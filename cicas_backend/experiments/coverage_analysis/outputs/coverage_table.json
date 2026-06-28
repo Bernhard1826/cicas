@@ -1,0 +1,33 @@
+{
+  "by_source": [
+    {
+      "source": "CABF",
+      "lintable": 227,
+      "full": 79,
+      "uncovered": 148
+    },
+    {
+      "source": "RFC5280",
+      "lintable": 109,
+      "full": 53,
+      "uncovered": 56
+    }
+  ],
+  "total": {
+    "lintable": 336,
+    "full": 132,
+    "uncovered": 204
+  },
+  "zlint_reference": {
+    "CABF": {
+      "total": 170,
+      "cert": 164,
+      "crl": 6
+    },
+    "RFC5280": {
+      "total": 122,
+      "cert": 115,
+      "crl": 7
+    }
+  }
+}

@@ -1,0 +1,152 @@
+[
+  {
+    "lint": "cicasgen_not_any_policy_list_contains_29324",
+    "fires": 36,
+    "applies": 233,
+    "error_frac": 0.155,
+    "REAL": 20,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 16,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_not_subject_locality_present_subject_province_29433",
+    "fires": 4,
+    "applies": 31,
+    "error_frac": 0.129,
+    "REAL": 4,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730",
+    "fires": 20,
+    "applies": 257,
+    "error_frac": 0.078,
+    "REAL": 20,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_issuer_unique_id_absent_29298",
+    "fires": 15,
+    "applies": 233,
+    "error_frac": 0.064,
+    "REAL": 15,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460",
+    "fires": 7,
+    "applies": 215,
+    "error_frac": 0.033,
+    "REAL": 7,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465",
+    "fires": 7,
+    "applies": 215,
+    "error_frac": 0.033,
+    "REAL": 7,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_authority_key_id_present_29273",
+    "fires": 7,
+    "applies": 233,
+    "error_frac": 0.03,
+    "REAL": 7,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274",
+    "fires": 4,
+    "applies": 257,
+    "error_frac": 0.016,
+    "REAL": 4,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29475",
+    "fires": 2,
+    "applies": 215,
+    "error_frac": 0.009,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 1,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_sig_alg_matches_tbssignature_29300",
+    "fires": 1,
+    "applies": 233,
+    "error_frac": 0.004,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_subject_unique_id_absent_29299",
+    "fires": 1,
+    "applies": 233,
+    "error_frac": 0.004,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_root_ca_not_crl_dist_present_29288",
+    "fires": 1,
+    "applies": 257,
+    "error_frac": 0.004,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_cert_policy_present_policy_identifiers_count_29491",
+    "fires": 1,
+    "applies": 748,
+    "error_frac": 0.001,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_subscriber_cert_not_aiahas_method_other_than_29484",
+    "fires": 1,
+    "applies": 748,
+    "error_frac": 0.001,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  },
+  {
+    "lint": "cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490",
+    "fires": 1,
+    "applies": 748,
+    "error_frac": 0.001,
+    "REAL": 1,
+    "SPURIOUS": 0,
+    "UNCERTAIN": 0,
+    "suspect": false
+  }
+]

@@ -1,0 +1,848 @@
+{
+  "zlint_v3": "/home/bernhard/projects/cicas/cicas_backend/zlint/v3",
+  "count": 31,
+  "lints": [
+    {
+      "lint_name": "cicasgen_not_ext_subfield_present_authority_key_id_28730",
+      "rule_id": 28730,
+      "source": "CABF-BR",
+      "section": "7.1.2.11.1",
+      "rule_text": "`authorityCertSerialNumber` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_authority_key_id_28730.go"
+    },
+    {
+      "lint_name": "cicasgen_when_root_ca_issuer_unique_id_absent_29217",
+      "rule_id": 29217,
+      "source": "CABF-BR",
+      "section": "7.1.2.1",
+      "rule_text": "`issuerUniqueID` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_root_ca_issuer_unique_id_absent_29217.go"
+    },
+    {
+      "lint_name": "cicasgen_when_root_ca_subject_unique_id_absent_29218",
+      "rule_id": 29218,
+      "source": "CABF-BR",
+      "section": "7.1.2.1",
+      "rule_text": "`subjectUniqueID` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_root_ca_subject_unique_id_absent_29218.go"
+    },
+    {
+      "lint_name": "cicasgen_not_aiahas_method_other_than_29235",
+      "rule_id": 29235,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.3",
+      "rule_text": "Each `AccessDescription` MUST only contain a permitted `accessMethod`, as detailed below",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_aiahas_method_other_than_29235.go"
+    },
+    {
+      "lint_name": "cicasgen_not_aiahas_method_other_than_29240",
+      "rule_id": 29240,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.3",
+      "rule_text": "Any other value | - | MUST NOT | - | No other `accessMethod`s may be used.",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_aiahas_method_other_than_29240.go"
+    },
+    {
+      "lint_name": "cicasgen_when_cert_policy_present_policy_identifiers_count_29243",
+      "rule_id": 29243,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.5",
+      "rule_text": "If present, the Certificate Policies extension MUST contain at least one `PolicyInformation`",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_cert_policy_present_policy_identifiers_count_29243.go"
+    },
+    {
+      "lint_name": "cicasgen_not_ext_subfield_present_name_const_29264",
+      "rule_id": 29264,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.8",
+      "rule_text": "`minimum` | MUST NOT be present.",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_name_const_29264.go"
+    },
+    {
+      "lint_name": "cicasgen_not_ext_subfield_present_name_const_29265",
+      "rule_id": 29265,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.8",
+      "rule_text": "`maximum` | MUST NOT be present.",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_name_const_29265.go"
+    },
+    {
+      "lint_name": "cicasgen_authority_key_id_present_29273",
+      "rule_id": 29273,
+      "source": "CABF-BR",
+      "section": "7.1.2.11.1",
+      "rule_text": "`keyIdentifier` | MUST be present.",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_authority_key_id_present_29273.go"
+    },
+    {
+      "lint_name": "cicasgen_not_ext_subfield_present_authority_key_id_29274",
+      "rule_id": 29274,
+      "source": "CABF-BR",
+      "section": "7.1.2.11.1",
+      "rule_text": "`authorityCertIssuer` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_authority_key_id_29274.go"
+    },
+    {
+      "lint_name": "cicasgen_when_root_ca_not_crl_dist_present_29288",
+      "rule_id": 29288,
+      "source": "CABF-BR",
+      "section": "7.1.2.11.2",
+      "rule_text": "Root CA Certificates.",
+      "method": "deterministic",
+      "severity": "lint.Warn",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_root_ca_not_crl_dist_present_29288.go"
+    },
+    {
+      "lint_name": "cicasgen_issuer_unique_id_absent_29298",
+      "rule_id": 29298,
+      "source": "CABF-BR",
+      "section": "7.1.2.2",
+      "rule_text": "`issuerUniqueID` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_issuer_unique_id_absent_29298.go"
+    },
+    {
+      "lint_name": "cicasgen_subject_unique_id_absent_29299",
+      "rule_id": 29299,
+      "source": "CABF-BR",
+      "section": "7.1.2.2",
+      "rule_text": "`subjectUniqueID` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_subject_unique_id_absent_29299.go"
+    },
+    {
+      "lint_name": "cicasgen_sig_alg_matches_tbssignature_29300",
+      "rule_id": 29300,
+      "source": "CABF-BR",
+      "section": "7.1.2.2",
+      "rule_text": "`signatureAlgorithm` | Encoded value MUST be byte-for-byte identical to the `tbsCertificate.",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_sig_alg_matches_tbssignature_29300.go"
+    },
+    {
+      "lint_name": "cicasgen_not_any_policy_list_contains_29324",
+      "rule_id": 29324,
+      "source": "CABF-BR",
+      "section": "7.1.2.2.6",
+      "rule_text": "`anyPolicy` | MUST NOT | The `anyPolicy` Policy Identifier",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29324.go"
+    },
+    {
+      "lint_name": "cicasgen_when_not_subject_locality_present_subject_province_29433",
+      "rule_id": 29433,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.3",
+      "rule_text": "`stateOrProvinceName` | MUST / MAY | MUST be present if `localityName` is absent",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_not_subject_locality_present_subject_province_29433.go"
+    },
+    {
+      "lint_name": "cicasgen_when_not_subject_locality_present_subject_province_29460",
+      "rule_id": 29460,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.4",
+      "rule_text": "`stateOrProvinceName` | MUST / MAY | MUST be present if `localityName` is absent",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_not_subject_locality_present_subject_province_29460.go"
+    },
+    {
+      "lint_name": "cicasgen_when_not_subject_province_present_subject_locality_29465",
+      "rule_id": 29465,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.4",
+      "rule_text": "`localityName` | MUST / MAY | MUST be present if `stateOrProvinceName` is absent",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_not_subject_province_present_subject_locality_29465.go"
+    },
+    {
+      "lint_name": "cicasgen_when_oid_policy_organization_validated_list_contains_29475",
+      "rule_id": 29475,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.4",
+      "rule_text": "`givenName` | MUST NOT | - | -",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_oid_policy_organization_validated_list_contains_29475.go"
+    },
+    {
+      "lint_name": "cicasgen_when_subscriber_cert_not_aiahas_method_other_than_29484",
+      "rule_id": 29484,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.7",
+      "rule_text": "Each `AccessDescription` MUST only contain a permitted `accessMethod`, as detailed below",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_not_aiahas_method_other_than_29484.go"
+    },
+    {
+      "lint_name": "cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490",
+      "rule_id": 29490,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.8",
+      "rule_text": "`pathLenConstraint` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490.go"
+    },
+    {
+      "lint_name": "cicasgen_when_cert_policy_present_policy_identifiers_count_29491",
+      "rule_id": 29491,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.9",
+      "rule_text": "If present, the Certificate Policies extension MUST contain at least one `PolicyInformation`",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_cert_policy_present_policy_identifiers_count_29491.go"
+    },
+    {
+      "lint_name": "cicasgen_issuer_unique_id_absent_29499",
+      "rule_id": 29499,
+      "source": "CABF-BR",
+      "section": "7.1.2.8",
+      "rule_text": "`issuerUniqueID` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_issuer_unique_id_absent_29499.go"
+    },
+    {
+      "lint_name": "cicasgen_subject_unique_id_absent_29500",
+      "rule_id": 29500,
+      "source": "CABF-BR",
+      "section": "7.1.2.8",
+      "rule_text": "`subjectUniqueID` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_subject_unique_id_absent_29500.go"
+    },
+    {
+      "lint_name": "cicasgen_not_aiahas_method_other_than_29506",
+      "rule_id": 29506,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.3",
+      "rule_text": "Any other value | - | MUST NOT | - | No other `accessMethod`s may be used.",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_aiahas_method_other_than_29506.go"
+    },
+    {
+      "lint_name": "cicasgen_not_is_ca_29508",
+      "rule_id": 29508,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.4",
+      "rule_text": "`cA` | MUST be FALSE",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_is_ca_29508.go"
+    },
+    {
+      "lint_name": "cicasgen_not_path_len_constraint_present_29509",
+      "rule_id": 29509,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.4",
+      "rule_text": "`pathLenConstraint` | MUST NOT be present",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_path_len_constraint_present_29509.go"
+    },
+    {
+      "lint_name": "cicasgen_when_cert_policy_present_policy_identifiers_count_29513",
+      "rule_id": 29513,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.8",
+      "rule_text": "If present, the Certificate Policies extension MUST contain at least one `PolicyInformation`",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_cert_policy_present_policy_identifiers_count_29513.go"
+    },
+    {
+      "lint_name": "cicasgen_not_any_policy_list_contains_29514",
+      "rule_id": 29514,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.8",
+      "rule_text": "`anyPolicy` | NOT RECOMMENDED |",
+      "method": "deterministic",
+      "severity": "lint.Warn",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29514.go"
+    },
+    {
+      "lint_name": "cicasgen_not_cert_policy_present_29518",
+      "rule_id": 29518,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.8",
+      "rule_text": "Any other qualifier | MUST NOT | - | -",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_cert_policy_present_29518.go"
+    },
+    {
+      "lint_name": "cicasgen_raw_subject_present_29557",
+      "rule_id": 29557,
+      "source": "CABF-BR",
+      "section": "7.1.4.1",
+      "rule_text": "Each `Name` MUST contain an `RDNSequence`",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_raw_subject_present_29557.go"
+    }
+  ],
+  "skipped": [
+    {
+      "rule_id": 28708,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 28713,
+      "reason": "deterministic_noncompile: render_error: 'anyExtendedKeyUsage'"
+    },
+    {
+      "rule_id": 28739,
+      "reason": "deterministic_noncompile: render_error: 'PrecertificateSigningCA'"
+    },
+    {
+      "rule_id": 28783,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29019,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29199,
+      "reason": "deterministic_noncompile: # local/cicas_v2_check/pkgs/cicasgen_when_root_ca_key_usage_not_in_set_29199\npkgs/cicasgen_when_root_ca_key_usage_not_in_set_29199/cicasgen_"
+    },
+    {
+      "rule_id": 29238,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29244,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29246,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29247,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.10.5: 'MUST include exactly one Reserved Policy Identifier' is conditional on the certificatePolicies extension being present; precondition dropped -> fires on certs with no certPolicies ext (61 of 121 testdata hits have no such extension)."
+    },
+    {
+      "rule_id": 29257,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29269,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29316,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.2.6: 'extension MUST contain at least one PolicyInformation' is conditional on the extension being present (cf. 29491 which keeps its 'if present' precondition); precondition dropped here."
+    },
+    {
+      "rule_id": 29318,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29321,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.2.6: 'anyPolicy MUST' is a nested cell under a conditional ('Issuing CA MAY use anyPolicy, which MUST then be the only value'); extraction flattened it into an unconditional 'anyPolicy MUST be present', which contradicts sibling 29324/29325 (anyPolicy MUST NOT)."
+    },
+    {
+      "rule_id": 29325,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.2.6: rule is 'anyPolicy MUST NOT be present' (a policy *identifier*), but subject was extracted as the whole certificatePolicies extension -> fires whenever the ext is present."
+    },
+    {
+      "rule_id": 29329,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29332,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29333,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29334,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29338,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29339,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29342,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29343,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29347,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29358,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29359,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29360,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29362,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29365,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29366,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29367,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29374,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29375,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29376,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29377,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29378,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29379,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29382,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29383,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29385,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29386,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29387,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29388,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29389,
+      "reason": "deterministic_noncompile: render_error: 'TechnicallyConstrainedCA'"
+    },
+    {
+      "rule_id": 29392,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29394,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29397,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29399,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29408,
+      "reason": "deterministic_noncompile: # local/cicas_v2_check/pkgs/cicasgen_when_subscriber_cert_key_usage_in_set_29408\npkgs/cicasgen_when_subscriber_cert_key_usage_in_set_29408/c"
+    },
+    {
+      "rule_id": 29409,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29411,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29414,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29415,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.7.12: the rule is a two-row conditional — 'if the SAN is the ONLY subject identity (subject is empty) the extension MUST be critical; otherwise MUST NOT be critical'. Extraction captured only the 'Otherwise ... MUST NOT be marked critical' row (rule_text is truncated to that clause) and dropped the 'subject non-empty' antecedent, so the lint fires on compliant empty-subject certs whose critical SAN is REQUIRED. Verified false positive on testdata subCertEmptySubject.pem and subject_rdn_order_ok_03.pem (both empty subject + critical SAN). Needs re-extraction to recover the empty-subject precondition."
+    },
+    {
+      "rule_id": 29420,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29422,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29426,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29429,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29430,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29446,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29447,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29448,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29451,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29453,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29454,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29455,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29463,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29468,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29474,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29476,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29480,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29485,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29487,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29492,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29493,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.7.9: rule is 'anyPolicy Policy Identifier MUST NOT be present', but subject was extracted as the whole certificatePolicies extension -> fires on every subscriber cert that carries a (compliant) certificatePolicies ext. Same defect as 29325. Verified false positive on testdata 27monthsEv.pem (has compliant certPolicies)."
+    },
+    {
+      "rule_id": 29495,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.7.9: rule is 'Any other qualifier MUST NOT be present', but subject collapsed to the whole certificatePolicies extension (identical generated code to 29493) -> fires whenever the ext exists. Needs re-extraction to target the policyQualifier, not the extension."
+    },
+    {
+      "rule_id": 29504,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29505,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29510,
+      "reason": "deterministic_noncompile: # local/cicas_v2_check/pkgs/cicasgen_key_usage_not_in_set_29510\npkgs/cicasgen_key_usage_not_in_set_29510/cicasgen_key_usage_not_in_set_29510"
+    },
+    {
+      "rule_id": 29533,
+      "reason": "deterministic_noncompile: render_error: 'PrecertificateSigningCA'"
+    },
+    {
+      "rule_id": 29534,
+      "reason": "deterministic_noncompile: render_error: 'PrecertificateSigningCA'"
+    },
+    {
+      "rule_id": 29535,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.3.1.1: 'The CA SHALL indicate an RSA key using rsaEncryption' — applies ONLY when the key is RSA, but precondition was dropped (ir.precondition=None) so it fires on every non-RSA cert. Verified: all 221 testdata hits are non-RSA (ECDSA) keys."
+    },
+    {
+      "rule_id": 29538,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.3.1.1: 'SHALL NOT use id-RSASSA-PSS ...' is the RSA-key counterpart of 29535; same dropped 'when key is RSA' precondition."
+    },
+    {
+      "rule_id": 29539,
+      "reason": "deterministic_noncompile: # local/cicas_v2_check/pkgs/cicasgen_oid_eq_oid_ec_public_key_29539\npkgs/cicasgen_oid_eq_oid_ec_public_key_29539/cicasgen_oid_eq_oid_ec_publ"
+    },
+    {
+      "rule_id": 29541,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29542,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29543,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29544,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29545,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29546,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29548,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29558,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29559,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29560,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29562,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.4.2: per-attribute encoding ('domainComponent MUST use IA5String'); extracted as whole-subject + rule_text is a URL fragment 'org/doc/html/rfc4519) | MUST use IA5String | 63' -> demands every subject attribute be IA5String. Fires on ~84% of certs."
+    },
+    {
+      "rule_id": 29564,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.4.2: same defect as 29562 (rule_text is a URL fragment 'org/doc/html/rfc5280) | MUST use UTF8String or PrintableString'); applies a per-attribute encoding rule to the whole subject."
+    },
+    {
+      "rule_id": 29566,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29617,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29672,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29733,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29735,
+      "reason": "quarantined_garbled_extraction: CABF 7.1.2.11.2: rule is 'the CRL Distribution Points extension MUST contain at least one DistributionPoint'. The generated code binds the count to zcrypto's c.CRLDistributionPoints, which is a flattened list of distributionPoint URLs/names — NOT DistributionPoint structures. A DP that carries only a 'reasons' field (no distributionPoint name) contributes 0 to that slice, so the lint fires even though >=1 DistributionPoint is present and the rule is satisfied. Verified false positive on testdata crlIncomlepteDp.pem (1 DistributionPoint, reasons-only): the real defect there (incomplete DP / no URL) is a DIFFERENT requirement, caught by zlint's e_distribution_point_incomplete. Codegen faithfulness bug — needs an atom that counts DistributionPoint elements, not URLs."
+    },
+    {
+      "rule_id": 29738,
+      "reason": "not_synonymous: verdict=DOES_NOT_EXPRESS"
+    },
+    {
+      "rule_id": 29743,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29745,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29754,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29757,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29759,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29766,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29768,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29769,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29770,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29771,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29788,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29799,
+      "reason": "deterministic_noncompile: render_error: 'anyExtendedKeyUsage'"
+    },
+    {
+      "rule_id": 29800,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29801,
+      "reason": "deterministic_only"
+    },
+    {
+      "rule_id": 29804,
+      "reason": "deterministic_only"
+    }
+  ]
+}

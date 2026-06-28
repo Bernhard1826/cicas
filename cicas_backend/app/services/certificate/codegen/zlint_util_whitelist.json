@@ -1,0 +1,1286 @@
+{
+  "funcs": [
+    {
+      "name": "RemovePrependedQuestionMarks",
+      "args": "domain string",
+      "ret": "string",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "RemovePrependedWildcard",
+      "args": "domain string",
+      "ret": "string",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "IsFQDN",
+      "args": "domain string",
+      "ret": "bool",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "GetAuthority",
+      "args": "uri string",
+      "ret": "string",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "GetHost",
+      "args": "auth string",
+      "ret": "string",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "AuthIsFQDNOrIP",
+      "args": "auth string",
+      "ret": "bool",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "IsFQDNOrIP",
+      "args": "host string",
+      "ret": "bool",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "DNSNamesExist",
+      "args": "cert *x509.Certificate",
+      "ret": "bool",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "CommonNameIsIP",
+      "args": "cert *x509.Certificate",
+      "ret": "bool",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "IsLDHLabel",
+      "args": "label string",
+      "ret": "bool",
+      "file": "fqdn.go"
+    },
+    {
+      "name": "FindTimeType",
+      "args": "firstDate, secondDate asn1.RawValue",
+      "ret": "(int, int)",
+      "file": "time.go"
+    },
+    {
+      "name": "GetTimes",
+      "args": "cert *x509.Certificate",
+      "ret": "(asn1.RawValue, asn1.RawValue)",
+      "file": "time.go"
+    },
+    {
+      "name": "BeforeOrOn",
+      "args": "left, right time.Time",
+      "ret": "bool",
+      "file": "time.go"
+    },
+    {
+      "name": "OnOrAfter",
+      "args": "left, right time.Time",
+      "ret": "bool",
+      "file": "time.go"
+    },
+    {
+      "name": "CertificateValidityInSeconds",
+      "args": "cert *x509.Certificate",
+      "ret": "float64",
+      "file": "time.go"
+    },
+    {
+      "name": "CertificateValidityInDays",
+      "args": "cert *x509.Certificate",
+      "ret": "float64",
+      "file": "time.go"
+    },
+    {
+      "name": "GreaterThan",
+      "args": "cert *x509.Certificate, maxDaysAllowed float64",
+      "ret": "bool",
+      "file": "time.go"
+    },
+    {
+      "name": "IsExtInCert",
+      "args": "cert *x509.Certificate, oid asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "oid.go"
+    },
+    {
+      "name": "GetExtFromCert",
+      "args": "cert *x509.Certificate, oid asn1.ObjectIdentifier",
+      "ret": "*pkix.Extension",
+      "file": "oid.go"
+    },
+    {
+      "name": "SliceContainsOID",
+      "args": "list []asn1.ObjectIdentifier, oid asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "oid.go"
+    },
+    {
+      "name": "TypeInName",
+      "args": "name *pkix.Name, oid asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "oid.go"
+    },
+    {
+      "name": "GetTypesInName",
+      "args": "name *pkix.Name",
+      "ret": "[]asn1.ObjectIdentifier",
+      "file": "oid.go"
+    },
+    {
+      "name": "GetMappedPolicies",
+      "args": "polMap *pkix.Extension",
+      "ret": "([][2]asn1.ObjectIdentifier, error)",
+      "file": "oid.go"
+    },
+    {
+      "name": "HasEmailSAN",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "san.go"
+    },
+    {
+      "name": "IsMailboxAddress",
+      "args": "address string",
+      "ret": "bool",
+      "file": "san.go"
+    },
+    {
+      "name": "IsNameAttribute",
+      "args": "oid asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "names.go"
+    },
+    {
+      "name": "NotAllNameFieldsAreEmpty",
+      "args": "name *pkix.Name",
+      "ret": "bool",
+      "file": "names.go"
+    },
+    {
+      "name": "IsCACert",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsRootCA",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsSubCA",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsSelfSigned",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsSubscriberCert",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsDelegatedOCSPResponderCert",
+      "args": "cert *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsServerAuthCert",
+      "args": "cert *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsEmailProtectionCert",
+      "args": "cert *x509.Certificate",
+      "ret": "bool",
+      "file": "ca.go"
+    },
+    {
+      "name": "IsIANAReserved",
+      "args": "ip net.IP",
+      "ret": "bool",
+      "file": "ip.go"
+    },
+    {
+      "name": "IntersectsIANAReserved",
+      "args": "net net.IPNet",
+      "ret": "bool",
+      "file": "ip.go"
+    },
+    {
+      "name": "GetErrorInfo",
+      "args": "",
+      "ret": "string",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "IsPresent",
+      "args": "",
+      "ret": "bool",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "AppendToStringSemicolonDelim",
+      "args": "this *string, s string",
+      "ret": "{\n\tif len(*this) > 0 && len(s) > 0",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "IsAnyEtsiQcStatementPresent",
+      "args": "extVal []byte",
+      "ret": "bool",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "ParseQcStatem",
+      "args": "extVal []byte, sought asn1.ObjectIdentifier",
+      "ret": "EtsiQcStmtIf",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "IsCodeSigning",
+      "args": "policies []asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "cs.go"
+    },
+    {
+      "name": "HasKeyUsageOID",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "ku.go"
+    },
+    {
+      "name": "HasKeyUsage",
+      "args": "c *x509.Certificate, usage x509.KeyUsage",
+      "ret": "bool",
+      "file": "ku.go"
+    },
+    {
+      "name": "KeyUsageIsPresent",
+      "args": "keyUsages x509.KeyUsage, usage x509.KeyUsage",
+      "ret": "bool",
+      "file": "ku.go"
+    },
+    {
+      "name": "GetKeyUsageStrings",
+      "args": "keyUsages x509.KeyUsage",
+      "ret": "[]string",
+      "file": "ku.go"
+    },
+    {
+      "name": "HasReservedLabelPrefix",
+      "args": "s string",
+      "ret": "bool",
+      "file": "idna.go"
+    },
+    {
+      "name": "HasXNLabelPrefix",
+      "args": "s string",
+      "ret": "bool",
+      "file": "idna.go"
+    },
+    {
+      "name": "IdnaToUnicode",
+      "args": "s string",
+      "ret": "(string, error)",
+      "file": "idna.go"
+    },
+    {
+      "name": "IsISOCountryCode",
+      "args": "in string",
+      "ret": "bool",
+      "file": "countries.go"
+    },
+    {
+      "name": "HasEKU",
+      "args": "cert *x509.Certificate, eku x509.ExtKeyUsage",
+      "ret": "bool",
+      "file": "eku.go"
+    },
+    {
+      "name": "GetEKUString",
+      "args": "eku x509.ExtKeyUsage",
+      "ret": "string",
+      "file": "eku.go"
+    },
+    {
+      "name": "GetEKUStrings",
+      "args": "eku []x509.ExtKeyUsage",
+      "ret": "[]string",
+      "file": "eku.go"
+    },
+    {
+      "name": "CheckRDNSequenceWhiteSpace",
+      "args": "raw []byte",
+      "ret": "(leading, trailing bool, err error)",
+      "file": "encodings.go"
+    },
+    {
+      "name": "IsIA5String",
+      "args": "raw []byte",
+      "ret": "bool",
+      "file": "encodings.go"
+    },
+    {
+      "name": "IsInPrefSyn",
+      "args": "name string",
+      "ret": "bool",
+      "file": "encodings.go"
+    },
+    {
+      "name": "AllAlternateNameWithTagAreIA5",
+      "args": "ext *pkix.Extension, tag int",
+      "ret": "(bool, error)",
+      "file": "encodings.go"
+    },
+    {
+      "name": "IsEmptyASN1Sequence",
+      "args": "input []byte",
+      "ret": "bool",
+      "file": "encodings.go"
+    },
+    {
+      "name": "ParseBMPString",
+      "args": "bmpString []byte",
+      "ret": "(string, error)",
+      "file": "encodings.go"
+    },
+    {
+      "name": "IsSMIMEBRCertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsIndividualValidatedCertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsMailboxValidatedCertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsOrganizationValidatedCertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsSponsorValidatedCertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsLegacySMIMECertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsMultipurposeSMIMECertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "IsStrictSMIMECertificate",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "ContainsExactlyOneSMIMEPolicy",
+      "args": "policies []asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "smime_policies.go"
+    },
+    {
+      "name": "PrimeNoSmallerThan752",
+      "args": "dividend *big.Int",
+      "ret": "bool",
+      "file": "primes.go"
+    },
+    {
+      "name": "Valid",
+      "args": "when time.Time",
+      "ret": "error",
+      "file": "gtld.go"
+    },
+    {
+      "name": "HasValidTLD",
+      "args": "domain string, when time.Time",
+      "ret": "bool",
+      "file": "gtld.go"
+    },
+    {
+      "name": "IsInTLDMap",
+      "args": "label string",
+      "ret": "bool",
+      "file": "gtld.go"
+    },
+    {
+      "name": "CertificateSubjInTLD",
+      "args": "c *x509.Certificate, label string",
+      "ret": "bool",
+      "file": "gtld.go"
+    },
+    {
+      "name": "CheckAlgorithmIDParamNotNULL",
+      "args": "algorithmIdentifier []byte, requiredAlgoID asn1.ObjectIdentifier",
+      "ret": "error",
+      "file": "algorithm_identifier.go"
+    },
+    {
+      "name": "GetSignatureAlgorithmInTBSEncoded",
+      "args": "c *x509.Certificate",
+      "ret": "([]byte, error)",
+      "file": "algorithm_identifier.go"
+    },
+    {
+      "name": "GetPublicKeyOID",
+      "args": "c *x509.Certificate",
+      "ret": "(asn1.ObjectIdentifier, error)",
+      "file": "algorithm_identifier.go"
+    },
+    {
+      "name": "GetPublicKeyAidEncoded",
+      "args": "c *x509.Certificate",
+      "ret": "([]byte, error)",
+      "file": "algorithm_identifier.go"
+    },
+    {
+      "name": "IsOnionV3Address",
+      "args": "dnsName string",
+      "ret": "bool",
+      "file": "onion.go"
+    },
+    {
+      "name": "IsOnionV2Address",
+      "args": "dnsName string",
+      "ret": "bool",
+      "file": "onion.go"
+    },
+    {
+      "name": "IsOnionV3Cert",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "onion.go"
+    },
+    {
+      "name": "IsOnionV2Cert",
+      "args": "c *x509.Certificate",
+      "ret": "bool",
+      "file": "onion.go"
+    },
+    {
+      "name": "IsEV",
+      "args": "in []asn1.ObjectIdentifier",
+      "ret": "bool",
+      "file": "ev.go"
+    }
+  ],
+  "consts_vars": [
+    {
+      "name": "DurationDay",
+      "file": "time.go"
+    },
+    {
+      "name": "ZeroDate",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC1035Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC2459Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC3161Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC3279Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC3280Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC3490Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC8399Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC4325Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC4630Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC5280Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC6818Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC6960Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC6962Date",
+      "file": "time.go"
+    },
+    {
+      "name": "RFC8813Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABEffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABReservedIPDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABGivenNameDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABSerialNumberEntropyDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV102Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV113Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV114Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV116Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV130Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV131Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV170Date",
+      "file": "time.go"
+    },
+    {
+      "name": "NO_SHA1",
+      "file": "time.go"
+    },
+    {
+      "name": "NoRSA1024RootDate",
+      "file": "time.go"
+    },
+    {
+      "name": "NoRSA1024Date",
+      "file": "time.go"
+    },
+    {
+      "name": "GeneralizedDate",
+      "file": "time.go"
+    },
+    {
+      "name": "NoReservedIP",
+      "file": "time.go"
+    },
+    {
+      "name": "SubCert39Month",
+      "file": "time.go"
+    },
+    {
+      "name": "SubCert825Days",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV148Date",
+      "file": "time.go"
+    },
+    {
+      "name": "EtsiEn319_412_4_V1_3_0_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "EtsiEn319_412_5_V2_2_1_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "EtsiEn319_412_5_V2_4_1_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "EtsiEn319_412_5_V2_6_0_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "EtsiEn319_411_2_V2_5_0_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "OnionOnlyEVDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABV201Date",
+      "file": "time.go"
+    },
+    {
+      "name": "AppleCTPolicyDate",
+      "file": "time.go"
+    },
+    {
+      "name": "MozillaPolicy22Date",
+      "file": "time.go"
+    },
+    {
+      "name": "MozillaPolicy24Date",
+      "file": "time.go"
+    },
+    {
+      "name": "MozillaPolicy241Date",
+      "file": "time.go"
+    },
+    {
+      "name": "MozillaPolicy27Date",
+      "file": "time.go"
+    },
+    {
+      "name": "MozillaPolicy30Date",
+      "file": "time.go"
+    },
+    {
+      "name": "ChromePolicy18Date",
+      "file": "time.go"
+    },
+    {
+      "name": "ChromePolicyClientAuthDisallowedDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_6_2_UnderscorePermissibilitySunsetDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_6_2_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_2_1_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_6_9_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_7_1_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "AppleReducedLifetimeDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_7_9_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_8_0_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_0_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_1_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_2_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_3_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_4_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_5_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_6_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_7_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_2_0_8_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "NoReservedDomainLabelsDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_OU_Prohibited_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "SC16EffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "SC17EffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_SMIME_BRs_1_0_0_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_SMIME_BRs_1_0_11_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "SMC08EffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFBRs_1_8_7_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "SC62EffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "SC63EffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFEV_Sec9_2_8_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_CS_BRs_1_2_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_CS_CSC_31_Date",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_SC081_FIRST_MILESTONE",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_SC081_SECOND_MILESTONE",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_SC081_THIRD_MILESTONE",
+      "file": "time.go"
+    },
+    {
+      "name": "CABF_SC086_EffectiveDate",
+      "file": "time.go"
+    },
+    {
+      "name": "CABFEV_9_8_2",
+      "file": "time.go"
+    },
+    {
+      "name": "DAY_LENGTH",
+      "file": "time.go"
+    },
+    {
+      "name": "AdobeTimeStampOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "AdobeArchiveRevInfoOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "AiaOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "AuthkeyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "BasicConstOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CertPolicyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CrlDistOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CtPoisonOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "DeltaCRLIndicatorOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "EkuSynOid",
+      "file": "oid.go"
+    },
+    {
+      "name": "FreshCRLOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "InhibitAnyPolicyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "IssuerAlternateNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "KeyUsageOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "LegalEntityIdentifierOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "LegalEntityIdentifierRoleOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "LogoTypeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "NameConstOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "OscpNoCheckOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "PolicyConstOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "PolicyMapOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "PrivKeyUsageOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "QcStateOid",
+      "file": "oid.go"
+    },
+    {
+      "name": "TimestampOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SmimeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SubjectAlternateNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SubjectDirAttrOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SubjectInfoAccessOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SubjectKeyIdentityOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "ReasonCodeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CRLNumberOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "IssuingDistOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "PreCertificateSigningCertificateEKU",
+      "file": "oid.go"
+    },
+    {
+      "name": "BRExtendedValidatedOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "BRDomainValidatedOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "BROrganizationValidatedOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "BRIndividualValidatedOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "BRTorServiceDescriptor",
+      "file": "oid.go"
+    },
+    {
+      "name": "CabfExtensionOrganizationIdentifier",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRMailboxValidatedLegacyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRMailboxValidatedMultipurposeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRMailboxValidatedStrictOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBROrganizationValidatedLegacyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBROrganizationValidatedMultipurposeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBROrganizationValidatedStrictOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRSponsorValidatedLegacyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRSponsorValidatedMultipurposeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRSponsorValidatedStrictOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRIndividualValidatedLegacyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRIndividualValidatedMultipurposeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SMIMEBRIndividualValidatedStrictOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CommonNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SurnameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SerialOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CountryNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "LocalityNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "StateOrProvinceNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "StreetAddressOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "OrganizationNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "OrganizationalUnitNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "BusinessOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "PostalCodeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "GivenNameOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "EmailAddressOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidIdOnSmtpUtf8Mailbox",
+      "file": "oid.go"
+    },
+    {
+      "name": "SHA256OID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SHA384OID",
+      "file": "oid.go"
+    },
+    {
+      "name": "SHA512OID",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidRSASSAPSS",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidMD2WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidMD5WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidSHA1WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidSHA224WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidSHA256WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidSHA384WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "OidSHA512WithRSAEncryption",
+      "file": "oid.go"
+    },
+    {
+      "name": "AnyPolicyOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "UserNoticeOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "CpsOID",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQcCompliance",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQcLimitValue",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQcRetentionPeriod",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQcSSCD",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQcEuPDS",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQcType",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQctEsign",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQctEseal",
+      "file": "oid.go"
+    },
+    {
+      "name": "IdEtsiQcsQctWeb",
+      "file": "oid.go"
+    },
+    {
+      "name": "DNSNameTag",
+      "file": "oid.go"
+    },
+    {
+      "name": "KeyUsageToString",
+      "file": "ku.go"
+    },
+    {
+      "name": "GTLDPeriodDateFormat",
+      "file": "gtld.go"
+    },
+    {
+      "name": "RSAAlgorithmIDToDER",
+      "file": "algorithm_identifier.go"
+    },
+    {
+      "name": "OidSignatureSHA224withECDSA",
+      "file": "algorithm_identifier.go"
+    },
+    {
+      "name": "OnionTLD",
+      "file": "ev.go"
+    }
+  ],
+  "types": [
+    {
+      "name": "EtsiQcStmtIf",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "Etsi421QualEuCert",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "Etsi423QcType",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "EtsiQcSscd",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "EtsiMonetaryValueAlph",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "EtsiMonetaryValueNum",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "EtsiQcLimitValue",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "EtsiQcRetentionPeriod",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "PdsLocation",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "EtsiQcPds",
+      "file": "qc_stmt.go"
+    },
+    {
+      "name": "AttributeTypeAndRawValue",
+      "file": "rdn.go"
+    },
+    {
+      "name": "AttributeTypeAndRawValueSET",
+      "file": "rdn.go"
+    },
+    {
+      "name": "RawRDNSequence",
+      "file": "rdn.go"
+    },
+    {
+      "name": "GTLDPeriod",
+      "file": "gtld.go"
+    }
+  ]
+}

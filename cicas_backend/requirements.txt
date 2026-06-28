@@ -1,0 +1,59 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+alembic==1.13.1
+pgvector==0.2.4
+asyncpg==0.29.0  # For crt.sh PostgreSQL direct access
+
+# HTTP & Web Scraping
+httpx>=0.27.0
+aiohttp==3.9.1
+beautifulsoup4==4.12.3
+lxml==5.1.0
+requests==2.31.0
+
+# PDF Processing
+pymupdf==1.23.8  # Used for all PDF text extraction (fitz)
+
+# NLP & Embeddings (using BAAI/bge-large-en-v1.5 via httpx)
+
+# Utilities
+python-dotenv==1.0.0
+python-multipart==0.0.6
+tenacity==8.2.3
+schedule==1.2.0
+apscheduler==3.10.4
+python-dateutil==2.8.2
+jinja2==3.1.6
+
+# Logging & Monitoring
+loguru==0.7.2
+rich==13.7.0
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.3
+networkx==3.2.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+
+# Task Queue (Celery + Redis for multi-process certificate validation)
+celery[redis]==5.3.4
+# Note: redis version is auto-resolved by celery[redis] to 4.6.0 for compatibility
+
+# Certificate Processing
+cryptography==46.0.4
+asn1crypto==1.5.1
+
+# Task Queue (Celery + Redis for multi-process certificate validation)
+celery[redis]==5.3.4
+# Note: redis version is auto-resolved by celery[redis] to 4.6.0 for compatibility

@@ -1,0 +1,108 @@
+{"cert": "SANDirectoryNameBeginning.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "SANDirectoryNameEnd.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "akiMissing.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "akiNoKeyIdentifier.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "akiNoKeyIdentifier.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "akiWithSerial.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "akidNoKeyIdentifier.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "akidNoKeyIdentifier.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "akidNoKeyIdentifier.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "akidNoKeyIdentifier.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertIssuer present"}
+{"cert": "arpa_sub0_rev4x_rev6x_effx.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "c1r0e0a0s0m0b0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "c1r0e1a0s1m0b0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "c1r0e1a0s1m1b0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "c1r0e1a0s1m1b1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "c1r0e1a1s0m0b0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "c1r0e1a1s0m1b0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "ca1_sub1_cr0_any1_mulx_varx_effx.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "caCertificateAfter15092023.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "cacp_c1r0p1m0a1b0e1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "cacp_c1r0p1m1a1b0e0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "cana_sub0_srvx_clix_effx.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "crlComlepteDp.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "crlIncomlepteDp.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "directoryNamePresent.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "dnsNameWildcardIncorrect.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "dnsNameWildcardNotOnlyInLeftLabel.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "dnsNameWildcardOnlyInLeftLabel.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "empty_sct_list_na_02.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "empty_seq_of_cps.pem", "lint": "cicasgen_when_cert_policy_present_policy_identifiers_count_29491", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "certPolicies present, 0 PolicyInformation"}
+{"cert": "explicitText200Char.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "extra_subj_attrs_na1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "illegalChar.pem", "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29475", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "OV policy + givenName"}
+{"cert": "indivValNoLocalOrProvince.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29433", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "keyCertSignCA.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "legalChar.pem", "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29475", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "OV policy + givenName"}
+{"cert": "mpCrossCertNoEKU.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "nameConstraintsMissing.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "orgNoBoth.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "orgNoBoth.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "orgValAllBad.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "orgValAllBad.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "orgValNoProvinceOrLocal.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "orgValNoProvinceOrLocal.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "orgunit_in_ca_ko1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "orgunit_in_ca_ok3.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "ouPresentCATrueAfterSep22.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "policyConstEmpty.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyConstGoodBoth.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyConstGoodOnlyExplicit.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyConstGoodOnlyInhibit.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyConstNotCritical.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyMapAnyPolNotAsserted.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyMapFromAnyPolicy.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "policyMapFromAnyPolicy.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyMapGood.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyMapIssuerNotInCertPolicy.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyMapNotCritical.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyMapToAnyPolicy.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "policyMapToAnyPolicy.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "policyQualifiersOtherThanCpsNotPermittedError.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "policyQualifiersOtherThanCpsNotPermittedValid.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "qctWithEseal.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "qctWithEseal.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "qctWithEsealAndWeb.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "qctWithEsealAndWeb.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "qctWithWrongType.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "qctWithWrongType.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "qctWithWrongType_2024.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29460", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "qctWithWrongType_2024.pem", "lint": "cicasgen_when_not_subject_province_present_subject_locality_29465", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "ST absent and L absent"}
+{"cert": "rootCAKeyUsageMissing.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "rootCAKeyUsageMissing.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertIssuer present"}
+{"cert": "rootCAWithEKU.pem", "lint": "cicasgen_when_root_ca_not_crl_dist_present_29288", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "root CA carries CRLDP (advisory)"}
+{"cert": "rsaSigAlgoNoNULLParam.pem", "lint": "cicasgen_sig_alg_matches_tbssignature_29300", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "outer sigAlg != tbs.signature"}
+{"cert": "rsawithsha1after2016.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "rsawithsha1after2016.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertIssuer present"}
+{"cert": "rsawithsha1before2016.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "rsawithsha1before2016.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertIssuer present"}
+{"cert": "sub0_valxx_iatx_cdpx_ocspx_effx.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subCAAIAMissingPostCABFBR171.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "subCAAIAValidPostCABFBR171.pem", "lint": "cicasgen_authority_key_id_present_29273", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI keyIdentifier absent on non-self-signed CA (confirmed by zlint twin lint)"}
+{"cert": "subCAWithAnyPolicy.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subCaCrlMissing.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "subCaCrlPresent.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "subCertIsCA.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subCertLocalityNameMustAppear.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29433", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "subCertLocalityNameNotProhibited.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29433", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "subCertPathLenPositive.pem", "lint": "cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subscriber carries pathLenConstraint"}
+{"cert": "subCertProvinceProhibited.pem", "lint": "cicasgen_when_not_subject_locality_present_subject_province_29433", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "L absent and ST absent"}
+{"cert": "subDirAttCritical.pem", "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AKI.authorityCertSerialNumber present"}
+{"cert": "subca1_ocsp0_httpx_cais0_httpx_effx.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp0_httpx_cais1_http0_eff0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp0_httpx_cais1_http0_eff1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp0_httpx_cais1_http1_eff1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp1_http0_cais0_httpx_eff0.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp1_http0_cais0_httpx_eff1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp1_http1_cais0_httpx_eff1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subca1_ocsp1_http1_cais1_http1_eff1.pem", "lint": "cicasgen_not_any_policy_list_contains_29324", "triage": "UNCERTAIN", "indep": "CONFIRMED", "indep_evidence": "subordinate CA carries anyPolicy"}
+{"cert": "subjectUID.pem", "lint": "cicasgen_subject_unique_id_absent_29299", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "subjectUniqueID present"}
+{"cert": "unsupportedAccessMethod.pem", "lint": "cicasgen_when_subscriber_cert_not_aiahas_method_other_than_29484", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "AIA carries disallowed accessMethod: 2.23.140.1.2.1 - URI:http://issuers.example.com/"}
+{"cert": "userNoticeExpTextNotIA5String.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "userNoticeExpTextUtf8.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "userNoticeMissing.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "userNoticePres.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "userNoticeUnrecommended.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "utf8ControlX10.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "utf8ControlX88.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}
+{"cert": "utf8NoControl.pem", "lint": "cicasgen_issuer_unique_id_absent_29298", "triage": "REAL", "indep": "CONFIRMED", "indep_evidence": "issuerUniqueID present"}

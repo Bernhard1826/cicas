@@ -1,0 +1,18 @@
+{
+  "version": "BR 1.4.8",
+  "backend_size": 422,
+  "sheet_rows": 122,
+  "sheet_yes": 75,
+  "sheet_no": 47,
+  "matched": 106,
+  "matching_recall": 0.8689,
+  "TP": 60,
+  "FN": 9,
+  "FP": 0,
+  "TN": 37,
+  "agreement": 0.9151,
+  "kappa": 0.8231,
+  "yes_precision": 1.0,
+  "yes_recall": 0.8696,
+  "yes_f1": 0.9302
+}

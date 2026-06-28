@@ -1,0 +1,250 @@
+{"row": 1, "section": "1.3.2", "sheet": 0, "backend": 0, "note": "With the exception of Section 3.2.2.4 and Section 3.2.2.5, the CA MAY delegate t"}
+{"row": 2, "section": "1.3.2", "sheet": 0, "backend": 0, "note": "Before the CA authorizes a Delegated Third Party to perform a delegated function"}
+{"row": 3, "section": "1.3.2", "sheet": 0, "backend": 0, "note": "The CA MAY designate an Enterprise RA to verify certificate requests from the En"}
+{"row": 4, "section": "1.3.2", "sheet": 0, "backend": 0, "note": "The CA SHALL impose these limitations as a contractual requirement on the Enterp"}
+{"row": 5, "section": "1.3.3", "sheet": 0, "backend": null, "note": "See Section 1.6.1."}
+{"row": 6, "section": "1.5.2", "sheet": 0, "backend": null, "note": "In this section of a CA’s CPS, the CA shall provide a link to a web page or an e"}
+{"row": 7, "section": "1.6.1", "sheet": 0, "backend": null, "note": "Note: After careful consideration, indicate if the definitions included in the C"}
+{"row": 8, "section": "1.6.2", "sheet": 0, "backend": null, "note": "Note: After careful consideration, indicate if the acronyms included in the CA o"}
+{"row": 9, "section": "2.0", "sheet": 0, "backend": null, "note": "The CA SHALL develop, implement, enforce, and annually update a Certificate Poli"}
+{"row": 10, "section": "2.1", "sheet": 0, "backend": 0, "note": "The CA SHALL make revocation information for Subordinate Certificates and Subscr"}
+{"row": 11, "section": "2.2", "sheet": 0, "backend": 0, "note": "The CA SHALL publicly disclose its Certificate Policy and/or Certification Pract"}
+{"row": 12, "section": "2.2", "sheet": 0, "backend": 0, "note": "The CA SHALL publicly disclose its CA business practices to the extent required "}
+{"row": 13, "section": "2.2", "sheet": 0, "backend": 0, "note": "The Certificate Policy and/or Certification Practice Statement MUST be structure"}
+{"row": 14, "section": "2.2", "sheet": 0, "backend": 0, "note": "Section 4.2 of a CA’s Certificate Policy and/or Certification Practice Statement"}
+{"row": 15, "section": "2.2", "sheet": 0, "backend": 0, "note": "The CA SHALL publicly give effect to these Requirements and represent that it wi"}
+{"row": 16, "section": "2.2", "sheet": 0, "backend": 0, "note": "The CA SHALL host test Web pages that allow Application Software Suppliers to te"}
+{"row": 17, "section": "2.3", "sheet": 0, "backend": 0, "note": "The CA SHALL develop, implement, enforce, and annually update a Certificate Poli"}
+{"row": 18, "section": "2.3", "sheet": 0, "backend": 0, "note": "The CA SHALL indicate conformance with this requirement by incrementing the vers"}
+{"row": 19, "section": "2.4", "sheet": 0, "backend": null, "note": "The CA shall make its Repository publicly available in a read-only manner."}
+{"row": 20, "section": "3.2.2", "sheet": 0, "backend": 0, "note": "If the Applicant requests a Certificate that will contain Subject Identity Infor"}
+{"row": 21, "section": "3.2.2", "sheet": 0, "backend": 0, "note": "If the Applicant requests a Certificate that will contain the countryName field "}
+{"row": 22, "section": "3.2.2", "sheet": 0, "backend": 0, "note": "The CA SHALL inspect any document relied upon under this Section for alteration "}
+{"row": 23, "section": "3.2.2.1", "sheet": 0, "backend": 0, "note": "If the Subject Identity Information is to include the name or address of an orga"}
+{"row": 24, "section": "3.2.2.1", "sheet": 0, "backend": 0, "note": "The CA SHALL verify the identity and address of the Applicant using documentatio"}
+{"row": 25, "section": "3.2.2.1", "sheet": 0, "backend": 0, "note": "The CA MAY use the same documentation or communication described in 1 through 4 "}
+{"row": 26, "section": "3.2.2.1", "sheet": 0, "backend": 0, "note": "Alternatively, the CA MAY verify the address of the Applicant (but not the ident"}
+{"row": 27, "section": "3.2.2.2", "sheet": 0, "backend": 0, "note": "If the Subject Identity Information is to include a DBA or tradename, the CA SHA"}
+{"row": 28, "section": "3.2.2.3", "sheet": 0, "backend": 0, "note": "If the subject:countryName field is present, then the CA SHALL verify the countr"}
+{"row": 29, "section": "3.2.2.3", "sheet": 0, "backend": 0, "note": "The CA SHOULD implement a process to screen proxy servers in order to prevent re"}
+{"row": 30, "section": "3.2.2.4", "sheet": 0, "backend": 0, "note": "The CA SHALL confirm that prior to issuance, the CA has validated each Fully-Qua"}
+{"row": 31, "section": "3.2.2.4", "sheet": 0, "backend": 0, "note": "Completed validations of Applicant authority may be valid for the issuance of mu"}
+{"row": 32, "section": "3.2.2.4", "sheet": 0, "backend": 0, "note": "CAs SHALL maintain a record of which domain validation method, including relevan"}
+{"row": 33, "section": "3.2.2.4.1", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used. \n\nPrior validations using thi"}
+{"row": 34, "section": "3.2.2.4.2", "sheet": 0, "backend": 0, "note": "The Random Value MUST be sent to an email address, fax/SMS number, or postal mai"}
+{"row": 35, "section": "3.2.2.4.2", "sheet": 0, "backend": 0, "note": "The Random Value SHALL be unique in each email, fax, SMS, or postal mail."}
+{"row": 36, "section": "3.2.2.4.2", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 37, "section": "3.2.2.4.3", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used. \n\nPrior validations using thi"}
+{"row": 38, "section": "3.2.2.4.4", "sheet": 0, "backend": 0, "note": "The Random Value SHALL be unique in each email."}
+{"row": 39, "section": "3.2.2.4.4", "sheet": 0, "backend": 0, "note": "The email MAY be re-sent in its entirety, including the re-use of the Random Val"}
+{"row": 40, "section": "3.2.2.4.4", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 41, "section": "3.2.2.4.5", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used. \n\nPrior validations using thi"}
+{"row": 42, "section": "3.2.2.4.6", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used. \n\nPrior validations using thi"}
+{"row": 43, "section": "3.2.2.4.7", "sheet": 0, "backend": 0, "note": "If a Random Value is used, the CA SHALL provide a Random Value unique to the Cer"}
+{"row": 44, "section": "3.2.2.4.8", "sheet": 0, "backend": 0, "note": "Once the FQDN has been validated using this method, the CA MUST NOT issue Certif"}
+{"row": 45, "section": "3.2.2.4.8", "sheet": 0, "backend": null, "note": "This method is NOT suitable for validating Wildcard Domain Names."}
+{"row": 46, "section": "3.2.2.4.9", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used. \n\nPrior validations using thi"}
+{"row": 47, "section": "3.2.2.4.10", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used. \n\nPrior validations using thi"}
+{"row": 48, "section": "3.2.2.4.11", "sheet": 0, "backend": 0, "note": "This method has been retired and MUST NOT be used."}
+{"row": 49, "section": "3.2.2.4.12", "sheet": 0, "backend": null, "note": "Confirming the Applicant’s control over the FQDN by validating the Applicant is "}
+{"row": 50, "section": "3.2.2.4.13", "sheet": 0, "backend": 0, "note": "The Random Value MUST be sent to a DNS CAA Email Contact."}
+{"row": 51, "section": "3.2.2.4.13", "sheet": 0, "backend": 0, "note": "The relevant CAA Resource Record Set MUST be found using the search algorithm de"}
+{"row": 52, "section": "3.2.2.4.13", "sheet": 0, "backend": 0, "note": "The Random Value SHALL be unique in each email."}
+{"row": 53, "section": "3.2.2.4.13", "sheet": 0, "backend": 0, "note": "The email MAY be re-sent in its entirety, including the re-use of the Random Val"}
+{"row": 54, "section": "3.2.2.4.13", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 55, "section": "3.2.2.4.14", "sheet": 0, "backend": 0, "note": "Confirming the Applicant’s control over the FQDN by sending a Random Value via e"}
+{"row": 56, "section": "3.2.2.4.14", "sheet": 0, "backend": 0, "note": "The Random Value SHALL be unique in each email."}
+{"row": 57, "section": "3.2.2.4.14", "sheet": 0, "backend": 0, "note": "The email MAY be re-sent in its entirety, including the re-use of the Random Val"}
+{"row": 58, "section": "3.2.2.4.14", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 59, "section": "3.2.2.4.15", "sheet": 0, "backend": 0, "note": "The Random Value MUST be returned to the CA to approve the request."}
+{"row": 60, "section": "3.2.2.4.15", "sheet": 0, "backend": null, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 61, "section": "3.2.2.4.16", "sheet": 0, "backend": 0, "note": "The CA MUST NOT knowingly be transferred or request to be transferred as this ph"}
+{"row": 62, "section": "3.2.2.4.16", "sheet": 0, "backend": null, "note": "In the event of reaching voicemail, the CA may leave the Random Value and the AD"}
+{"row": 63, "section": "3.2.2.4.16", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 64, "section": "3.2.2.4.17", "sheet": 0, "backend": 0, "note": "The relevant CAA Resource Record Set MUST be found using the search algorithm de"}
+{"row": 65, "section": "3.2.2.4.17", "sheet": 0, "backend": 0, "note": "The CA MUST NOT be transferred or request to be transferred as this phone number"}
+{"row": 66, "section": "3.2.2.4.17", "sheet": 0, "backend": 0, "note": "In the event of reaching voicemail, the CA may leave the Random Value and the AD"}
+{"row": 67, "section": "3.2.2.4.17", "sheet": 0, "backend": null, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 68, "section": "3.2.2.4.18", "sheet": 0, "backend": 0, "note": "Confirming the Applicant’s control over the FQDN by verifying that the Request T"}
+{"row": 69, "section": "3.2.2.4.18", "sheet": 0, "backend": 0, "note": "The file containing the Request Token or Random Value:\n\n1. MUST be located on th"}
+{"row": 70, "section": "3.2.2.4.18", "sheet": 0, "backend": 0, "note": "If the CA follows redirects, the following apply:\n\n1. Redirects MUST be initiate"}
+{"row": 71, "section": "3.2.2.4.18", "sheet": 0, "backend": 0, "note": "If a Random Value is used, then:\n\n1. The CA MUST provide a Random Value unique t"}
+{"row": 72, "section": "3.2.2.4.18", "sheet": 0, "backend": 0, "note": "The CA MUST NOT issue Certificates for other FQDNs that end with all the labels "}
+{"row": 73, "section": "3.2.2.4.19", "sheet": 0, "backend": 0, "note": "The CA MUST receive a successful HTTP response from the request (meaning a 2xx H"}
+{"row": 74, "section": "3.2.2.4.19", "sheet": 0, "backend": 0, "note": "The token (as defined in RFC 8555, Section 8.3) MUST NOT be used for more than 3"}
+{"row": 75, "section": "3.2.2.4.19", "sheet": 0, "backend": 0, "note": "If the CA follows redirects, the following apply:\n\n1. Redirects MUST be initiate"}
+{"row": 76, "section": "3.2.2.4.19", "sheet": 0, "backend": 0, "note": "The CA MUST NOT issue Certificates for other FQDNs that end with all the labels "}
+{"row": 77, "section": "3.2.2.4.20", "sheet": 0, "backend": 0, "note": "The token (as defined in RFC 8737, Section 3) MUST NOT be used for more than 30 "}
+{"row": 78, "section": "3.2.2.4.20", "sheet": 0, "backend": 0, "note": "Once the FQDN has been validated using this method, the CA MUST NOT issue Certif"}
+{"row": 79, "section": "3.2.2.5", "sheet": 0, "backend": 0, "note": "The CA SHALL confirm that prior to issuance, the CA has validated each IP Addres"}
+{"row": 80, "section": "3.2.2.5", "sheet": 0, "backend": 0, "note": "Completed validations of Applicant authority may be valid for the issuance of mu"}
+{"row": 81, "section": "3.2.2.5", "sheet": 0, "backend": 0, "note": "After July 31, 2019, CAs SHALL maintain a record of which IP validation method, "}
+{"row": 82, "section": "3.2.2.5.1", "sheet": 0, "backend": 0, "note": "Confirming the Applicant’s control over the requested IP Address by confirming t"}
+{"row": 83, "section": "3.2.2.5.1", "sheet": 0, "backend": 0, "note": "If a Random Value is used, the CA SHALL provide a Random Value unique to the cer"}
+{"row": 84, "section": "3.2.2.5.2", "sheet": 0, "backend": 0, "note": "Confirming the Applicant’s control over the IP Address by sending a Random Value"}
+{"row": 85, "section": "3.2.2.5.2", "sheet": 0, "backend": 0, "note": "The Random Value SHALL be unique in each email, fax, SMS, or postal mail."}
+{"row": 86, "section": "3.2.2.5.2", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 87, "section": "3.2.2.5.3", "sheet": 0, "backend": null, "note": "Confirming the Applicant’s control over the IP Address by obtaining a Domain Nam"}
+{"row": 88, "section": "3.2.2.5.4", "sheet": 0, "backend": 0, "note": "CAs SHALL NOT perform validations using this method after July 31, 2019. Complet"}
+{"row": 89, "section": "3.2.2.5.5", "sheet": 0, "backend": 0, "note": "Confirming the Applicant’s control over the IP Address by calling the IP Address"}
+{"row": 90, "section": "3.2.2.5.5", "sheet": 0, "backend": 0, "note": "Each phone call SHALL be made to a single number."}
+{"row": 91, "section": "3.2.2.5.5", "sheet": 0, "backend": 0, "note": "In the event of reaching voicemail, the CA may leave the Random Value and the IP"}
+{"row": 92, "section": "3.2.2.5.5", "sheet": 0, "backend": 0, "note": "The Random Value SHALL remain valid for use in a confirming response for no more"}
+{"row": 93, "section": "3.2.2.5.6", "sheet": 0, "backend": null, "note": "Confirming the Applicant’s control over the IP Address by performing the procedu"}
+{"row": 94, "section": "3.2.2.5.7", "sheet": 0, "backend": null, "note": "Confirming the Applicant’s control over the IP Address by performing the procedu"}
+{"row": 95, "section": "3.2.2.6", "sheet": 0, "backend": 0, "note": "Before issuing a Wildcard Certificate, the CA MUST establish and follow a docume"}
+{"row": 96, "section": "3.2.2.6", "sheet": 0, "backend": 0, "note": "If the FQDN portion of any Wildcard Domain Name is “registry-controlled” or is a"}
+{"row": 97, "section": "3.2.2.7", "sheet": 0, "backend": 0, "note": "Prior to using any data source as a Reliable Data Source, the CA SHALL evaluate "}
+{"row": 98, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "As part of the issuance process, the CA MUST retrieve and process CAA records in"}
+{"row": 99, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "If the CA issues, they MUST do so within the TTL of the CAA record, or 8 hours, "}
+{"row": 100, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "When processing CAA records, CAs MUST process the issue, issuewild, and iodef pr"}
+{"row": 101, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "Additional property tags MAY be supported, but MUST NOT conflict with or superse"}
+{"row": 102, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "CAs MUST respect the critical flag and not issue a certificate if they encounter"}
+{"row": 103, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "RFC 8659 requires that CAs “MUST NOT issue a certificate unless the CA determine"}
+{"row": 104, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "For issuances conforming to these Baseline Requirements, CAs MUST NOT rely on an"}
+{"row": 105, "section": "3.2.2.8", "sheet": 0, "backend": 0, "note": "CAs MUST document potential issuances that were prevented by a CAA record in suf"}
+{"row": 106, "section": "3.2.3", "sheet": 0, "backend": 0, "note": "If an Applicant subject to this Section 3.2.3 is a natural person, then the CA S"}
+{"row": 107, "section": "3.2.3", "sheet": 0, "backend": 0, "note": "The CA SHALL verify the Applicant’s name using a legible copy, which discernibly"}
+{"row": 108, "section": "3.2.3", "sheet": 0, "backend": 0, "note": "The CA SHALL inspect the copy for any indication of alteration or falsification."}
+{"row": 109, "section": "3.2.3", "sheet": 0, "backend": 0, "note": "The CA SHALL verify the Applicant’s address using a form of identification that "}
+{"row": 110, "section": "3.2.3", "sheet": 0, "backend": 0, "note": "The CA SHALL verify the certificate request with the Applicant using a Reliable "}
+{"row": 111, "section": "3.2.5", "sheet": 0, "backend": 0, "note": "If the Applicant for a Certificate containing Subject Identity Information is an"}
+{"row": 112, "section": "3.2.5", "sheet": 0, "backend": 0, "note": "In addition, the CA SHALL establish a process that allows an Applicant to specif"}
+{"row": 113, "section": "3.2.5", "sheet": 0, "backend": 0, "note": "If an Applicant specifies, in writing, the individuals who may request a Certifi"}
+{"row": 114, "section": "3.2.5", "sheet": 0, "backend": 0, "note": "The CA SHALL provide an Applicant with a list of its authorized certificate requ"}
+{"row": 115, "section": "3.2.6", "sheet": 0, "backend": 0, "note": "The CA SHALL disclose all Cross-Certified Subordinate CA Certificates that ident"}
+{"row": 116, "section": "4.1.2", "sheet": 0, "backend": 0, "note": "Prior to the issuance of a Certificate, the CA SHALL obtain the following docume"}
+{"row": 117, "section": "4.1.2", "sheet": 0, "backend": 0, "note": "Prior to the issuance of a Certificate, the CA SHALL obtain from the Applicant a"}
+{"row": 118, "section": "4.1.2", "sheet": 0, "backend": 0, "note": "The certificate request MUST contain a request from, or on behalf of, the Applic"}
+{"row": 119, "section": "4.2.1", "sheet": 0, "backend": 0, "note": "In cases where the certificate request does not contain all the necessary inform"}
+{"row": 120, "section": "4.2.1", "sheet": 0, "backend": 0, "note": "The CA SHALL establish and follow a documented procedure for verifying all data "}
+{"row": 121, "section": "4.2.1", "sheet": 0, "backend": 1, "note": "Applicant information MUST include, but not be limited to, at least one Fully-Qu"}
+{"row": 122, "section": "4.2.1", "sheet": 0, "backend": 0, "note": "For validation of Domain Names and IP Addresses according to Section 3.2.2.4 and"}
+{"row": 123, "section": "4.2.1", "sheet": 0, "backend": 0, "note": "The CA SHALL develop, maintain, and implement documented procedures that identif"}
+{"row": 124, "section": "4.2.1", "sheet": 0, "backend": 0, "note": "If a Delegated Third Party fulfills any of the CA’s obligations under this secti"}
+{"row": 125, "section": "4.2.2", "sheet": 1, "backend": 0, "note": "CAs SHALL NOT issue certificates containing Internal Names or Reserved IP Addres"}
+{"row": 126, "section": "4.3.1", "sheet": 0, "backend": 0, "note": "Certificate issuance by the Root CA SHALL require an individual authorized by th"}
+{"row": 127, "section": "4.5.1", "sheet": 0, "backend": null, "note": "See Section 9.6.3, provisions 2. and 4."}
+{"row": 128, "section": "4.9.1.1", "sheet": 1, "backend": 0, "note": "The CA SHALL revoke a Certificate within 24 hours and use the corresponding CRLR"}
+{"row": 129, "section": "4.9.1.1", "sheet": 1, "backend": 0, "note": "The CA SHOULD revoke a certificate within 24 hours and MUST revoke a Certificate"}
+{"row": 130, "section": "4.9.1.2", "sheet": 0, "backend": 0, "note": "The Issuing CA SHALL revoke a Subordinate CA Certificate within seven (7) days i"}
+{"row": 131, "section": "4.9.3", "sheet": 0, "backend": 0, "note": "The CA SHALL provide a process for Subscribers to request revocation of their ow"}
+{"row": 132, "section": "4.9.3", "sheet": 0, "backend": 0, "note": "The CA SHALL maintain a continuous 24x7 ability to accept and respond to revocat"}
+{"row": 133, "section": "4.9.3", "sheet": 0, "backend": null, "note": "The CA SHALL provide Subscribers, Relying Parties, Application Software Supplier"}
+{"row": 134, "section": "4.9.3", "sheet": 0, "backend": 0, "note": "The CA SHALL publicly disclose the instructions through a readily accessible onl"}
+{"row": 135, "section": "4.9.5", "sheet": 0, "backend": 0, "note": "Within 24 hours after receiving a Certificate Problem Report, the CA SHALL inves"}
+{"row": 136, "section": "4.9.5", "sheet": 0, "backend": 0, "note": "After reviewing the facts and circumstances, the CA SHALL work with the Subscrib"}
+{"row": 137, "section": "4.9.5", "sheet": 0, "backend": 0, "note": "The period from receipt of the Certificate Problem Report or revocation-related "}
+{"row": 138, "section": "4.9.7", "sheet": 0, "backend": null, "note": "For the status of Subscriber Certificates:\n\nIf the CA publishes a CRL, then the "}
+{"row": 139, "section": "4.9.7", "sheet": 0, "backend": 0, "note": "For the status of Subordinate CA Certificates:\n\nThe CA SHALL update and reissue "}
+{"row": 140, "section": "4.9.10", "sheet": 0, "backend": 0, "note": "OCSP responders operated by the CA SHALL support the HTTP GET method, as describ"}
+{"row": 141, "section": "4.9.10", "sheet": 0, "backend": 0, "note": "The validity interval of an OCSP response is the difference in time between the "}
+{"row": 142, "section": "4.9.10", "sheet": 1, "backend": 0, "note": "For the status of Subscriber Certificates:\n\n1. OCSP responses MUST have a validi"}
+{"row": 143, "section": "4.9.10", "sheet": 0, "backend": 0, "note": "For the status of Subordinate CA Certificates:\n\nThe CA SHALL update information "}
+{"row": 144, "section": "4.9.10", "sheet": 0, "backend": 0, "note": "If the OCSP responder receives a request for the status of a certificate serial "}
+{"row": 145, "section": "4.9.10", "sheet": 0, "backend": 0, "note": "A certificate serial number within an OCSP request is one of the following three"}
+{"row": 146, "section": "4.9.12", "sheet": 0, "backend": null, "note": "See Section 4.9.1 above, and section 4.9.12 of the Mozilla Compliance Self Asses"}
+{"row": 147, "section": "4.9.13", "sheet": 0, "backend": 0, "note": "The Repository MUST NOT include entries that indicate that a Certificate is susp"}
+{"row": 148, "section": "4.10.1", "sheet": 0, "backend": 0, "note": "Revocation entries on a CRL or OCSP Response MUST NOT be removed until after the"}
+{"row": 149, "section": "4.10.2", "sheet": 0, "backend": 0, "note": "The CA SHALL operate and maintain its CRL and OCSP capability with resources suf"}
+{"row": 150, "section": "4.10.2", "sheet": 0, "backend": 0, "note": "The CA SHALL maintain an online 24x7 Repository that application software can us"}
+{"row": 151, "section": "4.10.2", "sheet": 0, "backend": 0, "note": "The CA SHALL maintain a continuous 24x7 ability to respond internally to a high-"}
+{"row": 152, "section": "5.0", "sheet": 0, "backend": null, "note": "The CA/Browser Forum’s Network and Certificate System Security Requirements are "}
+{"row": 153, "section": "5.0", "sheet": 0, "backend": null, "note": "The CA SHALL develop, implement, and maintain a comprehensive security program d"}
+{"row": 154, "section": "5.0", "sheet": 0, "backend": null, "note": "The Certificate Management Process MUST include:\n\n1. physical security and envir"}
+{"row": 155, "section": "5.0", "sheet": 0, "backend": null, "note": "The CA’s security program MUST include an annual Risk Assessment that:\n\n1. Ident"}
+{"row": 156, "section": "5.0", "sheet": 0, "backend": null, "note": "Based on the Risk Assessment, the CA SHALL develop, implement, and maintain a se"}
+{"row": 157, "section": "5.0", "sheet": 0, "backend": null, "note": "The security plan MUST include administrative, organizational, technical, and ph"}
+{"row": 158, "section": "5.0", "sheet": 0, "backend": null, "note": "The security plan MUST also take into account then-available technology and the "}
+{"row": 159, "section": "5.2.2", "sheet": 0, "backend": 0, "note": "The CA Private Key SHALL be backed up, stored, and recovered only by personnel i"}
+{"row": 160, "section": "5.3.1", "sheet": 0, "backend": 0, "note": "Prior to the engagement of any person in the Certificate Management Process, whe"}
+{"row": 161, "section": "5.3.3", "sheet": 0, "backend": 0, "note": "The CA SHALL provide all personnel performing information verification duties wi"}
+{"row": 162, "section": "5.3.3", "sheet": 0, "backend": 0, "note": "The CA SHALL maintain records of such training and ensure that personnel entrust"}
+{"row": 163, "section": "5.3.3", "sheet": 0, "backend": 0, "note": "The CA SHALL document that each Validation Specialist possesses the skills requi"}
+{"row": 164, "section": "5.3.3", "sheet": 0, "backend": 0, "note": "The CA SHALL require all Validation Specialists to pass an examination provided "}
+{"row": 165, "section": "5.3.4", "sheet": 0, "backend": 0, "note": "All personnel in Trusted roles SHALL maintain skill levels consistent with the C"}
+{"row": 166, "section": "5.3.7", "sheet": 0, "backend": 0, "note": "The CA SHALL verify that the Delegated Third Party’s personnel involved in the i"}
+{"row": 167, "section": "5.4.1", "sheet": 0, "backend": 0, "note": "The CA and each Delegated Third Party SHALL record events related to the securit"}
+{"row": 168, "section": "5.4.1", "sheet": 0, "backend": 0, "note": "The CA and each Delegated Third Party SHALL record events related to their actio"}
+{"row": 169, "section": "5.4.1", "sheet": 0, "backend": null, "note": "The CA SHALL make these records available to its Qualified Auditor as proof of t"}
+{"row": 170, "section": "5.4.1", "sheet": 0, "backend": 0, "note": "The CA SHALL record at least the following events:\n\n1. CA certificate and key li"}
+{"row": 171, "section": "5.4.1", "sheet": 0, "backend": 0, "note": "Log records MUST include the following elements:\n\n1. Date and time of record;\n\n2"}
+{"row": 172, "section": "5.4.3", "sheet": 0, "backend": 0, "note": "The CA and each Delegated Third Party SHALL retain, for at least two (2) years:\n"}
+{"row": 173, "section": "5.4.8", "sheet": 0, "backend": 0, "note": "Additionally, the CA’s security program MUST include an annual Risk Assessment t"}
+{"row": 174, "section": "5.5.1", "sheet": 0, "backend": 0, "note": "The CA and each Delegated Third Party SHALL archive all audit logs (as set forth"}
+{"row": 175, "section": "5.5.2", "sheet": 0, "backend": 0, "note": "Archived audit logs (as set forth in Section 5.5.1 SHALL be retained for a perio"}
+{"row": 176, "section": "5.5.2", "sheet": 0, "backend": 0, "note": "Additionally, the CA and each Delegated Third Party SHALL retain, for at least t"}
+{"row": 177, "section": "5.7.1", "sheet": 0, "backend": 0, "note": "CA organizations shall have an Incident Response Plan and a Disaster Recovery Pl"}
+{"row": 178, "section": "5.7.1", "sheet": 0, "backend": 0, "note": "The CA SHALL document business continuity and disaster recovery procedures desig"}
+{"row": 179, "section": "5.7.1", "sheet": 0, "backend": 0, "note": "The CA is not required to publicly disclose its business continuity plans but SH"}
+{"row": 180, "section": "5.7.1", "sheet": 0, "backend": 0, "note": "The CA SHALL annually test, review, and update these procedures."}
+{"row": 181, "section": "5.7.1", "sheet": 0, "backend": 0, "note": "The business continuity plan MUST include:\n\n1. The conditions for activating the"}
+{"row": 182, "section": "6.1.1.1", "sheet": 0, "backend": 0, "note": "For CA Key Pairs that are either\ni. used as a CA Key Pair for a Root Certificate"}
+{"row": 183, "section": "6.1.1.1", "sheet": 0, "backend": 0, "note": "For other CA Key Pairs that are for the operator of the Root CA or an Affiliate "}
+{"row": 184, "section": "6.1.1.1", "sheet": 0, "backend": 0, "note": "In all cases, the CA SHALL:\n\n1. generate the CA Key Pair in a physically secured"}
+{"row": 185, "section": "6.1.1.3", "sheet": 0, "backend": 0, "note": "The CA SHALL reject a certificate request if one or more of the following condit"}
+{"row": 186, "section": "6.1.1.3", "sheet": 0, "backend": 0, "note": "If the Subscriber Certificate will contain an extKeyUsage extension containing e"}
+{"row": 187, "section": "6.1.2", "sheet": 0, "backend": 0, "note": "Parties other than the Subscriber SHALL NOT archive the Subscriber Private Key w"}
+{"row": 188, "section": "6.1.2", "sheet": 0, "backend": 0, "note": "If the CA or any of its designated RAs become aware that a Subscriber’s Private "}
+{"row": 189, "section": "6.1.5", "sheet": 1, "backend": 1, "note": "For RSA key pairs the CA SHALL:\n• Ensure that the modulus size, when encoded, is"}
+{"row": 190, "section": "6.1.5", "sheet": 1, "backend": null, "note": "For ECDSA key pairs, the CA SHALL:\n• Ensure that the key represents a valid poin"}
+{"row": 191, "section": "6.1.5", "sheet": 1, "backend": null, "note": "No other algorithms or key sizes are permitted."}
+{"row": 192, "section": "6.1.6", "sheet": 1, "backend": 1, "note": "RSA: The CA SHALL confirm that the value of the public exponent is an odd number"}
+{"row": 193, "section": "6.1.6", "sheet": 1, "backend": 0, "note": "ECDSA: The CA SHOULD confirm the validity of all keys using either the ECC Full "}
+{"row": 194, "section": "6.1.7", "sheet": 0, "backend": 0, "note": "Private Keys corresponding to Root Certificates MUST NOT be used to sign Certifi"}
+{"row": 195, "section": "6.2", "sheet": 0, "backend": 0, "note": "The CA SHALL implement physical and logical safeguards to prevent unauthorized c"}
+{"row": 196, "section": "6.2", "sheet": 0, "backend": 0, "note": "Protection of the CA Private Key outside the validated system or device specifie"}
+{"row": 197, "section": "6.2", "sheet": 0, "backend": 0, "note": "The CA SHALL encrypt its Private Key with an algorithm and key-length that, acco"}
+{"row": 198, "section": "6.2.4", "sheet": 0, "backend": null, "note": "See Section 5.2.2."}
+{"row": 199, "section": "6.2.5", "sheet": 0, "backend": 0, "note": "Parties other than the Subordinate CA SHALL NOT archive the Subordinate CA Priva"}
+{"row": 200, "section": "6.2.6", "sheet": 0, "backend": 0, "note": "If the Issuing CA generated the Private Key on behalf of the Subordinate CA, the"}
+{"row": 201, "section": "6.2.6", "sheet": 0, "backend": 0, "note": "If the Issuing CA becomes aware that a Subordinate CA’s Private Key has been com"}
+{"row": 202, "section": "6.2.7", "sheet": 0, "backend": 0, "note": "The CA SHALL protect its Private Key in a system or device that has been validat"}
+{"row": 203, "section": "6.3.2", "sheet": 1, "backend": 1, "note": "Subscriber Certificates issued on or after 1 September 2020 SHOULD NOT have a Va"}
+{"row": 204, "section": "6.3.2", "sheet": 1, "backend": null, "note": "Subscriber Certificates issued after 1 March 2018, but prior to 1 September 2020"}
+{"row": 205, "section": "6.3.2", "sheet": 1, "backend": null, "note": "Subscriber Certificates issued after 1 July 2016 but prior to 1 March 2018 MUST "}
+{"row": 206, "section": "6.3.2", "sheet": 0, "backend": 0, "note": "For the purpose of calculations, a day is measured as 86,400 seconds. Any amount"}
+{"row": 207, "section": "6.5.1", "sheet": 0, "backend": 0, "note": "The CA SHALL enforce multi-factor authentication for all accounts capable of dir"}
+{"row": 208, "section": "7.1", "sheet": 1, "backend": 0, "note": "Prior to 2023-09-15, the CA SHALL issue Certificates in accordance with the prof"}
+{"row": 209, "section": "7.1.1", "sheet": 1, "backend": 1, "note": "Certificates MUST be of type X.509 v3."}
+{"row": 210, "section": "7.1.2.3.2", "sheet": 1, "backend": 1, "note": "If present, the Certificate Policies extension MUST be formatted as one of the t"}
+{"row": 211, "section": "7.1.2.5.2", "sheet": 1, "backend": 1, "note": "For a TLS Subordinate CA to be Technically Constrained, Name Constraints extensi"}
+{"row": 212, "section": "7.1.2.5.2", "sheet": 1, "backend": null, "note": "Any otherName, if present:\n\n1. MUST apply in the context of the public Internet,"}
+{"row": 213, "section": "8.0", "sheet": 0, "backend": null, "note": "The CA SHALL at all times:\n\n1. Comply with these Requirements;\n\n2. Comply with t"}
+{"row": 214, "section": "8.1", "sheet": 0, "backend": 0, "note": "Certificates that are capable of being used to issue new certificates MUST eithe"}
+{"row": 215, "section": "8.1", "sheet": 0, "backend": 0, "note": "The period during which the CA issues Certificates SHALL be divided into an unbr"}
+{"row": 216, "section": "8.1", "sheet": 0, "backend": 0, "note": "An audit period MUST NOT exceed one year in duration."}
+{"row": 217, "section": "8.1", "sheet": 0, "backend": 0, "note": "If the CA does not have a currently valid Audit Report indicating compliance wit"}
+{"row": 218, "section": "8.1", "sheet": 0, "backend": 0, "note": "The point-in-time readiness assessment SHALL be completed no earlier than twelve"}
+{"row": 219, "section": "8.2", "sheet": 0, "backend": 0, "note": "The CA’s audit SHALL be performed by a Qualified Auditor. A Qualified Auditor me"}
+{"row": 220, "section": "8.4", "sheet": 0, "backend": 0, "note": "The CA SHALL undergo an audit in accordance with one of the following schemes:\n\n"}
+{"row": 221, "section": "8.4", "sheet": 0, "backend": 0, "note": "Whichever scheme is chosen, it MUST incorporate periodic monitoring and/or accou"}
+{"row": 222, "section": "8.4", "sheet": 0, "backend": 0, "note": "The audit MUST be conducted by a Qualified Auditor, as specified in Section 8.2."}
+{"row": 223, "section": "8.4", "sheet": 0, "backend": 0, "note": "For Delegated Third Parties which are not Enterprise RAs, then the CA SHALL obta"}
+{"row": 224, "section": "8.4", "sheet": 0, "backend": 0, "note": "If the opinion is that the Delegated Third Party does not comply, then the CA SH"}
+{"row": 225, "section": "8.4", "sheet": 0, "backend": 0, "note": "The audit period for the Delegated Third Party SHALL NOT exceed one year (ideall"}
+{"row": 226, "section": "8.4", "sheet": 0, "backend": 0, "note": "However, if the CA or Delegated Third Party is under the operation, control, or "}
+{"row": 227, "section": "8.6", "sheet": 0, "backend": 0, "note": "The Audit Report SHALL state explicitly that it covers the relevant systems and "}
+{"row": 228, "section": "8.6", "sheet": 0, "backend": 0, "note": "The CA SHALL make the Audit Report publicly available."}
+{"row": 229, "section": "8.6", "sheet": 0, "backend": 0, "note": "The CA MUST make its Audit Report publicly available no later than three months "}
+{"row": 230, "section": "8.6", "sheet": 0, "backend": 0, "note": "The Audit Report MUST contain at least the following clearly-labelled informatio"}
+{"row": 231, "section": "8.6", "sheet": 0, "backend": 0, "note": "An authoritative English language version of the publicly available audit inform"}
+{"row": 232, "section": "8.6", "sheet": 0, "backend": 0, "note": "The Audit Report MUST be available as a PDF, and SHALL be text searchable for al"}
+{"row": 233, "section": "8.7", "sheet": 0, "backend": 0, "note": "During the period in which the CA issues Certificates, the CA SHALL monitor adhe"}
+{"row": 234, "section": "8.7", "sheet": 0, "backend": 0, "note": "Except for Delegated Third Parties that undergo an annual audit that meets the c"}
+{"row": 235, "section": "8.7", "sheet": 0, "backend": 0, "note": "The CA SHALL review each Delegated Third Party’s practices and procedures to ens"}
+{"row": 236, "section": "8.7", "sheet": 0, "backend": 0, "note": "The CA SHALL internally audit each Delegated Third Party’s compliance with these"}
+{"row": 237, "section": "8.7", "sheet": 0, "backend": 0, "note": "During the period in which a Technically Constrained Subordinate CA issues Certi"}
+{"row": 238, "section": "8.7", "sheet": 0, "backend": 0, "note": "On at least a quarterly basis, against a randomly selected sample of the greater"}
+{"row": 239, "section": "9.6.1", "sheet": 0, "backend": 0, "note": "The Root CA SHALL be responsible for the performance and warranties of the Subor"}
+{"row": 240, "section": "9.6.3", "sheet": 0, "backend": 0, "note": "The CA SHALL require, as part of the Subscriber Agreement or Terms of Use, that "}
+{"row": 241, "section": "9.6.3", "sheet": 0, "backend": 0, "note": "Prior to the issuance of a Certificate, the CA SHALL obtain, for the express ben"}
+{"row": 242, "section": "9.6.3", "sheet": 0, "backend": 0, "note": "The CA SHALL implement a process to ensure that each Subscriber Agreement or Ter"}
+{"row": 243, "section": "9.6.3", "sheet": 0, "backend": 0, "note": "The Subscriber Agreement or Terms of Use MUST contain provisions imposing on the"}
+{"row": 244, "section": "9.8", "sheet": 0, "backend": 0, "note": "For delegated tasks, the CA and any Delegated Third Party MAY allocate liability"}
+{"row": 245, "section": "9.8", "sheet": 0, "backend": 0, "note": "If the CA chooses to limit its liability for Certificates that are not issued or"}
+{"row": 246, "section": "9.9", "sheet": 0, "backend": 0, "note": "Thus, except in the case where the CA is a government entity, the CA SHALL defen"}
+{"row": 247, "section": "9.15", "sheet": 0, "backend": 0, "note": "The CA SHALL issue Certificates and operate its PKI in accordance with all law a"}
+{"row": 248, "section": "9.16.3", "sheet": 0, "backend": 0, "note": "In the event of a conflict between these Requirements and a law, regulation or g"}
+{"row": 249, "section": "9.16.3", "sheet": 0, "backend": 0, "note": "The CA MUST also (prior to issuing a certificate under the modified requirement)"}
+{"row": 250, "section": "9.16.3", "sheet": 0, "backend": 0, "note": "Any modification to CA practice enabled under this section MUST be discontinued "}

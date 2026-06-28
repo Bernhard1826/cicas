@@ -1,0 +1,2 @@
+Covering 132 full verdicts — assessing whether 'MUST NOT' in the text should match done the missing lint.
+Only 4 cases flip to polarity: all NONE but 2928 which partial judgment.

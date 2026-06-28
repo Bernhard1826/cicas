@@ -1,0 +1,17 @@
+{
+  "total": 108,
+  "REAL": 91,
+  "SPURIOUS": 0,
+  "UNCERTAIN": 17,
+  "total_certs": 1128,
+  "n_shipped_lints": 31,
+  "uncertain_verified": {
+    "CONFIRMED_REAL": 17
+  },
+  "independent_audit": {
+    "CONFIRMED": 108
+  },
+  "independent_conflicts": 0,
+  "genuine": 108,
+  "false_positives": 0
+}
