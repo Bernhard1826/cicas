@@ -54,9 +54,9 @@
 
 本文的贡献按上述三道边界组织。
 
-**(C1) 可 lint 边界与覆盖缺口。** 本文给出基于 IR 字段的可 lint 性判定框架，并在 RFC 5280 与 CABF BR 上量化出单证书可观测规则及其 zlint 覆盖缺口；前半段结果用 zlint 维护者公开的人工映射表作外部对照（§5, §8.4）。
+**(C1) 可 lint 边界与覆盖缺口。** 本文给出基于 IR 字段的可 lint 性判定框架，并在 RFC 5280 与 CABF BR 上量化出单证书可观测规则及其 zlint 覆盖缺口；前半段结果用 zlint 维护者公开的人工映射表作外部对照（§5, §8.3）。
 
-**(C2) 受限生成与分层验证。** 本文把代码生成限制在类型化 DSL 与原子模板空间内，并用确定性渲染、机械摘要、编译检查、同义判定和证书级 oracle 分层验证生成结果。该设计明确区分 IR 级忠实性与规范级同义性，避免把可编译或可执行误认为规范正确（§6, §8.3）。
+**(C2) 受限生成与分层验证。** 本文把代码生成限制在类型化 DSL 与原子模板空间内，并用确定性渲染、机械摘要、编译检查、同义判定和证书级 oracle 分层验证生成结果。该设计明确区分 IR 级忠实性与规范级同义性，避免把可编译或可执行误认为规范正确（§6, §8.1, §8.4）。
 
 **(C3) 无人工真值下的残差核算。** 本文提出 SAIV，将召回守恒、代码-规范同义性、外部覆盖一致性组织为可计算残差，并在实验中报告哪些残差已经闭合、哪些仍由同义端点或跨标准覆盖口径限制（§7--§9）。
 
@@ -237,59 +237,13 @@ _图 3：受限代码工厂。IR 经过 $\mu$ 和词汇封闭门进入 $\mathcal
 
 **证书级语义 oracle（$\mathrm{Code}\equiv\mathrm{IR}$ 的执行级验证，独立于同义判定）。** 为每个原子模板造一对受控 fixture（谓词真/假，按原子模板类参数化、不绑定具体规则），令代码真执行、读回状态，两张都符期望即认证该原子模板。对持 DSL 树 $t$ 的自生成 lint：当 $t$ 仅由已认证原子模板构成且编译通过时，$\rho(t)$ 逐原子忠实，由结构归纳得 $\mathrm{Code}\equiv t$（基：原子模板已由 oracle 认证; 步: $\neg/\wedge/\vee$ 保持忠实）；又因 $t$ 忠实归约自 IR，故 $\mathrm{Code}\equiv\mathrm{IR}$。这是受控 fixture 上的执行级验证，确定、不随模型而变。**关键限定：$\mathrm{Code}\equiv\mathrm{IR}$ 不是规范同义性；最终仍以 $\mathrm{Code}\equiv\mathrm{Spec}$ 判定为准。**
 
-### 6.6 合成算法与样本级局部修复
-
-§6.5 验收门不通过时修复分两级。本小节是**较轻**的样本级局部修复：假定误差仍在该规则的字段或语法层，就地重修、不动全局 $\mathcal{V}$/$\mathcal{A}$/$\phi_C$（更重的管道级留 §7，仅在样本级耗尽后介入）。局部修复操作 $\rho_G^{\mathrm{loc}}$ 含两类子操作：
-
-$$
-\rho_G^{\mathrm{loc}}(t, c) \;=\; \begin{cases}
-\Phi_{\mathrm{post}}(t, r), & \text{Description / Citation 偏差} \\
-\phi_G\bigl(r,\; \mathrm{feedback}(\eta(s), \mathcal{V}, \mathcal{A})\bigr), & \eta(s) = \mathrm{Err} \;\text{或}\; \mathrm{compile}(\rho(t)) = 0
-\end{cases}
-\tag{3}
-$$
-
-第一支是**幂等闭式修复** $\Phi_{\mathrm{post}}(t, r)$——后处理器确定性绑定 `Description`/`Citation`/`Name`，对可溯源字段一次性绑定规范原文即止；第二支是**类型反馈式重生成**——$\eta(s)$ 为 LLM 输出 $s$ 的解析结果（$\perp_{\mathrm{NT}}$、类型错误 $\mathrm{Err}$ 或合法树 $t \in \mathcal{T}_{\mathcal{V}}$），把解析错误（哪个原子模板签名不满足）或编译错误结构化注入提示、触发重合成。$K_{\mathrm{loc}}$（默认 3）轮内仍未通过验收门者移交 §7 管道级修复。
-
-算法 1 把上述样本级修复嵌入循环；整个流程不依赖模板分类，只以 $(\mathcal{V}, \mathcal{A})$ 作为代码空间约束。
-
-```
-算法 1：DSL 受限合成与验证
-输入：可执行规则 r ∈ R_L，词汇表 V，原子模板集 A，LLM 模型 M
-输出：可编译 Go 代码 Φ_post(t, r) 或失败标志
-
- 1: t_det ← DeterministicSynth(r, μ, V, A)            // 确定性主路径：IR 经 μ 直接归约
- 2: if t_det ≠ ⊥ then
- 3:     code ← Φ_post(t_det, r)
- 4:     if compile(code) and Verify(code, r) = PASS then return code
- 5:                                                    // 否则视同未解决，回退 LLM
- 6: prompt ← BuildPrompt(r, V, A)                      // 受限 LLM 回退路径
- 7: for k = 1 to K_loc do
- 8:     s ← M.generate(prompt)                         // LLM 输出 JSON
- 9:     case η(s):
-10:         ⊥_NT  : return FAIL("no_template", reason)
-11:         Err   : prompt ← prompt ⊕ feedback(η(s))    // 类型错误反馈
-12:                 continue
-13:         t ∈ T_V :
-14:             code ← Φ_post(t, r)
-15:             if not compile(code) then
-16:                 prompt ← prompt ⊕ feedback(compile_error(code))
-17:                 continue
-18:             g ← Verify(code, r)                     // §6.5 三层布尔验收门
-19:             if g = PASS then return code
-20:             prompt ← prompt ⊕ feedback(g, σ_mech(t))
-21: return FAIL("local_repair_exhausted", t)            // 进入 §7 管道级修复
-```
-
-算法 1 先尝试确定性合成（第 1–5 行），仅在其返回 $\bot$ 或产出的代码未通过接受门时，才进入 $K_{\mathrm{loc}}$ 轮受限 LLM 回退循环（第 6–20 行）并在轮内终止。区别于"空白重采样式启发式重试"，每轮重试都携带可定位的结构化诊断（类型/编译错误，或 $\sigma_{\mathrm{mech}}(t)$ 与同义反馈）；且在 $\eta$ 与 $\Phi_{\mathrm{post}}$ 的封闭性下，任何返回的代码——无论来自确定性主路径还是 LLM 回退——都同时满足词汇封闭（$t \in \mathcal{T}_{\mathcal{V}}$）、通过编译、通过三层验收门——即"语义可追溯 + 结构可执行 + 类型受约束"。
-
 ## 7. 阶段感知式迭代验证框架（SAIV）
 
-为了保证各个模块的正确性，我们预先设定一些目标，通过多轮次的迭代向这些目标逼近。当目标无法达到时，需要找到出问题的模块并执行修复，再进行下一次迭代，直到收敛。
+为了协调各个模块之间的工作，保证各个模块的正确性，我们引入一个自动迭代框架，具体做法是预先设定一些目标，通过多轮次的迭代向这些目标逼近。当目标无法达到时，需要找到出问题的模块并执行修复，再进行下一次迭代，直到收敛。
 
 ### 7.1 形式化定义
 
-受控规范-代码生成管道 $\Pi$ 是四个模块依次串联的复合函数——**提取 $\to$ 分类 $\to$ 生成 $\to$ 验证**：
+全流程 $\Pi$ 是四个模块依次串联的复合函数——**提取 $\to$ 分类 $\to$ 生成 $\to$ 验证**：
 
 $$
 \Pi = \phi_V \circ \phi_G \circ \phi_C \circ \phi_R
@@ -307,16 +261,16 @@ SAIV 借鉴反向传播的思路：先定下整个流程要优化的目标，再
 
   **定理 1（召回完整性不变量）**。*若 $\phi_R$ 对由 RFC 2119 关键词触发正则匹配，则以下守恒关系成立：*
   $$
-  |\mathcal{R}_{\mathrm{kw}}(\mathcal{D})| = |\mathcal{R}_N| + |\mathcal{R}_L| + |\mathcal{R}_U| \tag{4}
+  |\mathcal{R}_{\mathrm{kw}}(\mathcal{D})| = |\mathcal{R}_N| + |\mathcal{R}_L| + |\mathcal{R}_U| \tag{3}
   $$
 
-  式中 $\mathcal{R}_N$ 为噪声（Layer 1 关键词扫描产生的假阳性，不包含真实规范规则）、$\mathcal{R}_L$ 为 lintable 规则、$\mathcal{R}_U$ 为 not lintable 规则（含 CA 行为类、跨证书类、运行时类等不可仅凭单张证书裁决的规则）。可执行类 $\mathcal{R}_L$ 进一步按"是否已被现有外部 lint 工具实现"二分：
+  式中 $\mathcal{R}_N$ 为噪声也就是虽然包含rfc2119关键词但不是真正的规则、$\mathcal{R}_L$ 为 lintable 规则、$\mathcal{R}_U$ 为 not lintable 规则。可执行类 $\mathcal{R}_L$ 进一步按"是否已被现有外部 lint 工具实现"二分：
 
   $$
-  |\mathcal{R}_L| = |\mathcal{R}_L^{\mathrm{cov}}| + |\mathcal{R}_L^{\mathrm{uncov}}| \tag{5}
+  |\mathcal{R}_L| = |\mathcal{R}_L^{\mathrm{cov}}| + |\mathcal{R}_L^{\mathrm{uncov}}| \tag{4}
   $$
 
-  其中 $\mathcal{R}_L^{\mathrm{cov}}$ 为已被某lint工具覆盖的规则、$\mathcal{R}_L^{\mathrm{uncov}}$ 为尚未覆盖的规则。第一式（式 4）是召回到分类的总量守恒，第二式（式 5）则把可执行集拆开，以便后续目标分别实现：未覆盖子集 $\mathcal{R}_L^{\mathrm{uncov}}$ 是生成"补生态空白"的最重要观测域（G2 同义性），已覆盖子集 $\mathcal{R}_L^{\mathrm{cov}}$ 则给出反向可执行性的外部证据（G3）。
+  其中 $\mathcal{R}_L^{\mathrm{cov}}$ 为已被某lint工具覆盖的规则、$\mathcal{R}_L^{\mathrm{uncov}}$ 为尚未覆盖的规则。第一式（式 3）是召回到分类的总量守恒，第二式（式 4）则把可执行集拆开，以便后续目标分别实现：未覆盖子集 $\mathcal{R}_L^{\mathrm{uncov}}$ 是生成"补生态空白"的最重要观测域，已覆盖子集 $\mathcal{R}_L^{\mathrm{cov}}$ 则给出反向可执行性的外部证据。
 
   残差为召回守恒残差 $\mathcal{L}_{\mathrm{recall}}$，无需人工真值即可计算，当前已闭合（§8.2）。
 
@@ -324,13 +278,15 @@ SAIV 借鉴反向传播的思路：先定下整个流程要优化的目标，再
 
 - **G3（已覆盖规则的反向可执行性）**：规则若在 zlint等lint工具中存在对应实现，则必然 lintable，目标是违反计数 $N_{\mathrm{viol}}=0$。
 
-在此标签之上，SAIV 把三类质量信号形式化为可计算残差：**召回守恒残差** $\mathcal{L}_{\mathrm{recall}}$（附录 G 式 7）以对称归一化度量定理 1 的理想恒等被违反的程度；**代码忠实残差** $\mathcal{L}_{\mathrm{code}}$（附录 G 式 8）是可 lint 集上正确性标签的平均缺口；二者加权为**总损失** $\mathcal{L}_{\mathrm{total}}$（附录 G 式 9，默认 $w_R=w_C=0.5$）。第三类是双判定源一致性残差 $N_{\mathrm{viol}}$（§7.4）。
+在此标签之上，SAIV 把三类质量信号形式化为可计算残差：**召回守恒残差** $\mathcal{L}_{\mathrm{recall}}$（附录 G 式 6）以对称归一化度量定理 1 的理想恒等被违反的程度；**代码忠实残差** $\mathcal{L}_{\mathrm{code}}$（附录 G 式 7）是可 lint 集上正确性标签的平均缺口；二者加权为**总损失** $\mathcal{L}_{\mathrm{total}}$（附录 G 式 8，默认 $w_R=w_C=0.5$）。第三类是双判定源一致性残差 $N_{\mathrm{viol}}$（§7.4）。
 
-| 目标 | 残差 | 主要修复操作 | 修复对象 |
+| 目标 | 残差 | 主要修复方向 | 修复对象 |
 |---|---|---|---|
-| G1 召回完整性 | $\mathcal{L}_{\mathrm{recall}}$（附录 G 式 7） | —（结构不变量，已闭合） | 召回逻辑 |
-| G2 同义性 | $\mathcal{L}_{\mathrm{code}}$（附录 G 式 8） | $\rho_R$ / $\rho_G$ / $\rho_V$ | IR 内容修正 / DSL 树重合成 / 判定与摘要复核 |
-| G3 双判定源一致 | $N_{\mathrm{viol}}$（§7.4） | $\rho_V$ | $\phi_C$ 假阴性 / 外部覆盖标签假阳性 |
+| G1 召回完整性 | $\mathcal{L}_{\mathrm{recall}}$（附录 G 式 6） | — | 召回逻辑 |
+| G2 同义性 | $\mathcal{L}_{\mathrm{code}}$（附录 G 式 7） | IR 内容、DSL 生成、验证判定三类修复 | IR 内容修正 / DSL 树重合成 / 判定与摘要复核 |
+| G3 双判定源一致 | $N_{\mathrm{viol}}$（§7.4） | 验证判定一致性修复 | $\phi_C$ 假阴性 / 外部覆盖标签假阳性 |
+
+表中只给出目标到修复方向的对应关系；具体修复操作及其记号在 §7.3 中定义。
 
 ![](figures/fig7_saiv_control_console.png)
 
@@ -344,15 +300,15 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
 
 - **IR 内容修复 $\rho_R$**：当路由器选择该操作时，把失败轨迹——当前 IR、不可归约类别、机械摘要、判官裁定与理由、同义置信度、本会话已试过的历史 IR——回传 LLM，要求其输出 `REPAIR(ir')` 或 `NO_FIX`。
 - **分类修复 $\rho_C$**：修复四条件框架对应字段的提取，重新提取IR，修复lintability判断。
-- **生成修复 $\rho_G$**：先试确定性修复（如 `Description`/`Citation` 字面替换）；失败则把失败码片段与 IR 约束差异、或解析阶段的原子模板签名/封闭性错误作为反馈注入提示、触发 LLM 在 $\mathcal{T}_{\mathcal{V}}$ 内重新合成；若持续弃权，则进入离线词汇扩展通道 $\rho_A$——分析弃权原因、在受控数据集上训练新原子模板候选、经 cert-oracle 认证后并入 $\mathcal{A}$。
-- **验证修复 $\rho_V$**：扩大同义判定的语义邻域（如允许否定/肯定互换、一对多分解），或修正双判定源输出之间的不一致（即下文的 G3 残差修复）。
+- **生成修复 $\rho_G$**：先试确定性修复；失败则把失败码片段与 IR 约束差异、或解析阶段的原子模板签名/封闭性错误作为反馈注入提示、触发 LLM 在 $\mathcal{T}_{\mathcal{V}}$ 内重新合成；若持续弃权，则进入离线词汇扩展通道 $\rho_A$——分析弃权原因、在受控数据集上训练新原子模板候选、经 cert-oracle 认证后并入 $\mathcal{A}$。
+- **验证修复 $\rho_V$**：扩大同义判定的语义邻域，如允许否定/肯定互换、一对多分解，或修正双判定源输出之间的不一致。
 
 ### 7.4 迭代算法与终止条件
 
-算法 2 给出完整流程。
+算法 1 给出完整流程。
 
 ```
-算法 2：阶段感知式迭代验证（SAIV），自动闸门负责回路内验收
+算法 1：阶段感知式迭代验证（SAIV），自动闸门负责回路内验收
 输入：标准文档 D，阈值 θ，最大迭代数 K
 输出：最终代码集 C* 与终止状态 status
 
@@ -362,7 +318,7 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
  4:  repeat
  5:      计算残差 L_recall(6), L_code(7), N_viol(§7.4)
  6:      if 全部残差 < θ then break                       // 多目标同时闭合
- 7:      stage ← StageAttribution(...)                    // 式(10)
+ 7:      stage ← StageAttribution(...)                    // 式(9)
  8:      if stage = φ_R then                              // IR 内容修复
  9:          for each r routed to ρ_R do
 10:              rep ← ρ_R(失败轨迹(r))                    // 自反思，返 REPAIR(ir') 或 NO_FIX
@@ -377,13 +333,11 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
 19: return (C, status ∈ {closed, dry, budget_exhausted})
 ```
 
-第 8–14 行即 $\rho_R$ 回路：第 11 行对重抽结果做结构校验（obligation 关键字、check_scope、subject 字段对照原文），未通过者或被下游重测否决者落入 $\mathcal{R}^{\mathrm{irred}}_{\mathrm{code}}$。这不替代 §8.3 对最终发射集的去噪多数同义判定。
-
 **终止条件**：$\mathcal{L}_{\mathrm{total}}<\theta$（默认 0.05）、达最大迭代 $K=10$、或本轮无残差下降。若每个被采纳的阶段修复操作都单调（减少该阶段误差或不变），则 $\mathcal{L}_{\mathrm{total}}$ 每轮非递增；实际系统用"无下降即停止"策略，故保证有限轮终止，但不保证全局最优（见 §8）。
 
 ## 8. 实验评估
 
-本章使用前文提到的方法和框架进行实验，并得出量化结论。除内部分层指标（§8.1–8.3）外，本章给出**两道相互独立的外部验证**，分别检验框架的两个半段：§8.4 以 zlint 维护者的人工金标外部验证**规则提取与可 lint 性判定**，§8.5 以真证书上的执行外部验证**代码生成与同义判定**。
+本章使用前文提到的方法和框架进行实验，并得出量化结论。除内部分层指标（§8.1–8.2）外，本章给出**两道相互独立的外部验证**，分别检验框架的两个半段：§8.3 以 zlint 维护者的人工金标外部验证**规则提取与可 lint 性判定**，§8.4 以真证书上的执行外部验证**代码生成与同义判定**。
 
 ### 8.1 实验设置与结果快照
 
@@ -401,7 +355,7 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
 | 不能生成（无树 / 不编译 / 弃权） | **29** | 确定性归约不出或归约树不编译、LLM 亦弃权或不编译 |
 | **同义表达（去噪 5 票 LLM 判官，$\mathrm{Code}\equiv\mathrm{Spec}$）** | **113** | 在 175 条可生成dsl树中判为同义的（确定性树 105/137、LLM 树 8/38）；**同义率 = 113/175 = 64.6%** |
 | 不同义（DNE） | **62** | 详见下文 |
-| *（旁证）证书级 oracle $\mathrm{Code}\equiv\mathrm{IR}$* | *124* | *确定性 soundness、非同义；其中 36 条判官判 DNE，说明 Code≡IR 不能替代 Code≡Spec（§8.3）* |
+| *（旁证）证书级 oracle $\mathrm{Code}\equiv\mathrm{IR}$* | *124* | *确定性 soundness、非同义；其中 36 条判官判 DNE，说明 Code≡IR 不能替代 Code≡Spec* |
 
 表 1 同时给出不可生成可编译 lint（29 条）与不同义（62 条）的数量。尤其，36 条经证书级 oracle 证得 $\mathrm{Code}\equiv\mathrm{IR}$ 却被判官判 $\mathrm{Code}\not\equiv\mathrm{Spec}$ 的规则，说明"忠实生成给定 IR"与"忠实表达规范"是两个不同问题。本文仅报告这一分歧；这些残差不是可 lint 性定义本身的反例。
 
@@ -417,10 +371,10 @@ $$
 
 要回答"现有工具覆盖了多少可 lint 规则"，关键在于用对判据。本文以"该可 lint 规则是否被某条同源 zlint lint 真正实现"为判据：对每条规则检索候选 zlint lint，再逐字段（subject / obligation / predicate / constraint）比对，给出 full（完整实现）/ partial（部分实现）/ none（无实现）三档裁定。
 
-算法 3 形式化该判定：把 lint 摘要为反向 IR、再逐字段对齐，候选检索按 source/section（Stage-1，RFC 章节号稳定、按前缀收窄，CABF 章节随版本漂移、故取全部 CABF lint）、新增"错字段"一致性闸门（Stage-3，只降不升）、覆盖只计 full（Stage-4，partial/none 归 $\phi_G$）。
+算法 2 形式化该判定：把 lint 摘要为反向 IR、再逐字段对齐，候选检索按 source/section（Stage-1，RFC 章节号稳定、按前缀收窄，CABF 章节随版本漂移、故取全部 CABF lint）、新增"错字段"一致性闸门（Stage-3，只降不升）、覆盖只计 full（Stage-4，partial/none 归 $\phi_G$）。
 
 ```
-算法 3：可 lint 规则的 zlint 覆盖对齐判定（规则索引）
+算法 2：可 lint 规则的 zlint 覆盖对齐判定（规则索引）
 输入：可 lint 规则集 B = {b_1,…,b_m}（每条带 IR 四元组 ⟨主体, 义务, 谓词, 约束⟩、source、section）；
       zlint lint 集 L = {ℓ_1,…,ℓ_n}（每条带 description/citation/severity 元数据与 Pass/Error 测试）；
       离线代码摘要器 M_summ、字段级判官 M_judge（temperature=0）
@@ -466,13 +420,7 @@ $$
 
 前三行（斜体）为 zlint 侧按其 `Source` 元数据字段从项目内置 v3 源码直接计得的 lint 数（单位：lint，13 条 CRL lint 经 `RegisterRevocationListLint` 识别、不属本文单证书口径）；其余各行为我方可 lint 规则的覆盖档（单位：规则）。full 计的是"我方某条规则是否被某条同源 zlint lint 完整实现"，与 zlint lint 总数不构成简单比值主要原因是一条 lint 可命中多条规则。
 
-### 8.3 代码生成分层与同义发射（主要结果）
-
-一条可 lint 规则能否被写成同义 lint，按口径分层报告（完整漏斗见 §8.1 表 1）：codegen 定义域 = **204 条**未覆盖目标；生成器以"确定性优先、LLM 兜底"两路合成，两路均须渲染并通过 `go build` 才计入——**能生成可编译 lint 175 条（确定性 137 + LLM 38），代码生成率 175/204 = 85.8%**；其上由去噪 5 票 LLM 判官判 $\mathrm{Code}\equiv\mathrm{Spec}$，得 EXPRESSES **113 条**，**同义率 = 113/175 = 64.6%**（分母为能生成可编译 lint 者）。两路的同义率分别为：确定性树 105/137 = 76.6%，LLM 兜底树 8/38 = 21.1%。独立地，证书级 oracle 对 124/175 条证得 $\mathrm{Code}\equiv\mathrm{IR}$（确定性 soundness，非同义）；其中 36 条判官判不同义，说明 oracle 只能证明生成代码忠实于给定 IR，不能替代最终规范同义判定。
-
-同义率全程由判官按 $\mathrm{Code}\equiv\mathrm{Spec}$ 判定（去噪 5 票多数表决以抑制单票方差），不因 oracle 认证而短路——这是相较"把 $\mathrm{Code}\equiv\mathrm{IR}$ 当作同义"更保守的口径。判官信号上的方法学加固（reducer 极性修复、obligation-aware 渲染、profile-scope 判定、定向重抽）见上文。最终同义率为 64.6%；确定性树同义率为 76.6%，LLM 兜底树为 21.1%。
-
-### 8.4 lintability外部验证：检验规则提取与可 lint 性判定
+### 8.3 lintability外部验证：检验规则提取与可 lint 性判定
 
 本框架的前半段——规则提取与可 lint 性判定——需要用独立外部资料对照。为此我们引入 zlint 维护者公开的 CABF BR 映射表 [26]：该表由 zlint 专家逐条人工标注"某条 BR 要求是否可被静态 lint 表达"，与本文的提取器、IR、可 lint 性判定器互不知情。表中每一个 Yes/No 标签，正对应本文对同一条规则的"提取出该规则 + 判定其可 lint"这一联合输出；二者一致即表明本系统的规则提取与可 lint 性判定与人类专家相符。表覆盖 BR 1.4.8 和 BR 2.0.2 两个版本，分别与本文按相同双层流水线提取的 CABF-Server-1.4.8 后端（422 条）、CABF-Server-2.0.2 后端 [27]（1024 条）进行同版本对照。
 
@@ -485,11 +433,11 @@ $$
 
 两版的匹配率几乎一致（86.9% vs 86.8%），但 κ 差异显著。BR 2.0.2 一致率高至 96.8% 是因为该 sheet 的 Yes-标签仅占 6.8%（17/250），朴素 all-No 基线一致率即达 93.2%；κ 在校正这种类别不平衡后给出更真实的判别力评估。BR 1.4.8 sheet 的 Yes/No 分布更均衡（75/47），κ=0.823 更直接地反映了 CICAS 与外部金标的实际一致性。两版上 Yes-precision 均高（≥0.86），Yes-class F1 在更均衡分布下达 0.930。
 
-**这一外部验证检验的是系统前半段。** κ=0.823 与 86.9% 的召回率说明：本文的规则提取（从 422/1024 条后端中识别出哪些是真规范要求）与可 lint 性判定（四条件合取，§5）与 zlint 专家的独立人工判断高度一致。它并不检验下游的代码生成与同义性；后者由 §8.5 的证书检测在真证书上补充检查。
+**这一外部验证检验的是系统前半段。** κ=0.823 与 86.9% 的召回率说明：本文的规则提取（从 422/1024 条后端中识别出哪些是真规范要求）与可 lint 性判定（四条件合取，§5）与 zlint 专家的独立人工判断高度一致。它并不检验下游的代码生成与同义性；后者由 §8.4 的证书检测在真证书上补充检查。
 
-### 8.5 证书检测
+### 8.4 证书检测
 
-把被判为同义的 lint 注入 zlint 二进制、检测证书，检验代码生成与同义判定；一条 lint 命中一张证书后，必须经独立结构审计确认，无法确认或被反驳的命中不计入有效发现。语料用 zlint 自带 testdata，31 条发射 lint 扫描 1128 张可解析 testdata 证书，按有效发现口径得到 **72** 条 `cicasgen_` 命中。
+把被判为同义的 lint 注入 zlint 二进制、检测证书，检验代码生成与同义判定；一条 lint 命中一张证书后，必须经独立结构审计确认，无法确认或被反驳的命中不计入有效发现。语料首先使用 zlint 自带 testdata：31 条发射 lint 扫描 1128 张可解析 testdata 证书，按有效发现口径得到 **72** 条 `cicasgen_` 命中。
 
 **TABLE IV：证书级发现与严重性解释（31 lint / 1128 testdata 证书）**
 
@@ -500,6 +448,18 @@ $$
 | 其他经确认结构命中 | 69 | 不统一提升严重性 | 只证明结构真实性；不支持现实生态发生率估计，且部分受跨标准覆盖口径影响 |
 
 本文把严重性落到具体发现上解释：OV+givenName 属于合规上严重、直接密码学安全后果间接的问题；Root CA CRLDP 属于低一档的 Warn 级 profile 警告。
+
+**真实证书补充扫描。** 为检验这些发现是否只存在于人工构造的 testdata，本文进一步构造两个外部语料：Tranco Top 1M 域名的 TLS 握手证书链（去重后 47,791 张 PEM，其中 leaf 47,160、chain 631）与近期 CT 日志样本（去重后 63,327 张 PEM，其中 logged precert 58,082、logged x509 5,066、chain 179）。两者合计 **111,118** 张可解析证书。原始 `cicasgen_` 命中很多：Tranco 上 128,439 条、CT 上 165,897 条；但原始命中不能直接视为缺陷，因为若生成 lint 丢失 profile scope、条件句或生效时间约束，独立结构审计仍可能只证明"证书满足了错误 lint 的触发条件"。因此本文对外部语料只作负向验证：它能暴露哪些 generated lint 仍不能写成真实缺陷结论，而不把 raw 命中率当作现实生态缺陷率。
+
+**TABLE V：真实 Tranco/CT 语料中被严格复核排除的候选发现**
+
+| 初筛候选 | 初筛命中 | 复核结论 | 排除原因 |
+|---|---:|---|---|
+| OV 订户证书缺少 `localityName` | 4 | 不计为真实缺陷 | CABF BR §7.1.2.7.4 对 `stateOrProvinceName` / `localityName` 是二选一条件：`localityName` 仅在 `stateOrProvinceName` 缺失时 MUST；4 张证书均含 `stateOrProvinceName`，生成 lint 丢失了该条件 |
+| OV 订户证书携带 `organizationalUnitName` | 11 | 不计为签发时缺陷 | 当前 BR 禁止 OU，但这 11 张证书均签发于 2022-09-01 的 OU 禁止生效日前；可说"不符合当前 profile"，不能说"签发时违规" |
+| AKI 含 `authorityCertIssuer` / `authorityCertSerialNumber` | 2（同一 CA 证书） | 不计为签发时缺陷 | 当前 BR §7.1.2.11.1 禁止这两个 AKI 子字段，但该链证书签发于 2007 年，早于 BR 原始生效日 2012-07-01 |
+
+同一外部扫描还暴露出若干更明显的 `cicasgen_` 高频误报：RFC 5280 A.1 的 `version MUST be v2` 片段被错误抽为证书 profile 规则，会把正常 v3 证书报错；RFC 5280 §4.1.2.6 的 `subjectAltName MUST be critical` 丢失了"subject 为空"前提；CABF BR §7.1.3.1.2 的 ECDSA 约束被误写成所有证书公钥算法均须为 `id-ecPublicKey`；若干 SubCA `anyPolicy` / NameConstraints 规则只用 `IsSubCA` 近似 profile scope，未区分 Cross-Certified、Technically Constrained TLS 与 Non-TLS 子配置档。这进一步支持表 1 的负向结论：即便 lint 可编译、可执行并在证书上命中，仍必须复查原文 scope、条件句和规则生效时间，不能把 raw 命中率当作真实合规缺陷率。
 
 ## 9. 讨论
 
@@ -525,7 +485,7 @@ $$
 
 ### 9.4 局限性与有效性威胁
 
-本文结论严格受限于所用输入表示（结构化 IR）、受限代码空间与验证流程，更适合可在单文档上下文闭合的静态约束，不应外推为"所有 PKI 规范均可完全自动化"。七类边界：**(i) 方法表达力**——同义判定端点仍由 LLM 实现，79 原子模板对字节级编码、宿主未暴露字段、动态约束等仍有缺口；**(ii) 组件必要性未消融**——知识图谱/受限 DSL/SAIV 的支持分别为工程取舍、架构论证与未消融项，本文不主张图检索相对普通 RAG 的量化优越性；**(iii) 现代 LLM 基线缺位**——直接生成 Go 的对比未做，但证书级 oracle 生成器无关，使其成为定义明确的未来工作；**(iv) 覆盖与泛化边界**——可 lint 总量 336 与 codegen 目标 204 不同口径，跨体系泛化本文仅给机制论证；**(v) 端到端口径**——"代码≡规范"仅对发射集成立（§8.3），可 lint 标签未对全部 336 条穷尽人工审计；**(vi) 同义端点盲区**——code_summary≡规范 是比对 code_summary 与原文的 LLM 判官、非 oracle 那种与模型无关的检查，且其"原文"取自抽取时逐字存下的 rule_text（IR 内字段）而非重读规范源；因此若原始片段或 IR 已经遗漏语义，同义判官未必能独立发现。**(vii) 覆盖判定按 source 分区候选**——§8.2 对 CABF BR 规则只检索 CABF-BR source 的 zlint lint，切断了跨标准继承的覆盖关系：至少 9 条出自 CABF BR、实由 zlint 既有 RFC 5280 lint 实现的规则因此被误判为未覆盖、误入 codegen 定义域（§9.3）。这低估了既有工具的真实覆盖、并使覆盖缺口数偏大。此外生成 lint 以 `cicasgen_*` 前缀与 zlint 两端互拒以防"自己覆盖自己"。
+本文结论严格受限于所用输入表示（结构化 IR）、受限代码空间与验证流程，更适合可在单文档上下文闭合的静态约束，不应外推为"所有 PKI 规范均可完全自动化"。七类边界：**(i) 方法表达力**——同义判定端点仍由 LLM 实现，79 原子模板对字节级编码、宿主未暴露字段、动态约束等仍有缺口；**(ii) 组件必要性未消融**——知识图谱/受限 DSL/SAIV 的支持分别为工程取舍、架构论证与未消融项，本文不主张图检索相对普通 RAG 的量化优越性；**(iii) 现代 LLM 基线缺位**——直接生成 Go 的对比未做，但证书级 oracle 生成器无关，使其成为定义明确的未来工作；**(iv) 覆盖与泛化边界**——可 lint 总量 336 与 codegen 目标 204 不同口径，跨体系泛化本文仅给机制论证；**(v) 端到端口径**——"代码≡规范"仅对发射集成立（§8.1、§8.4），可 lint 标签未对全部 336 条穷尽人工审计；**(vi) 同义端点盲区**——code_summary≡规范 是比对 code_summary 与原文的 LLM 判官、非 oracle 那种与模型无关的检查，且其"原文"取自抽取时逐字存下的 rule_text（IR 内字段）而非重读规范源；因此若原始片段或 IR 已经遗漏语义，同义判官未必能独立发现。**(vii) 覆盖判定按 source 分区候选**——§8.2 对 CABF BR 规则只检索 CABF-BR source 的 zlint lint，切断了跨标准继承的覆盖关系：至少 9 条出自 CABF BR、实由 zlint 既有 RFC 5280 lint 实现的规则因此被误判为未覆盖、误入 codegen 定义域（§9.3）。这低估了既有工具的真实覆盖、并使覆盖缺口数偏大。此外生成 lint 以 `cicasgen_*` 前缀与 zlint 两端互拒以防"自己覆盖自己"。
 
 ## 10. 结论
 
@@ -650,7 +610,7 @@ GraphRAG 检索（§4.2）围绕一组核心关系构建上下文，并显式区
 
 **词汇表 $\mathcal{V}$ 的七个分量。** $\mathcal{V}$ 是七类在系统启动时冻结的有限集合的不相交并（§6.2）：证书字段 $\mathcal{F}_{\mathrm{cert}}$（~40，如 `c.Version`、`c.DNSNames`、`c.IPAddresses`）、DN 字段 $\mathcal{F}_{\mathrm{dn}}$（~15，如 `Subject.CommonName`、`Subject.Country`）、OID 常量 $\mathcal{O}$（~30，对应 zlint `util.*OID`）、KeyUsage 位 $\mathcal{B}_{\mathrm{KU}}$（9）、ExtKeyUsage 位 $\mathcal{B}_{\mathrm{EKU}}$（~10）、ASN.1 编码类型 $\mathcal{E}_{\mathrm{ASN1}}$（5，如 `UTF8String`、`PrintableString`、`IA5String`）、命名正则 $\mathcal{R}_{\mathrm{regex}}$（~20，每项为已审核的字面 RE2 模式）。所有分量均为冻结有限集合；LLM 在 prompt 中获得各分量全量枚举，故其输出中出现 $\mathcal{V}$ 之外的标识符即触发 $\eta$ 解析错误（命题 1）。
 
-**代表性原子模板（节选）。** 原子模板集 $\mathcal{A}$（$|\mathcal{A}|=79$）按语义簇组织，每个原子模板有类型化签名 $\mathrm{sig}(a)$（§6.2）。下表按簇节选关键原子模板（完整 79 项随代码与数据一并公开）：
+**代表性原子模板。** 原子模板集 $\mathcal{A}$（$|\mathcal{A}|=79$）按语义簇组织，每个原子模板有类型化签名 $\mathrm{sig}(a)$（§6.2）。下表按簇节选关键原子模板（完整 79 项随代码与数据一并公开）：
 
 | 簇 | 原子模板 | 签名 | 语义 |
 |---|---|---|---|
@@ -711,24 +671,24 @@ $\sigma_{\mathrm{mech}}$（定义见 §6.3）由原子模板-短语字典 $\math
 
 **SAIV 核心残差的精确式**（直觉与定义见 §7.3–§7.4 正文）：
 
-代码正确性标签（式 6）：
+代码正确性标签（式 5）：
 $$
-\lambda_{\mathrm{code}}(r) = \mathbb{1}[\mathrm{compile}(c)] \cdot s_{\mathrm{struct}}(c) \cdot c_{\mathrm{syn}}(\sigma(c),\; \mathrm{spec}(r)) \tag{6}
-$$
-
-召回守恒残差（式 7）：
-$$
-\mathcal{L}_{\mathrm{recall}} = 1 - \frac{\min(|\mathcal{R}_{\mathrm{kw}}|,\; |\mathcal{R}_N|+|\mathcal{R}_L|+|\mathcal{R}_U|)}{\max(|\mathcal{R}_{\mathrm{kw}}|,\; |\mathcal{R}_N|+|\mathcal{R}_L|+|\mathcal{R}_U|)} \tag{7}
+\lambda_{\mathrm{code}}(r) = \mathbb{1}[\mathrm{compile}(c)] \cdot s_{\mathrm{struct}}(c) \cdot c_{\mathrm{syn}}(\sigma(c),\; \mathrm{spec}(r)) \tag{5}
 $$
 
-代码忠实残差（式 8）：
+召回守恒残差（式 6）：
 $$
-\mathcal{L}_{\mathrm{code}} = 1 - \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}\lambda_{\mathrm{code}}(r) \tag{8}
+\mathcal{L}_{\mathrm{recall}} = 1 - \frac{\min(|\mathcal{R}_{\mathrm{kw}}|,\; |\mathcal{R}_N|+|\mathcal{R}_L|+|\mathcal{R}_U|)}{\max(|\mathcal{R}_{\mathrm{kw}}|,\; |\mathcal{R}_N|+|\mathcal{R}_L|+|\mathcal{R}_U|)} \tag{6}
 $$
 
-总损失（式 9，$w_R+w_C=1$）：
+代码忠实残差（式 7）：
 $$
-\mathcal{L}_{\mathrm{total}} = w_R\cdot\mathcal{L}_{\mathrm{recall}} + w_C\cdot\mathcal{L}_{\mathrm{code}} \tag{9}
+\mathcal{L}_{\mathrm{code}} = 1 - \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}\lambda_{\mathrm{code}}(r) \tag{7}
+$$
+
+总损失（式 8，$w_R+w_C=1$）：
+$$
+\mathcal{L}_{\mathrm{total}} = w_R\cdot\mathcal{L}_{\mathrm{recall}} + w_C\cdot\mathcal{L}_{\mathrm{code}} \tag{8}
 $$
 
 **阶段路由的四分支规则**（精确条件见 §7.4 正文）：
@@ -739,7 +699,7 @@ $$
 \phi_C, & \mathcal{L}_{\mathrm{recall}}^{(t)} \leq \tau_R \;\land\; p_{\mathrm{fail}}^{(t)} > \tau_C \\
 \phi_G, & \mathcal{L}_{\mathrm{recall}}^{(t)} \leq \tau_R \;\land\; p_{\mathrm{fail}}^{(t)} \leq \tau_C \;\land\; \mathcal{L}_{\mathrm{code}}^{(t)} > \tau_C \;\land\; \bar{s}_{\mathrm{struct}}^{(t)} < 1 \\
 \phi_V, & \mathcal{L}_{\mathrm{recall}}^{(t)} \leq \tau_R \;\land\; p_{\mathrm{fail}}^{(t)} \leq \tau_C \;\land\; \mathcal{L}_{\mathrm{code}}^{(t)} > \tau_C \;\land\; \bar{s}_{\mathrm{struct}}^{(t)} = 1
-\end{cases} \tag{10}
+\end{cases} \tag{9}
 $$
 
 其中 $p_{\mathrm{fail}}^{(t)} = \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}\mathbb{1}[\neg\mathrm{compile}(\phi_G(r))]$、$\bar{s}_{\mathrm{struct}}^{(t)} = \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}s_{\mathrm{struct}}(\phi_G(r))$。
