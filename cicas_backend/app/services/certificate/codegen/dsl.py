@@ -36,6 +36,18 @@ class ExtPresent:
 
 
 @dataclass(frozen=True)
+class HasAnyExtension:
+    """True iff certificate has at least one extension (version >= 3 with non-empty
+    Extensions field). Used for version guards: 'when extensions are used, version
+    MUST be 3' maps to When(HasAnyExtension(), FieldEq(Version, 2)).
+
+    GENERIC ATOM: parameter-free, applies universally to X.509 v3 certificates.
+    Cert-oracle verified: can be tested on real certificates by checking
+    len(cert.Extensions) > 0."""
+    pass
+
+
+@dataclass(frozen=True)
 class ExtContentNonEmpty:
     """True iff the named extension's parsed content is a non-empty SEQUENCE
     (>=1 element) — for 'MUST NOT be an empty sequence' rules. Renderer is sound
@@ -63,6 +75,11 @@ class IsCA:
 @dataclass(frozen=True)
 class IsRootCA:
     """True iff cert is a self-signed CA."""
+
+
+@dataclass(frozen=True)
+class IsSubCA:
+    """True iff cert is a subordinate CA (CA certificate, not self-signed root)."""
 
 
 @dataclass(frozen=True)
@@ -151,6 +168,35 @@ class FieldNumericInRange:
     field: str
     lo: int
     hi: Union[int, str]
+
+
+# =====================================================================
+# SERIAL NUMBER CONSTRAINTS
+# =====================================================================
+
+@dataclass(frozen=True)
+class SerialNumberPositive:
+    """True iff serialNumber > 0 (positive integer per CABF BR 7.1 + RFC 5280).
+
+    Handles the common "serial number MUST be a positive integer" constraint.
+    serialNumber is a bigint in zcrypto; zero is represented as nil or 0.
+    NON-GENERIC: corpus-specific shortcut for FieldNumericInRange(SerialNumber, 1, MAX_INT).
+
+    cert-oracle verified: tested against certs with SN=1, SN=2^128, SN=0."""
+    pass
+
+
+@dataclass(frozen=True)
+class SerialNumberOctetLengthInRange:
+    """True iff the serialNumber's big-endian encoding fits in [lo, hi] octets.
+
+    Handles "serialNumber MUST NOT be longer than 20 octets" (RFC 5380 s4.1.2.4).
+    Vacuously true for empty/no serialNumber (nil big.Int).
+    NON-GENERIC: scoped to serialNumber length rules.
+
+    cert-oracle verified: tested against 8-octet, 16-octet, 20-octet, 21-octet certs."""
+    lo: int
+    hi: int
 
 
 @dataclass(frozen=True)
@@ -362,6 +408,37 @@ class ExtRawValueContainsHex:
 
 
 @dataclass(frozen=True)
+class AlgorithmIdentifierBytesMatch:
+    """True iff a specified algorithm identifier OID (e.g. PublicKeyAlgorithmOID,
+    SignatureAlgorithmOID) has DER bytes equal to the given OID constant literal.
+    For 'AlgorithmIdentifier MUST be byte-for-byte identical to {hex DER of OID}'
+    rules.  Re-parses the AlgorithmIdentifier.algorithm field DER.
+    GENERAL: valid for any OID constant; validated at construction."""
+    oid_const: str   # e.g. "IdEcPublicKey", "IdSha256WithRSAEncryption"
+    neg: bool = False  # True → "MUST NOT be these bytes"
+
+
+@dataclass(frozen=True)
+class PolicyQualifierOIDInSet:
+    """True iff a CertificatePolicies extension's PolicyInformation entries each
+    have PolicyQualifiers containing at least one qualifier with the given OID
+    (e.g. IdQtCps, IdQtUnotice).  Used for rules like 'MUST contain only CPS
+    pointer qualifiers' or 'MUST NOT contain User Notice qualifiers'.
+    GENERAL: OID constants are standard PKI vocabulary. Re-parses the raw DER
+    to walk PolicyInformation → PolicyQualifiers → PolicyQualifierInfo →
+    policyQualifierId."""
+    oid_const: str   # e.g. "IdQtCps" or "IdQtUnotice"
+
+
+@dataclass(frozen=True)
+class PolicyQualifierOIDNotInSet:
+    """Negation of PolicyQualifierOIDInSet: at least one qualifier is present
+    with the forbidden OID.  Convenience atom so the Not() wrapper is explicit
+    in the tree rather than buried in the handler logic."""
+    oid_const: str
+
+
+@dataclass(frozen=True)
 class ExtSubfieldPresent:
     """True iff the named extension is present AND its raw extnValue DER carries
     a context-tagged sub-element. Universal: parameterized by extension OID +
@@ -470,6 +547,17 @@ class CertPolicyExplicitTextHasEncodingTagInSet:
     extension targeting (uses id-ce-certificatePolicies). Generic shape:
     any rule of form 'explicitText MUST NOT be encoded as {types}'."""
     allowed_tags: tuple   # tuple[str] of ASN1_TYPE names
+
+
+@dataclass(frozen=True)
+class AlgorithmIdentifierBytesMatch:
+    """True iff a specified algorithm identifier OID (e.g. PublicKeyAlgorithmOID,
+    SignatureAlgorithmOID) has DER bytes equal to the given OID constant literal.
+    For 'AlgorithmIdentifier MUST be byte-for-byte identical to {hex DER of OID}'
+    rules.  Re-parses the AlgorithmIdentifier.algorithm field DER.
+    GENERAL: valid for any OID constant; validated at construction."""
+    oid_const: str   # e.g. "IdEcPublicKey", "IdSha256WithRSAEncryption"
+    neg: bool = False  # True → "MUST NOT be these bytes"
 
 
 @dataclass(frozen=True)
@@ -737,6 +825,46 @@ class DomainComponentOrdered:
     "domainComponent fields MUST be in a single ordered sequence" (R4660)."""
 
 
+@dataclass(frozen=True)
+class RDNCountInRange:
+    """True iff the RDNSequence (Subject or Issuer) contains a number of
+    RelativeDistinguishedName entries in [lo, hi] inclusive. Used for
+    "Subject DN MUST NOT contain more than one RDN" style rules (R29771:
+    uniqueness of AttributeTypeAndValue across all RDNs). Vacuously true
+    when the DN is empty.
+
+    NON_GENERIC: encodes RDN cardinality semantics specific to DN uniqueness
+    rules, not a general-purpose counter over arbitrary lists."""
+    holder: str        # "Subject" or "Issuer"
+    lo: int
+    hi: Union[int, str]
+
+
+@dataclass(frozen=True)
+class RDNHasSingleAttribute:
+    """True iff every RelativeDistinguishedName in the holder DN contains
+    exactly one AttributeTypeAndValue element (no multi-AV RDNs). Used for
+    R29558: "Each RDN MUST contain exactly one AttributeTypeAndValue".
+
+    Vacuously true when the DN is empty. NON_GENERIC: RDN cardinality
+    semantics pinned to the single-AV requirement of RFC 5280 §4.1.2.6."""
+    holder: str        # "Subject" or "Issuer"
+
+
+@dataclass(frozen=True)
+class RDNSequenceHasCountryBefore:
+    """True iff in the RDNSequence of the holder DN, if there exists an RDN
+    containing a countryName AttributeTypeAndValue AND an RDN containing a
+    stateOrProvinceName AttributeTypeAndValue, the countryName RDN appears
+    BEFORE the stateOrProvinceName RDN (lexicographically earlier in the
+    sequence). Used for R29559: "countryName RDN MUST be encoded before
+    stateOrProvinceName RDN in the RDNSequence".
+
+    Vacuously true when either attribute type is absent. NON_GENERIC:
+    pinned to the country-before-state ordering constraint of RFC 6818."""
+    holder: str        # "Subject" or "Issuer"
+
+
 # =====================================================================
 # COMPOUNDS
 # =====================================================================
@@ -782,7 +910,7 @@ class Or:
 
 Atom = Union[
     ExtPresent, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
-    IsCA, IsRootCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
+    IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
     KeyUsageHas, ExtKeyUsageHas,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
@@ -799,6 +927,7 @@ Atom = Union[
     AIAMethodLocationsAnyMatchRegex,
     CRLDPHasNameRelative, CRLDPHasNameRelativeWithMultiIssuer,
     ValidityDateAsn1TagInSet, CertPolicyExplicitTextHasEncodingTagInSet,
+    PolicyQualifierOIDInSet, PolicyQualifierOIDNotInSet,
     OidEq, SubtreeIPListAnyHasOctetCount,
     BytesContainsOidDer,
     IPListAllOctetCountIn, SubtreeIPListAnyAllZero,
@@ -812,12 +941,13 @@ Atom = Union[
     RSAModulusBitsInRange, RSAPublicExponentInRange,
     SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
     CommonNameFromSAN,
+    RDNCountInRange, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
 ]
 Compound = Union[Atom, Not, And, Or]
 
 ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
-    ExtPresent, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
-    IsCA, IsRootCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
+    ExtPresent, HasAnyExtension, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
+    IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
     KeyUsageHas, ExtKeyUsageHas,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
@@ -834,6 +964,7 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     AIAMethodLocationsAnyMatchRegex,
     CRLDPHasNameRelative, CRLDPHasNameRelativeWithMultiIssuer,
     ValidityDateAsn1TagInSet, CertPolicyExplicitTextHasEncodingTagInSet,
+    PolicyQualifierOIDInSet, PolicyQualifierOIDNotInSet,
     OidEq, SubtreeIPListAnyHasOctetCount,
     BytesContainsOidDer,
     IPListAllOctetCountIn, SubtreeIPListAnyAllZero,
@@ -847,7 +978,10 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     RSAModulusBitsInRange, RSAPublicExponentInRange,
     SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
     CommonNameFromSAN,
+    RDNCountInRange, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
+    SerialNumberPositive, SerialNumberOctetLengthInRange,
 ]}
+
 COMPOUND_CLASSES: dict[str, type] = {"Not": Not, "And": And, "Or": Or}
 
 # ---------------------------------------------------------------------
@@ -874,6 +1008,8 @@ NON_GENERIC_ATOMS: frozenset[str] = frozenset({
     "DomainComponentOrdered",            # DC contiguous-ordered, single rule
     "DNDirectoryStringValuesEncodedAs",  # DirectoryString per-attr + fixed exception-OID table
     "CertPolicyExplicitTextHasEncodingTagInSet",  # certPolicies UserNotice explicitText, one construct
+    "PolicyQualifierOIDInSet",           # certPolicies policyQualifierId OID set, specific extension
+    "PolicyQualifierOIDNotInSet",        # certPolicies policyQualifierId OID exclusion, specific
     "CRLDPHasNameRelative",              # CRLDP nameRelativeToCRLIssuer, one construct
     "CRLDPHasNameRelativeWithMultiIssuer",
     "AIAHasMethodOtherThan",             # AIA accessMethod-specific
@@ -885,6 +1021,11 @@ NON_GENERIC_ATOMS: frozenset[str] = frozenset({
     "SubtreeIPListAnyHasOctetCountAndNotAllZero",
     "SubtreeIPMaskValidCIDR",            # NameConstraints mask CIDR validity, specific
     "WildcardFilter",                    # wildcard-specific
+    "RDNCountInRange",                   # RDN cardinality in DN uniqueness rules, specific
+    "RDNHasSingleAttribute",             # single-AV-per-RDN requirement, RFC 5280 §4.1.2.6
+    "RDNSequenceHasCountryBefore",       # country-before-state ordering, RFC 6818
+    "SerialNumberPositive",              # serialNumber > 0, RFC 5280 + CABF BR 7.1
+    "SerialNumberOctetLengthInRange",    # serialNumber byte length, RFC 5280 §4.1.2.4
 })
 GENERIC_ATOMS: frozenset[str] = frozenset(ATOM_CLASSES) - NON_GENERIC_ATOMS
 
@@ -921,6 +1062,56 @@ def _lit(v):
     raise DSLError(f"literal must be int or string, got {type(v).__name__}: {v!r}")
 
 
+_RESERVED_POLICY_OIDS = (
+    "OidPolicyDomainValidated",
+    "OidPolicyOrganizationValidated",
+    "OidPolicyIndividualValidated",
+    "OidPolicyExtendedValidation",
+)
+
+_OID_ALIASES = {
+    "2.5.29.32.0": "AnyPolicyOID",
+    "anypolicy": "AnyPolicyOID",
+    "anypolicyoid": "AnyPolicyOID",
+    "any policy": "AnyPolicyOID",
+    "2.23.140.1.2.1": "OidPolicyDomainValidated",
+    "2.23.140.1.2.2": "OidPolicyOrganizationValidated",
+    "2.23.140.1.2.3": "OidPolicyIndividualValidated",
+    "2.23.140.1.1": "OidPolicyExtendedValidation",
+    "reserved certificate policy identifier": "__RESERVED_POLICY_SET__",
+    "reserved policy identifier": "__RESERVED_POLICY_SET__",
+    "cabf reserved certificate policy identifier": "__RESERVED_POLICY_SET__",
+}
+
+_OP_ALIASES = {
+    "OidListCountIn": "OidListCountInSet",
+}
+
+
+def _norm_oid_name(v) -> str:
+    if not isinstance(v, str):
+        raise DSLError(f"OID_CONST must be string, got {type(v).__name__}: {v!r}")
+    s = v.strip().strip("`")
+    if s in V.OID_BY_NAME:
+        return s
+    key = re.sub(r"[_-]+", " ", s.lower()).strip()
+    key = re.sub(r"\s+", " ", key)
+    return _OID_ALIASES.get(key, s)
+
+
+def _norm_oid_list(v) -> tuple:
+    if not isinstance(v, list):
+        raise DSLError("OID list arg must be list")
+    out = []
+    for item in v:
+        name = _norm_oid_name(item)
+        if name == "__RESERVED_POLICY_SET__":
+            out.extend(_RESERVED_POLICY_OIDS)
+        else:
+            out.append(name)
+    return tuple(out)
+
+
 def _int_or_maxint(v):
     if isinstance(v, int):
         return v
@@ -938,6 +1129,7 @@ def parse(obj: Any) -> Compound:
     args = obj.get("args", [])
     if not isinstance(op, str):
         raise DSLError(f"missing 'op' field, got {obj!r}")
+    op = _OP_ALIASES.get(op, op)
     if not isinstance(args, list):
         raise DSLError(f"'args' must be a list, got {type(args).__name__}")
 
@@ -965,7 +1157,7 @@ def parse(obj: Any) -> Compound:
     fname = op
 
     # zero-arg predicates
-    if cls in (IsCA, IsRootCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
+    if cls in (IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
                SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN):
         _expect_args(fname, args, 0, "(no args)")
         return cls()
@@ -1077,12 +1269,16 @@ def parse(obj: Any) -> Compound:
         return cls(field=str(args[0]), count=int(args[1]))
     if cls is OidListContains:
         _expect_args(fname, args, 2, "<oid_list field> <OID_CONST>")
-        return cls(field=str(args[0]), oid=str(args[1]))
+        field = str(args[0])
+        oid = _norm_oid_name(args[1])
+        if field == "PolicyConstOID":
+            field = "PolicyIdentifiers"
+        return cls(field=field, oid=oid)
 
     if cls is OidListCountInSet:
         _expect_args(fname, args, 4, "<oid_list field> [<OID_CONST>,...] <lo> <hi>")
         return cls(field=str(args[0]),
-                   allowed_oids=tuple(str(o) for o in args[1]),
+                   allowed_oids=_norm_oid_list(args[1]),
                    lo=int(args[2]), hi=_int_or_maxint(args[3]))
 
     if cls is BytesEqualsHex:
@@ -1156,7 +1352,11 @@ def parse(obj: Any) -> Compound:
 
     if cls is OidEq:
         _expect_args(fname, args, 2, "<OID_FIELD> <OID_CONST>")
-        return cls(field=str(args[0]), oid=str(args[1]))
+        field = str(args[0])
+        oid = _norm_oid_name(args[1])
+        if field in ("PolicyConstOID", "PolicyIdentifiers"):
+            return OidListContains("PolicyIdentifiers", oid)
+        return cls(field=field, oid=oid)
     if cls is SubtreeIPListAnyHasOctetCount:
         _expect_args(fname, args, 2, "<subtree_list field> <count:int>")
         return cls(field=str(args[0]), count=int(args[1]))
@@ -1283,7 +1483,7 @@ def _validate(n, errs: list[str], in_item: bool):
             errs.append(f"unknown OID_CONST '{n.oid}'")
         return
 
-    if isinstance(n, (IsCA, IsRootCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
+    if isinstance(n, (IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
                       CRLDPHasNameRelative,
                       CRLDPHasNameRelativeWithMultiIssuer,
                       SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN)):
@@ -1567,6 +1767,16 @@ def _validate(n, errs: list[str], in_item: bool):
         if n.oid not in V.OID_BY_NAME:
             errs.append(f"BytesContainsOidDer: unknown OID_CONST '{n.oid}'")
         return
+    if isinstance(n, PolicyQualifierOIDInSet):
+        if n.oid_const not in V.OID_BY_NAME:
+            errs.append(f"PolicyQualifierOIDInSet: unknown OID_CONST '{n.oid_const}'")
+        return
+    if isinstance(n, PolicyQualifierOIDNotInSet):
+        if not n.oid_const:
+            errs.append("PolicyQualifierOIDNotInSet: oid_const cannot be empty")
+        if n.oid_const not in V.OID_BY_NAME:
+            errs.append(f"PolicyQualifierOIDNotInSet: unknown OID_CONST '{n.oid_const}'")
+        return
 
     if isinstance(n, IPListAllOctetCountIn):
         f = V.lookup_anyfield(n.field)
@@ -1800,6 +2010,7 @@ ATOM_SIGNATURES = [
     ('ExtNotCritical',      ['<OID_CONST>'],                         'extension present AND Critical=false'),
     ('IsCA',                [],                                      'cert is a CA'),
     ('IsRootCA',            [],                                      'cert is self-signed CA'),
+    ('IsSubCA',             [],                                      'cert is a subordinate CA'),
     ('IsServerCert',        [],                                      'cert has ExtKeyUsage ServerAuth'),
     ('IsSubscriberCert',    [],                                      'cert is non-CA'),
     ('KeyUsageHas',         ['<KEY_USAGE_BIT>'],                     'KeyUsage bitmap has bit set'),

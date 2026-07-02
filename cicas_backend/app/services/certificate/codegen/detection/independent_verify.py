@@ -29,6 +29,7 @@ from pathlib import Path
 
 ANYPOLICY = "2.5.29.32.0"
 OV_POLICY = "2.23.140.1.2.2"
+IV_POLICY = "2.23.140.1.2.3"
 
 try:
     from pyasn1.codec.der import decoder as _der_dec, encoder as _der_enc
@@ -51,8 +52,12 @@ def _osslr(cert: Path, *args) -> str:
 
 
 def _der_of(cert: Path) -> bytes:
-    return subprocess.run(["openssl", "x509", "-in", str(cert), "-outform", "DER"],
-                          capture_output=True).stdout
+    der = subprocess.run(["openssl", "x509", "-in", str(cert), "-outform", "DER"],
+                         capture_output=True).stdout
+    # openssl refuses (or silently re-encodes away) some deliberately-malformed
+    # testdata fixtures. Fall back to the raw base64 in the PEM so byte-level
+    # checks match what zcrypto (which the lints use) actually parsed.
+    return der or _der_from_pem(cert)
 
 
 def _text(cert: Path) -> str:
@@ -90,7 +95,31 @@ def _ext(t: str, header: str):
     return False, False, []
 
 
-def _policy_oids(t: str) -> set:
+def _der_from_pem(cert: Path) -> bytes:
+    """Raw DER straight from the PEM — NOT via `openssl -outform DER`, which
+    silently drops/normalises the deliberately-malformed extensions in the
+    testdata. zcrypto (which the lints use) parses those raw bytes, so the auditor
+    must too or it disagrees with the lint on malformed-policy fixtures."""
+    try:
+        import base64
+        m = re.search(rb"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----",
+                      cert.read_bytes(), re.S)
+        return base64.b64decode(re.sub(rb"\s", b"", m.group(1))) if m else b""
+    except Exception:
+        return b""
+
+
+# DER content-byte encodings of the policy OIDs the auditor cares about.
+_POLICY_OID_DER = {
+    "2.23.140.1.2.2": bytes([0x67, 0x81, 0x0c, 0x01, 0x02, 0x02]),  # OV
+    "2.23.140.1.2.3": bytes([0x67, 0x81, 0x0c, 0x01, 0x02, 0x03]),  # IV
+    "2.23.140.1.2.1": bytes([0x67, 0x81, 0x0c, 0x01, 0x02, 0x01]),  # DV
+    ANYPOLICY:        bytes([0x55, 0x1d, 0x20, 0x00]),               # anyPolicy
+}
+_CERTPOL_EXT_DER = bytes([0x55, 0x1d, 0x20])  # id-ce-certificatePolicies 2.5.29.32
+
+
+def _policy_oids(t: str, cert: Path | None = None) -> set:
     out = set()
     present, _, body = _ext(t, "X509v3 Certificate Policies")
     for b in body:
@@ -99,7 +128,86 @@ def _policy_oids(t: str) -> set:
             out.add(m.group(1))
     if present and "Any Policy" in t:
         out.add(ANYPOLICY)
+    # Fallback: openssl drops malformed certificatePolicies extensions from its
+    # text view, so scan the raw DER for the specific policy OIDs we test on.
+    if cert is not None:
+        der = _der_from_pem(cert)
+        if der and _CERTPOL_EXT_DER in der:
+            for oid, needle in _POLICY_OID_DER.items():
+                if needle in der:
+                    out.add(oid)
     return out
+
+
+# Subject attribute OID content bytes (X.520 attribute types, tag 0x06 prefix stripped)
+_SUBJECT_ATTR_OID = {
+    "OU": bytes([0x55, 0x04, 0x0b]),   # 2.5.4.11 organizationalUnitName
+    "L":  bytes([0x55, 0x04, 0x07]),   # 2.5.4.7  localityName
+    "SN": bytes([0x55, 0x04, 0x04]),   # 2.5.4.4  surname
+    "GN": bytes([0x55, 0x04, 0x2a]),   # 2.5.4.42 givenName
+}
+
+
+def _subject_has_attr_raw(cert: Path, label: str) -> bool | None:
+    """Check whether the Subject Name in the raw DER contains a given attribute.
+    Returns True/False, or None if the DER cannot be extracted or parsed.
+    Used only as a fallback when openssl refuses to parse the certificate.
+
+    Approach: walk the outer SEQUENCE(TBSCertificate, …) → TBSCertificate SEQUENCE
+    → skip optional version [0] / serialNumber / signature-alg / issuer Name →
+    arrive at subject Name, then search for the OID bytes only within that region.
+    """
+    oid_bytes = _SUBJECT_ATTR_OID.get(label)
+    if oid_bytes is None:
+        return None
+    der = _der_from_pem(cert)
+    if len(der) < 4:
+        return None
+
+    def _rdlen(b, i):
+        if i >= len(b):
+            return 0, i
+        n = b[i]; i += 1
+        if n & 0x80:
+            k = n & 0x7f
+            if i + k > len(b):
+                return 0, i
+            n = int.from_bytes(b[i:i + k], "big"); i += k
+        return n, i
+
+    try:
+        # Outer: Certificate SEQUENCE
+        if der[0] != 0x30:
+            return None
+        _, i = _rdlen(der, 1)            # skip Certificate envelope
+        # TBSCertificate SEQUENCE
+        if der[i] != 0x30:
+            return None
+        tlen, i = _rdlen(der, i + 1)
+        tbs_end = i + tlen
+        # optional [0] version
+        if i < tbs_end and der[i] == 0xa0:
+            vlen, vi = _rdlen(der, i + 1); i = vi + vlen
+        # serialNumber INTEGER
+        if i < tbs_end and der[i] == 0x02:
+            slen, si = _rdlen(der, i + 1); i = si + slen
+        # signature AlgorithmIdentifier SEQUENCE
+        if i < tbs_end and der[i] == 0x30:
+            alen, ai = _rdlen(der, i + 1); i = ai + alen
+        # issuer Name SEQUENCE — skip entirely
+        if i < tbs_end and der[i] == 0x30:
+            ilen, ii = _rdlen(der, i + 1); i = ii + ilen
+        # validity SEQUENCE — skip
+        if i < tbs_end and der[i] == 0x30:
+            valen, vai = _rdlen(der, i + 1); i = vai + valen
+        # subject Name SEQUENCE — THIS is what we search
+        if i < tbs_end and der[i] == 0x30:
+            subjlen, subji = _rdlen(der, i + 1)
+            subj_bytes = der[i: subji + subjlen]
+            return oid_bytes in subj_bytes
+    except Exception:
+        pass
+    return None
 
 
 def _aki_subfields(t: str):
@@ -211,16 +319,32 @@ def verify(lint: str, cert: Path, probe: ZlintProbe) -> tuple[str, str]:
     subj = _subject(cert)
 
     if "not_any_policy_list_contains" in lint:
-        has = ANYPOLICY in _policy_oids(t)
+        has = ANYPOLICY in _policy_oids(t, cert)
+        if not has:
+            return "REFUTED", "no anyPolicy in certificatePolicies"
+        # Two different profile scopes assert "MUST NOT contain anyPolicy":
+        #   - Subscriber Certificate (CABF 7.1.2.7.9, rule 29493): a NON-CA cert
+        #     carrying anyPolicy is itself the violation.
+        #   - (Cross-Certified) Subordinate CA (7.1.2.2.x / 7.1.2.3.x): a sub CA
+        #     carrying anyPolicy is the violation.
+        if "subscriber_cert" in lint:
+            if not _is_ca(t):
+                return "CONFIRMED", "subscriber (non-CA) cert carries anyPolicy"
+            return "REFUTED", "anyPolicy present but cert is a CA (out of subscriber scope)"
         sub_ca = _is_ca(t) and probe.aki_keyid_absent(cert)
         if not sub_ca and _is_ca(t):
             sub_ca = bool(subj and _issuer(cert) and subj != _issuer(cert))
-        if has and sub_ca:
+        if sub_ca:
             return "CONFIRMED", "subordinate CA carries anyPolicy"
-        if has and not sub_ca:
-            return "REFUTED", f"has anyPolicy but not clearly subordinate CA (ca={_is_ca(t)})"
-        return "REFUTED", "no anyPolicy in certificatePolicies"
+        return "REFUTED", f"has anyPolicy but not clearly subordinate CA (ca={_is_ca(t)})"
 
+    if "issuer_unique_id_absent_and_subject_unique_id_absent" in lint:
+        # Compound rule 31183: BOTH uniqueIDs MUST be absent. Either one present
+        # violates it — the earlier single-field branch only saw issuerUniqueID.
+        a, b = _tbs_unique_ids(cert)
+        if a or b:
+            return "CONFIRMED", f"uniqueID present (issuer={a} subject={b})"
+        return "REFUTED", "both uniqueIDs absent"
     if "issuer_unique_id_absent" in lint:
         a, _ = _tbs_unique_ids(cert)
         return ("CONFIRMED", "issuerUniqueID present") if a else \
@@ -260,11 +384,45 @@ def verify(lint: str, cert: Path, probe: ZlintProbe) -> tuple[str, str]:
         return ("CONFIRMED", "ST absent and L absent") if (not st and not l) else \
                ("REFUTED", f"ST={st} L={l}")
 
-    if "organization_validated_list_contains" in lint:
-        ov = OV_POLICY in _policy_oids(t)
-        gn = _name_has(subj, "GN") or _name_has(subj, "givenName")
-        return ("CONFIRMED", "OV policy + givenName") if (ov and gn) else \
-               ("REFUTED", f"ov={ov} givenName={gn}")
+    if "validated_list_contains" in lint:
+        # CABF 7.1.2.7.3 (Individual Validated, policy 2.23.140.1.2.3) and
+        # 7.1.2.7.4 (Organization Validated, policy 2.23.140.1.2.2) each constrain a
+        # DIFFERENT subject attribute with a DIFFERENT polarity. The earlier code
+        # checked givenName for every rule in this family, which REFUTED correct
+        # findings for the OU/locality/surname rules. Dispatch on the rule id so the
+        # auditor re-derives the SPECIFIC attribute+polarity the lint asserts.
+        _OV_IV = {   # rule_id -> (policy_oid, rfc2253_label, must_be_present)
+            29446: (IV_POLICY, "SN", True),   # surname MUST be present
+            29447: (IV_POLICY, "GN", True),   # givenName MUST be present
+            29448: (IV_POLICY, "OU", False),  # organizationalUnitName MUST NOT
+            29463: (OV_POLICY, "L",  True),   # localityName MUST be present
+            29474: (OV_POLICY, "SN", False),  # surname MUST NOT be present
+            29475: (OV_POLICY, "GN", False),  # givenName MUST NOT be present
+            29476: (OV_POLICY, "OU", False),  # organizationalUnitName MUST NOT
+        }
+        m = re.search(r"_(\d+)$", lint)
+        rid = int(m.group(1)) if m else None
+        spec = _OV_IV.get(rid)
+        if spec is None:
+            return "NOCHECK", f"no field/polarity mapping for {lint}"
+        policy_oid, label, must_be_present = spec
+        in_scope = policy_oid in _policy_oids(t, cert)
+        field_here = _name_has(subj, label)
+        # openssl can refuse to parse deliberately-malformed testdata fixtures,
+        # leaving subj empty. Fall back to raw-DER subject region scan so the
+        # auditor agrees with zcrypto (which the lint uses) on those certs.
+        if not subj and field_here is False:
+            raw_result = _subject_has_attr_raw(cert, label)
+            if raw_result is not None:
+                field_here = raw_result
+        if not in_scope:
+            return "REFUTED", f"policy {policy_oid} absent (out of profile scope)"
+        # defect present == the obligation is violated in-scope
+        defect = (not field_here) if must_be_present else field_here
+        polarity = "MUST be present" if must_be_present else "MUST NOT be present"
+        if defect:
+            return "CONFIRMED", f"in-scope ({policy_oid}); {label} {polarity} violated (present={field_here})"
+        return "REFUTED", f"in-scope ({policy_oid}); {label} {polarity} satisfied (present={field_here})"
 
     if "sig_alg_matches_tbssignature" in lint:
         m = _sig_algs_match(cert)
@@ -293,7 +451,7 @@ def verify(lint: str, cert: Path, probe: ZlintProbe) -> tuple[str, str]:
         if "X509v3 Certificate Policies" not in t:
             return "REFUTED", "no certificatePolicies ext"
         return ("CONFIRMED", "certPolicies present, 0 PolicyInformation") \
-            if not _policy_oids(t) else ("REFUTED", "certPolicies has policies")
+            if not _policy_oids(t, cert) else ("REFUTED", "certPolicies has policies")
 
     if "when_subscriber_cert_not_path_len_constraint_present" in lint:
         present, _, body = _ext(t, "X509v3 Basic Constraints")
@@ -331,6 +489,62 @@ def verify(lint: str, cert: Path, probe: ZlintProbe) -> tuple[str, str]:
         has = "X509v3 CRL Distribution Points" in t
         return ("CONFIRMED", "root CA carries CRLDP (advisory)") if (root and has) else \
                ("NOCHECK", f"root={root} crldp={has} (advisory)")
+
+    # R31349: version MUST be v2 (when present)
+    if "when_version_present_version_eq_31349" in lint:
+        # Version v2 = on-wire INTEGER 1 (zcrypto reports it as 2)
+        version_match = re.search(r"Version:\s*(\d+)", t)
+        if not version_match:
+            return "REFUTED", "version field not present"
+        version = int(version_match.group(1))
+        # zcrypto reports: v1=1, v2=2, v3=3 (on-wire is 0/1/2)
+        return ("CONFIRMED", f"version is {version}, not v2") if version != 2 else \
+               ("REFUTED", "version is v2 (compliant)")
+
+    # R31132: subjectAltName extension MUST be critical
+    if "subject_alternate_name_critical_31132" in lint:
+        present, crit, _ = _ext(t, "X509v3 Subject Alternative Name")
+        if not present:
+            return "REFUTED", "no SAN extension"
+        return ("CONFIRMED", "SAN not critical") if not crit else \
+               ("REFUTED", "SAN is critical (compliant)")
+
+    # R29539: ECDSA key MUST use id-ecPublicKey OID
+    if "oid_eq_oid_ec_public_key_29539" in lint:
+        # Subject Public Key Info shows algorithm
+        spki_match = re.search(r"Subject Public Key Info:.*?Public Key Algorithm:\s*([^\n]+)", t, re.DOTALL)
+        if not spki_match:
+            return "NOCHECK", "cannot parse SPKI algorithm"
+        algo = spki_match.group(1).strip()
+        # id-ecPublicKey shows as "id-ecPublicKey" or "EC Public-Key"
+        is_ec = "ecPublicKey" in algo or "EC Public" in algo
+        return ("REFUTED", f"SPKI algorithm is {algo} (compliant)") if is_ec else \
+               ("CONFIRMED", f"SPKI algorithm is {algo}, not id-ecPublicKey")
+
+    # R29415: Subscriber cert SAN MUST NOT be critical (when subject non-empty)
+    if "when_subscriber_cert_subject_alt_name_not_critical_29415" in lint:
+        present, crit, _ = _ext(t, "X509v3 Subject Alternative Name")
+        if not present:
+            return "REFUTED", "no SAN extension"
+        subj = _subject(cert)
+        empty = subj == ""
+        if crit and not empty:
+            return "CONFIRMED", "SAN critical with non-empty subject"
+        if crit and empty:
+            return "REFUTED", "SAN critical but subject EMPTY (critical is REQUIRED here)"
+        # SAN non-critical (compliant)
+        return "REFUTED", f"san_critical={crit} subject_empty={empty}"
+
+    # R29463: OV cert MUST have localityName
+    # (Already covered by validated_list_contains above, but add explicit check)
+    if "when_oid_policy_organization_validated_list_contains_29463" in lint:
+        in_scope = OV_POLICY in _policy_oids(t, cert)
+        if not in_scope:
+            return "REFUTED", f"policy {OV_POLICY} absent (out of profile scope)"
+        subj = _subject(cert)
+        has_l = _name_has(subj, "L")
+        return ("CONFIRMED", "OV cert lacks localityName") if not has_l else \
+               ("REFUTED", f"OV cert has localityName (compliant)")
 
     return "NOCHECK", "no independent check for this lint family"
 

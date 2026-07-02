@@ -19,7 +19,7 @@ Method (as described in §8.2):
     from the bundled zlint v3 Go source (Source metadata field).
 
 Inputs (snapshot written to inputs/ by --snapshot):
-  inputs/lintable_rules.jsonl   the 336 lint-able rules with their stored verdict
+  inputs/lintable_rules.jsonl   lint-able rules with their stored verdict
   inputs/zlint_lint_catalog.json zlint v3 lint counts by Source (reference row)
 
 Outputs (written to outputs/):
@@ -31,11 +31,16 @@ Run:
   python experiments/coverage_analysis/run.py            # aggregate + render Table 2
   python experiments/coverage_analysis/run.py --snapshot # also refresh inputs/
 
-Expected (current paper snapshot):
-  lint-able 336 = CABF 227 + RFC5280 109
-  full      132 = CABF  79 + RFC5280  53
-  uncovered 204 = CABF 148 + RFC5280  56   (= code-generation domain φ_G)
-  zlint same-source reference: CABF 170 lints, RFC5280 122 lints
+Expected (current refreshed snapshot):
+  lint-able 322 = CABF 226 + RFC5280  96
+  full      129 = CABF  79 + RFC5280  50
+  uncovered 192 = CABF 146 + RFC5280  46   (= judged code-generation domain φ_G)
+  pending     1 = CABF   1 + RFC5280   0   (excluded from φ_G until judged)
+  zlint same-source cert reference: CABF 164 lints, RFC5280 115 lints
+
+If a refreshed extraction has lint-able rows with lint_coverage IS NULL, they are
+reported as pending rather than folded into uncovered. Pending rows must be judged
+before codegen-domain metrics are final.
 """
 import argparse
 import json
@@ -64,22 +69,35 @@ def _conn():
 def coverage_table():
     """Aggregate persisted coverage verdicts into Table 2."""
     rows = []
-    total = {"lintable": 0, "full": 0, "uncovered": 0}
+    total = {"lintable": 0, "checked": 0, "full": 0, "uncovered": 0, "pending": 0}
     with _conn() as c:
         cur = c.cursor()
         for sid, name in STANDARDS:
             cur.execute("select count(*) from rules where lintable and standard_id=%s", (sid,))
             lintable = cur.fetchone()[0]
             cur.execute(
-                "select count(*) from rules where lintable and lint_covered and standard_id=%s",
+                "select count(*) from rules where lintable and lint_coverage is not null and standard_id=%s",
+                (sid,),
+            )
+            checked = cur.fetchone()[0]
+            cur.execute(
+                "select count(*) from rules where lintable and lint_coverage is not null and lint_covered and standard_id=%s",
                 (sid,),
             )
             full = cur.fetchone()[0]
-            rows.append({"source": name, "lintable": lintable, "full": full,
-                         "uncovered": lintable - full})
+            cur.execute(
+                "select count(*) from rules where lintable and lint_coverage is null and standard_id=%s",
+                (sid,),
+            )
+            pending = cur.fetchone()[0]
+            uncovered = checked - full
+            rows.append({"source": name, "lintable": lintable, "checked": checked,
+                         "full": full, "uncovered": uncovered, "pending": pending})
             total["lintable"] += lintable
+            total["checked"] += checked
             total["full"] += full
-            total["uncovered"] += lintable - full
+            total["uncovered"] += uncovered
+            total["pending"] += pending
     return {"by_source": rows, "total": total, "zlint_reference": zlint_source_counts()}
 
 
@@ -87,7 +105,8 @@ def zlint_source_counts():
     """Count zlint v3 lints by their Source metadata, splitting cert vs CRL.
 
     A lint is a CRL lint iff its file registers via RegisterRevocationListLint.
-    Mirrors §8.2 Table 2's reference row (CABF 170, RFC5280 122).
+    CRL lints are reported separately and are not part of the single-certificate
+    denominator.
     """
     src_re = re.compile(r"Source:\s*lint\.([A-Za-z0-9_]+)")
     by_source = {}
@@ -98,6 +117,10 @@ def zlint_source_counts():
         if go.name.endswith("_test.go"):
             continue
         text = go.read_text(errors="ignore")
+        # Reference counts are for native upstream zlint coverage only. Locally
+        # generated lints are named cicasgen_* and must not inflate that row.
+        if "cicasgen_" in go.name or "cicasgen_" in text:
+            continue
         sources = src_re.findall(text)
         if not sources:
             continue
@@ -122,11 +145,12 @@ def render_md(table):
     L.append("# Table 2 — zlint same-source coverage of lint-able rules\n")
     L.append("| 项 | CABF | RFC 5280 | 合计 |")
     L.append("|---|---:|---:|---:|")
-    L.append(f"| *zlint 同源 lint 总数（参照）* | *{rc.get('total','?')}* | *{rr.get('total','?')}* | *{rc.get('total',0)+rr.get('total',0)}* |")
-    L.append(f"| *　— 其中证书 lint（单证书口径）* | *{rc.get('cert','?')}* | *{rr.get('cert','?')}* | *{rc.get('cert',0)+rr.get('cert',0)}* |")
-    L.append(f"| *　— 其中 CRL lint（单证书口径外）* | *{rc.get('crl','?')}* | *{rr.get('crl','?')}* | *{rc.get('crl',0)+rr.get('crl',0)}* |")
+    L.append(f"| *zlint 同源证书 lint（参照分母）* | *{rc.get('cert','?')}* | *{rr.get('cert','?')}* | *{rc.get('cert',0)+rr.get('cert',0)}* |")
+    L.append(f"| *　— CRL lint（分母外）* | *{rc.get('crl','?')}* | *{rr.get('crl','?')}* | *{rc.get('crl',0)+rr.get('crl',0)}* |")
     L.append(f"| full（完整覆盖） | {cabf['full']} | {rfc['full']} | **{t['full']}** |")
-    L.append(f"| 未覆盖（codegen 定义域） | {cabf['uncovered']} | {rfc['uncovered']} | **{t['uncovered']}** |")
+    L.append(f"| 已判未覆盖（codegen 定义域） | {cabf['uncovered']} | {rfc['uncovered']} | **{t['uncovered']}** |")
+    L.append(f"| 待判覆盖（不计入 codegen 定义域） | {cabf['pending']} | {rfc['pending']} | **{t['pending']}** |")
+    L.append(f"| 已判覆盖合计 | {cabf['checked']} | {rfc['checked']} | **{t['checked']}** |")
     L.append(f"| 可 lint 合计 | {cabf['lintable']} | {rfc['lintable']} | **{t['lintable']}** |")
     return "\n".join(L) + "\n"
 
@@ -180,8 +204,11 @@ def main():
 
     print(md)
     t = table["total"]
-    assert t["lintable"] == t["full"] + t["uncovered"], "conservation broken"
-    print(f"[ok] lint-able {t['lintable']} = full {t['full']} + uncovered {t['uncovered']}")
+    assert t["lintable"] == t["full"] + t["uncovered"] + t["pending"], "conservation broken"
+    print(
+        f"[ok] lint-able {t['lintable']} = full {t['full']} "
+        f"+ uncovered {t['uncovered']} + pending {t['pending']}"
+    )
     print(f"[ok] wrote outputs/ -> {OUTPUTS}")
 
 

@@ -121,6 +121,23 @@ _NOT_OBSERVABLE_PATTERNS = [
     # no "certificate(s) for <word> purposes" / "for <category> purposes" shape).
     r"\bcertificates?\s+for\s+\w+\s+purposes\b",
     r"\bfor\s+(?:administrative|infrastructure|internal|operational)\b[^.]{0,40}\bpurposes\b",
+    # IDNA2008 processing PARAMETER, not a certificate field: the AllowUnassigned
+    # flag governs how a validator maps unassigned code points during name
+    # comparison (RFC 5280 §7.2 / RFC 5891); it is never encoded in the
+    # certificate, so "the AllowUnassigned flag SHALL NOT be set" is not
+    # single-certificate observable. (matches exactly R31308 corpus-wide)
+    r"\ballowunassigned flag\b",
+    # ISSUER-INTENT antecedent: "to indicate that a certificate has no
+    # well-defined expiration date, the notAfter SHOULD be 99991231235959Z" is
+    # conditional guidance keyed on what the issuer WANTS TO CONVEY. The intent
+    # is not decidable from the bytes (a normal notAfter is not a violation), so
+    # the obligation is not observable. (matches exactly R31150 corpus-wide)
+    r"no well-defined expiration date",
+    # CROSS-ORGANISATION relationship: "CA certificates issued to other
+    # organizations" turns on the issuer/subject organisational relationship,
+    # which is not decidable from a single certificate's bytes.
+    # (matches exactly R30979 corpus-wide)
+    r"issued to other organizations",
 ]
 _NOT_OBSERVABLE_RE = re.compile("|".join(_NOT_OBSERVABLE_PATTERNS), re.I)
 

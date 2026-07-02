@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .. import results_attribution as RA
@@ -50,7 +52,24 @@ def partition(per_lint: dict) -> tuple[dict, dict, dict]:
     return ours_np, up_np, ours_all
 
 
-def scan_corpus(zlint: Path, certs_dir: Path, limit: int = 0) -> list[dict]:
+def _scan_record(zlint: Path, cert: Path) -> dict | None:
+    per_lint = scan_cert(zlint, cert)
+    if per_lint is None:
+        return None
+    ours_np, up_np, ours_all = partition(per_lint)
+    return {"cert": cert.name, "ours": ours_np,
+            "upstream": up_np, "ours_all": ours_all}
+
+
+def _progress(done: int, total: int, progress_every: int, label: str) -> None:
+    if not progress_every:
+        return
+    if done == total or done % progress_every == 0:
+        print(f"[scan] {label}: {done}/{total}", file=sys.stderr, flush=True)
+
+
+def scan_corpus(zlint: Path, certs_dir: Path, limit: int = 0, workers: int = 1,
+                progress_every: int = 0, label: str | None = None) -> list[dict]:
     """Scan every *.pem under certs_dir with the built zlint binary.
 
     Returns one record per parseable cert:
@@ -61,12 +80,28 @@ def scan_corpus(zlint: Path, certs_dir: Path, limit: int = 0) -> list[dict]:
     certs = sorted(certs_dir.glob("*.pem"))
     if limit:
         certs = certs[:limit]
-    records = []
-    for cert in certs:
-        per_lint = scan_cert(zlint, cert)
-        if per_lint is None:
-            continue
-        ours_np, up_np, ours_all = partition(per_lint)
-        records.append({"cert": cert.name, "ours": ours_np,
-                        "upstream": up_np, "ours_all": ours_all})
-    return records
+    total = len(certs)
+    label = label or certs_dir.name
+    workers = max(1, int(workers or 1))
+
+    if workers == 1:
+        records = []
+        for i, cert in enumerate(certs, start=1):
+            rec = _scan_record(zlint, cert)
+            if rec is not None:
+                records.append(rec)
+            _progress(i, total, progress_every, label)
+        return records
+
+    ordered: list[tuple[int, dict]] = []
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        future_to_index = {
+            ex.submit(_scan_record, zlint, cert): i
+            for i, cert in enumerate(certs)
+        }
+        for done, fut in enumerate(as_completed(future_to_index), start=1):
+            rec = fut.result()
+            if rec is not None:
+                ordered.append((future_to_index[fut], rec))
+            _progress(done, total, progress_every, label)
+    return [rec for _, rec in sorted(ordered, key=lambda x: x[0])]

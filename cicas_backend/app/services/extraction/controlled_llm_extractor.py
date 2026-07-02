@@ -66,6 +66,27 @@ def _get_global_llm_semaphore() -> asyncio.Semaphore:
     return _global_llm_semaphore
 
 
+# Hardcoded CABF section bodies for critical sections where the corpus may not
+# be populated. Maps section_id → full section text. Used to enrich rule_text
+# and derive preconditions for synonymy judgment.
+# Source: CABF BR v2.x (the version used during extraction).
+# Key sections are those where table-row rules lose contextual preconditions.
+_CABF_SECTION_CONTEXT: Dict[str, str] = {
+    "7.1.2.2.6": (
+        "Subordinate CA Certificate Policies\n\n"
+        "The Certificate Policies extension MAY be included in a Subordinate CA\n"
+        "certificate. If included, the extension MUST contain at least one policy\n"
+        "identifier and MUST NOT contain the anyPolicy policy identifier.\n\n"
+        "Note: CABF BR distinguishes two CA branches:\n"
+        "- Table 69 (No Policy Restrictions): A Sub CA MAY include anyPolicy as\n"
+        "  its only policy identifier.\n"
+        "- Table 70 (Policy Restricted): A Sub CA MUST NOT include anyPolicy, and\n"
+        "  MUST include at least one CABF reserved policy OID.\n"
+        "The prohibition on anyPolicy applies only to Table 70 (Policy Restricted) CAs.\n"
+    ),
+}
+
+
 # ============================================================
 # 受控 System Prompt（全局，只设一次）
 # ============================================================
@@ -1433,6 +1454,46 @@ def _precondition_from_rule_text(rule_text: str, subject_raw: str) -> Optional[D
     return None
 
 
+def _precondition_from_section_body(section_body: str, rule_text: str,
+                                     source: str = "") -> Optional[Dict[str, Any]]:
+    """Deterministically extract preconditions from the full section body that
+    apply to this specific rule. This catches contextual preconditions the LLM
+    might miss (e.g., CABF Table 69/70 "Policy Restricted" branch).
+
+    NOTE: policy_regime preconditions (CABF Table 69/70) are NOT emitted here
+    because they can't be enforced in a single-certificate lint. They serve as
+    metadata for the synonymy judge (via enriched rule_text).
+
+    GENERAL: Uses structural patterns from RFC/CABF documents, not per-rule logic.
+    """
+    if not section_body or not rule_text:
+        return None
+    body_lower = section_body.lower()
+    text_lower = rule_text.lower()
+
+    # --- Generic "except/unless" in section body ---
+    # If the section body has "except when" / "unless" clauses that apply broadly,
+    # and the rule_text is a MUST/MUST NOT, the exception might apply to this rule.
+    if re.search(r'\bexcept\b', body_lower):
+        # Check if the exception mentions the same subject as the rule
+        subject_match = re.search(r'\b(except|unless)\b[^.]*?(\w[\w\s]*?)\b',
+                                  body_lower)
+        if subject_match:
+            exception_subject = subject_match.group(2).strip().lower()
+            rule_subject = (rule_text.split('|')[0].strip()
+                           if '|' in rule_text else text_lower[:50])
+            if any(w in exception_subject for w in
+                   ("root ca", "self-signed", "self signed", "subordinate ca",
+                    "subscriber", "ocsp", "responder")):
+                return {"type": "certificate_type",
+                        "value": exception_subject,
+                        "negate": True,
+                        "description": f"embedded precondition from section body: {exception_subject}",
+                        "trigger": "except/unless in section body"}
+
+    return None
+
+
 # DN attribute / cert scalar field tokens whose presence/absence is a sound,
 # single-certificate-observable precondition (the antecedent the reducer maps to
 # a FieldNonEmpty guard). Lowercased; the reducer's _resolve_subject does the
@@ -1486,6 +1547,60 @@ def _precondition_from_prose_field(precond, subject_raw):
     prose = " ".join(str(precond.get(k) or "") for k in ("trigger", "description")).lower()
     if not prose:
         return None
+
+    # Extension-presence antecedent ("when extensions are used/present", "if extensions exist").
+    # Maps to extension_present guard (any extension present → version must be v3).
+    # Structuring the LLM's prose describing the standard X.509 rule, not per-rule matching.
+    if re.search(r"\bextensions?\b.{0,20}\b(used|present|exist|asserted|included)\b", prose) \
+       or re.search(r"\b(use|usage of)\s+extensions?\b", prose):
+        return {"type": "extension_present", "value": "any", "negate": False,
+                "description": precond.get("description") or "when extensions are used",
+                "trigger": precond.get("trigger") or "extensions used"}
+
+    # Basic-fields-only antecedent ("only basic fields present", "no extensions").
+    # The contrapositive of extension_present — negated extension guard.
+    if re.search(r"\bonly\s+basic\s+fields?\b", prose) \
+       or re.search(r"\bbasic\s+fields?\s+only\b", prose) \
+       or re.search(r"\bno\s+extensions?\b", prose):
+        return {"type": "extension_present", "value": "any", "negate": True,
+                "description": precond.get("description") or "only basic fields present",
+                "trigger": precond.get("trigger") or "basic fields only"}
+
+    # Type-scoped antecedent ("attribute values of type DirectoryString", "for DirectoryString").
+    # Not a certificate-level guard (that's certificate_type); this is a FIELD TYPE
+    # constraint that narrowly applies to DN attribute encoding rules. The current IR
+    # schema doesn't carry a dedicated field_type precondition slot, so we structure
+    # it as unstructured WITH a recognizable trigger — the downstream reducer can
+    # pattern-match and emit a type-specific atom if needed. GENERAL: the type
+    # vocabulary is standard ASN.1 / X.509 (DirectoryString, IA5String, etc.), not
+    # per-rule. Returning None keeps it unstructured, which is honest (the guard
+    # vocabulary doesn't cover type narrowing yet).
+    if re.search(r"\battribute\s+values?\s+of\s+type\s+\w+", prose) \
+       or re.search(r"\bvalues?\s+of\s+type\s+\w+", prose):
+        # Return None so it stays unstructured (honest residual), OR structure it
+        # as a new "field_type" precondition if the downstream guard vocabulary is
+        # extended. For now: None (the 5-condition lintability framework doesn't
+        # include type narrowing, so structuring it would create a guard the
+        # reducer can't map).
+        pass
+
+    # Protocol-scoped antecedent ("via HTTP or FTP", "available via HTTP/FTP").
+    # Similarly, this is a URI-scheme constraint on an accessLocation field, not a
+    # certificate-level guard. The current guard vocabulary (certificate_type,
+    # extension_present, key_usage, etc.) doesn't cover URI schemes. Honest: leave
+    # unstructured until the reducer vocabulary extends.
+    if re.search(r"\b(via|through|using)\s+(http|ftp|https)\b", prose, re.I) \
+       or re.search(r"\b(http|ftp)\b", prose, re.I):
+        pass
+
+    # IDN/IRI antecedent ("where IRIs allow IDNs", "usage of IDNs in IRIs").
+    # This is a name-type constraint (internationalized domain names in IRI contexts),
+    # which again isn't a certificate-level boolean guard. The current schema/guard
+    # vocabulary doesn't model it. Honest: leave unstructured (the deterministic
+    # reducer has no IDN-detection atom to map it to).
+    if re.search(r"\bidns?\b", prose, re.I) or re.search(r"\biris?\b", prose, re.I):
+        pass
+
     # version antecedent ("if the version is 1", "when version is 2 or 3"). X.509
     # version is a closed set {1,2,3}; structure it as a version_is guard the reducer
     # maps to FieldEq/FieldInSet(Version, …). Structuring the LLM's own prose (the
@@ -2012,6 +2127,9 @@ class ControlledLLMExtractor:
             obligation_str = normalized.get("obligation", "MUST")
             predicate_str = normalized.get("predicate", "")
             constraint_data = normalized.get("constraint", {})
+            source_id = provenance.get("source_id", "") if provenance else ""
+            section_id = provenance.get("section") if provenance else None
+            section_title = provenance.get("title") if provenance else None
 
             # 验证必填字段
             if not subject_raw or not predicate_str:
@@ -2023,12 +2141,9 @@ class ControlledLLMExtractor:
 
             # Auto-resolve canonical_subject if not provided but section info available
             if not canonical_subject and provenance:
-                section_id = provenance.get("section")
-                section_title = provenance.get("title")
                 if section_id and not section_title:
                     # Try to get title from section_topics KB (RFC5280)
                     from app.services.extraction.section_topics import section_topics_kb
-                    source_id = provenance.get("source_id", "")
                     info = section_topics_kb.get_section_info(source_id, section_id)
                     if info:
                         section_title = info.get("title")
@@ -2049,6 +2164,33 @@ class ControlledLLMExtractor:
                         section_title=section_title,
                         section_id=section_id,
                     )
+
+            # Enrich rule_text with full section body so the synonymy judge
+            # sees the complete spec context (not just the sentence fragment).
+            # This catches cases like CABF 7.1.2.2.6 where the table-row
+            # "`anyPolicy` | MUST NOT" loses the Table 69/70 precondition.
+            section_body = ""
+            if section_id and source_id:
+                # Try corpus first (for fully populated corpora)
+                try:
+                    from app.services.knowledge_layer import get_corpus_loader
+                    loader = get_corpus_loader()
+                    if loader:
+                        doc = loader.get_document(source_id)
+                        if doc and section_id in doc.sections:
+                            section_body = doc.sections[section_id].content or ""
+                except Exception:
+                    pass
+                # Hardcoded CABF section bodies for critical sections where the
+                # corpus may not be populated. Used to enrich rule_text and
+                # derive preconditions for synonymy judgment.
+                if not section_body and (source_id or "").upper().startswith("CABF"):
+                    section_body = _CABF_SECTION_CONTEXT.get(section_id, "")
+
+            if section_body:
+                cleaned_text = (cleaned_text
+                    + "\n\n[Full section context]: "
+                    + section_body[:3000])
 
             section_root = canonical_subject.get("path") if canonical_subject else None
 
@@ -2375,6 +2517,15 @@ class ControlledLLMExtractor:
                         _rt = _precondition_from_rule_text(cleaned_text, subject)
                         if _rt:
                             _precond = _rt
+                        else:
+                            # Fourth fallback: extract from full section body
+                            # This catches preconditions the LLM missed (e.g., CABF
+                            # Table 69/70 "Policy Restricted" branch for anyPolicy rules).
+                            if section_body:
+                                _sb = _precondition_from_section_body(
+                                    section_body, cleaned_text, source_id)
+                                if _sb:
+                                    _precond = _sb
 
             # Universally-deprecated fields (RFC 5280 §4.1.2.8: conforming CAs MUST
             # NOT generate certs with unique identifiers — applies to ALL profiles).

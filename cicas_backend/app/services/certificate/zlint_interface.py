@@ -232,12 +232,16 @@ For "none" you MUST still name the closest candidate and give the field-by-field
     def _coverage_candidates(self, source: str, section: str) -> List[Dict]:
         """按 source 缩小候选（无 embedding）：
         RFC 规则 → RFC lint 中 citation 章节匹配的（章节稳定）；
-        CABF-BR 规则 → 全部 CABF-BR lint（章节会随版本漂移，只能按 source 收窄）。"""
+        CABF-BR 规则 → 全部 CABF-BR lint + 全部 RFC5280 lint（CABF很多规则derived from RFC5280）。
+
+        修改原因（2026-07-02）：CABF BR §7.1.2等章节的规则"derived from RFC5280"，
+        但zlint实现时标记为RFC5280 source。旧算法只在cabf池查找，系统性漏判这些覆盖。"""
         src = (source or "").upper().strip()
         if src in ("RFC", "RFC5280", "RFC2459"):
             return [z for z in self.zlint_ir_rfc if self._section_prefix_match(section, z.get("_sect") or set())]
         if src in ("CABF", "CABF-BR", "CABF_BR", "BRS", "BR"):
-            return list(self.zlint_ir_cabf)
+            # CABF规则需要同时匹配CABF和RFC5280的lint（跨标准覆盖）
+            return list(self.zlint_ir_cabf) + list(self.zlint_ir_rfc)
         return []
 
     @staticmethod
@@ -358,7 +362,7 @@ For "none" you MUST still name the closest candidate and give the field-by-field
         return 0               # cannot determine → leave to LLM
 
     @classmethod
-    def _consistent_verdict(cls, verdict: str, lint, lint_subject, rule_subject) -> str:
+    def _consistent_verdict(cls, verdict: str, lint, lint_subject, rule_subject, rule_text: str = "") -> str:
         """Downgrade full/partial when the rule and matched lint resolve to a
         SPECIFIC but DIFFERENT subject family (a wrong-field match) OR when
         the rule and lint imply opposite polarity (e.g., MUST NOT vs a positive presence)
@@ -371,12 +375,11 @@ For "none" you MUST still name the closest candidate and give the field-by-field
             if rf and lf and rf != lf:
                 return "none"      # wrong-field match
             # Obligation polarity: must-not rule matching a positive-presence lint (or vice versa)
-            try:
-                rule_text: str = rule_subject or ""
-                lint_text: str = (lint.get("summary") for _ in ()) if lint else ""
-            except Exception:
-                rule_text = str(rule_subject)
-                lint_text = str(lint.get("summary") or "") if lint else ""
+            rule_text: str = str(rule_text or rule_subject or "")
+            if isinstance(lint, dict):
+                lint_text = str(lint.get("summary") or lint.get("description") or "")
+            else:
+                lint_text = str(lint or "")
             r_pol = cls._obligation_polarity(rule_text)
             l_pol = cls._obligation_polarity(lint_text)
             if r_pol == -1 and l_pol == +1:           # rule-prohibited → lint-expected: downgrade
@@ -414,8 +417,15 @@ For "none" you MUST still name the closest candidate and give the field-by-field
             lint = obj.get("lint")
             # deterministic wrong-field guard: downgrade full/partial when the rule
             # and the matched lint resolve to DIFFERENT specific subject families
-            lint_subject = next((z.get("subject") for z in chunk if z.get("rule_id") == lint), None)
-            v = self._consistent_verdict(v, lint, lint_subject, rule_fields.get("subject"))
+            lint_obj = next((z for z in chunk if z.get("rule_id") == lint), None)
+            lint_subject = lint_obj.get("subject") if lint_obj else None
+            v = self._consistent_verdict(
+                v,
+                lint_obj or lint,
+                lint_subject,
+                rule_fields.get("subject"),
+                rule_fields.get("text"),
+            )
             if order[v] > order[best["verdict"]] or (best["verdict"] == "none" and not best["reason"]):
                 best = {"verdict": v, "lint": lint, "fields": fields,
                         "reason": reason, "n_cand": len(candidates)}

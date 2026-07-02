@@ -1,5 +1,5 @@
 #!/bin/bash
-# 同时启动 FastAPI 后端和 Celery Worker
+# 启动 FastAPI 后端
 
 # 颜色定义
 RED='\033[0;31m'
@@ -19,25 +19,17 @@ fi
 
 # 获取处理器数量（逻辑CPU数，已包含超线程）
 PROCESSOR_COUNT=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-WORKER_COUNT=$PROCESSOR_COUNT
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}   PKI Standards Management System${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo -e "${YELLOW}处理器数量: ${PROCESSOR_COUNT}${NC}"
-echo -e "${YELLOW}Celery Worker数: ${WORKER_COUNT}${NC}"
 echo ""
 
 # 清理函数 - 当脚本退出时停止所有后台进程
 cleanup() {
     echo ""
     echo -e "${YELLOW}[INFO]${NC} 正在停止所有服务..."
-
-    # 停止所有 Celery worker 进程（包括子进程）
-    pkill -f "celery.*app.celery_app.*worker" 2>/dev/null
-    sleep 1
-    pkill -9 -f "celery.*app.celery_app.*worker" 2>/dev/null
-    echo -e "${GREEN}[INFO]${NC} Celery Worker 已停止"
 
     # 停止 FastAPI
     if [ ! -z "$BACKEND_PID" ]; then
@@ -46,14 +38,7 @@ cleanup() {
     fi
 
     # 清理 sed 管道进程
-    pkill -f "sed.*Celery\|sed.*FastAPI" 2>/dev/null
-
-    # 清空 Redis 中的 Celery 队列
-    echo -e "${YELLOW}[INFO]${NC} 清空 Celery 队列..."
-    redis-cli FLUSHALL > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}[INFO]${NC} Celery 队列已清空"
-    fi
+    pkill -f "sed.*FastAPI" 2>/dev/null
 
     # 清理数据库中卡住的任务状态
     echo -e "${YELLOW}[INFO]${NC} 清理卡住的任务状态..."
@@ -87,30 +72,9 @@ except Exception:
 # 捕获退出信号
 trap cleanup SIGINT SIGTERM
 
-# 启动 Celery Worker（监听所有队列）
-echo -e "${GREEN}[INFO]${NC} 启动 Celery Worker..."
-watchmedo auto-restart \
-    --directory=./app --pattern='*.py' --recursive -- \
-    celery -A app.celery_app worker \
-    --loglevel=info \
-    --concurrency=$WORKER_COUNT \
-    --queues=celery,certificate_validation,ct_scan,tranco_crawl,ir_extraction \
-    2>&1 | sed 's/^/[Celery] /' &
-CELERY_PID=$!
-
-# 等待Celery启动
-sleep 2
-
-# 检查Celery是否启动成功
-if ! kill -0 $CELERY_PID 2>/dev/null; then
-    echo -e "${RED}[ERROR]${NC} Celery Worker 启动失败！请检查Redis是否运行。"
-    exit 1
-fi
-echo -e "${GREEN}[INFO]${NC} Celery Worker 已启动 (PID: $CELERY_PID)"
-
 # 启动 FastAPI 后端
 echo -e "${GREEN}[INFO]${NC} 启动 FastAPI 后端..."
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app 2>&1 | sed 's/^/[FastAPI] /' &
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app 2>&1 | sed 's/^/[FastAPI] /' &
 BACKEND_PID=$!
 
 # 等待后端启动

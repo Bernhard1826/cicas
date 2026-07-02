@@ -133,6 +133,33 @@ CERT_FIELD_ALIASES = {
     "certificationpath": "CertificationPath",
 }
 
+# ---- Extension subfield ASN.1 context tag mappings ----
+# Maps (extension_OID, subfield_name) → ASN.1 context tag number.
+# Used to convert IR constraint.allowed_values (field names) to ExtSubfieldPresent atoms.
+# Source: RFC 5280 ASN.1 definitions.
+
+_EXT_SUBFIELD_TAGS = {
+    # PolicyConstraints ::= SEQUENCE {
+    #      requireExplicitPolicy           [0] SkipCerts OPTIONAL,
+    #      inhibitPolicyMapping            [1] SkipCerts OPTIONAL }
+    ("PolicyConstraintsOID", "requireexplicitpolicy"): 0,
+    ("PolicyConstraintsOID", "inhibitpolicymapping"): 1,
+
+    # AuthorityKeyIdentifier ::= SEQUENCE {
+    #      keyIdentifier             [0] KeyIdentifier           OPTIONAL,
+    #      authorityCertIssuer       [1] GeneralNames            OPTIONAL,
+    #      authorityCertSerialNumber [2] CertificateSerialNumber OPTIONAL }
+    ("AuthorityKeyIdentifierOID", "keyidentifier"): 0,
+    ("AuthorityKeyIdentifierOID", "authoritycertissuer"): 1,
+    ("AuthorityKeyIdentifierOID", "authoritycertserialnumber"): 2,
+
+    # InhibitAnyPolicy ::= SkipCerts (SEQUENCE with implicit [0])
+    # (No subfields, single INTEGER value)
+
+    # Add more extension subfield mappings as needed
+}
+
+
 DN_FIELD_ALIASES = {
     "country": "Country",
     "organization": "Organization",
@@ -206,6 +233,7 @@ OID_BY_NAME.update({
     "OidExtCrlDistributionPoints": "2.5.29.31",
     "OidRSAEncryption":   "1.2.840.113549.1.1.1",
     "OidRSASSAPSS":       "1.2.840.113549.1.1.10",
+    "PreCertificateSigningCertificateEKU": "1.3.6.1.4.1.11129.2.4.4",
 })
 
 # Reverse: name -> OID const name
@@ -233,6 +261,11 @@ _OID_CONST_NORMALIZE: dict[str, str] = {
     "ecpublickey":                "OidEcPublicKey",
     "idrsassapss":                "OidRSASSAPSS",
     "rsassapss":                  "OidRSASSAPSS",
+    "anyextendedkeyusage":         "Any",
+    "anyeku":                      "Any",
+    "precertificatesigningca":     "PreCertificateSigningCertificateEKU",
+    "precertificatesigningcertificate": "PreCertificateSigningCertificateEKU",
+    "precertificatesigningcertificateeku": "PreCertificateSigningCertificateEKU",
 }
 
 # ---- OID const name normalization ----
@@ -702,6 +735,9 @@ _POLICY_OID_NAMES = {
 _CERT_TYPE_GUARD = {
     "ca": "IsCA", "ca certificate": "IsCA", "issuing ca": "IsCA", "cacertificate": "IsCA",
     "intermediate": "IsCA", "intermediate ca": "IsCA",
+    "subca": "IsSubCA", "sub ca": "IsSubCA", "subordinate ca": "IsSubCA",
+    "technicallyconstrainedca": "IsSubCA", "technically constrained ca": "IsSubCA",
+    "technically constrained subordinate ca": "IsSubCA",
     "root": "IsRootCA", "root ca": "IsRootCA", "self-signed ca": "IsRootCA",
     "self signed ca": "IsRootCA", "rootca": "IsRootCA",
     "subscriber": "IsSubscriberCert", "subscriber certificate": "IsSubscriberCert",
@@ -720,7 +756,7 @@ _KU_BIT_NORMALIZE = {
     "keyencipherment": "KeyEncipherment", "key_encipherment": "KeyEncipherment",
     "dataencipherment": "DataEncipherment", "data_encipherment": "DataEncipherment",
     "keyagreement": "KeyAgreement", "key_agreement": "KeyAgreement",
-    "keycertsign": "KeyCertSign", "key_cert_sign": "KeyCertSign", "certsign": "KeyCertSign",
+    "keycertsign": "CertSign", "key_cert_sign": "CertSign", "certsign": "CertSign",
     "crlsign": "CRLSign", "crl_sign": "CRLSign",
     "encipheronly": "EncipherOnly", "encipher_only": "EncipherOnly",
     "decipheronly": "DecipherOnly", "decipher_only": "DecipherOnly",
@@ -768,20 +804,29 @@ def _precondition_guard(ir: dict, c: dict):
         # resolver. Tolerate the legacy "extension_present_<short>" encoding.
         v = pl.replace("extension_present_", "").replace("extension_present", "").strip("_ ") or pval
         v = {"ski": "subjectKeyIdentifier", "aki": "authorityKeyIdentifier"}.get(v, v)
-        # extensions resolve to ext_oid only when prefixed with "extensions."
-        cand = v if v.startswith("extensions.") else "extensions." + v
-        kind, oid = _resolve_subject(cand)
-        if kind != "ext_oid":
-            kind, oid = _resolve_subject(v)
-        if kind == "ext_oid":
-            guard = dsl.ExtPresent(oid)
+        # Special case: "any" means ANY extension is present (version v3 guard).
+        # Maps to HasAnyExtension() — a parameter-free generic atom.
+        if v.lower() == "any":
+            guard = dsl.HasAnyExtension()
+        else:
+            # extensions resolve to ext_oid only when prefixed with "extensions."
+            cand = v if v.startswith("extensions.") else "extensions." + v
+            kind, oid = _resolve_subject(cand)
+            if kind != "ext_oid":
+                kind, oid = _resolve_subject(v)
+            if kind == "ext_oid":
+                guard = dsl.ExtPresent(oid)
     elif ptype in ("key_usage", "key_usage_bit"):
         bit = pl.replace("key_usage_", "").replace("keyusage_", "").replace("keyusage", "").strip("_ ")
         bit = _KU_BIT_NORMALIZE.get(bit) or _KU_BIT_NORMALIZE.get(bit.replace(" ", "_"))
         if bit:
             guard = dsl.KeyUsageHas(bit)
     elif ptype in ("eku_present", "extended_key_usage", "eku"):
-        guard = dsl.ExtKeyUsageHas(_norm_oid_const(pval))
+        name = _norm_oid_const(pval)
+        if name in EKU_BY_NAME:
+            guard = dsl.ExtKeyUsageHas(name)
+        elif name in OID_BY_NAME:
+            guard = dsl.OidListContains("UnknownExtKeyUsage", name)
     elif ptype == "policy_oid":
         # Validation-level profile guard: the cert's PolicyIdentifiers contain
         # the reserved CABF policy OID (e.g. 2.23.140.1.2.3 for IV).
@@ -920,6 +965,28 @@ def _san_subtype_atom(subject: str, pred: str, c: dict | None = None):
     else:
         return None
     sub = sub.strip("._/")
+    # SAN subtype → its flat typed list field (used by ACE + matches_pattern below).
+    _SAN_LIST = {"uniformresourceidentifier": "URIs", "uri": "URIs",
+                 "dnsname": "DNSNames", "rfc822name": "EmailAddresses",
+                 "ipaddress": "IPAddresses"}
+    # matches_pattern on a SAN subtype: apply the named regex to every entry of the
+    # subtype's list field. The subject keeps the subtype here (before it collapses
+    # to SubjectAltNameOID in _dispatch), so this is the sound place to route it.
+    # pattern_name may sit in constraint.pattern_name OR a singleton allowed_values/
+    # values list (extractor variance) — accept either, gated on a known named regex.
+    if c is not None and (pred == "matches_pattern"
+                          or (c.get("type") or "").lower() in ("pattern", "regex_pattern", "regex")):
+        _pat = c.get("pattern_name") or ""
+        if not _pat:
+            for _slot in ("allowed_values", "values"):
+                _v = c.get(_slot)
+                if isinstance(_v, list) and len(_v) == 1 and isinstance(_v[0], str) \
+                        and _v[0] in NAMED_REGEX_NAMES:
+                    _pat = _v[0]
+                    break
+        _f = _SAN_LIST.get(sub)
+        if _pat in NAMED_REGEX_NAMES and _f:
+            return dsl.ListAllMatch(_f, dsl.ItemMatchesRegex(_pat))
     # ACE / "ASCII Compatible Encoding": IRIs with IDNs MUST be converted to ACE.
     # The transformation itself is not checkable, but its OBSERVABLE consequence —
     # the stored value is pure ASCII — is, via ListAllMatch + Re_AsciiOnly. The
@@ -928,9 +995,7 @@ def _san_subtype_atom(subject: str, pred: str, c: dict | None = None):
         _val = (str(c.get("value") or "") + " " + (c.get("raw_text") or "")).lower()
         if ("ascii compatible" in _val or "ascii-compatible" in _val) and \
                 "Re_AsciiOnly" in NAMED_REGEX_NAMES:
-            _LIST = {"uniformresourceidentifier": "URIs", "uri": "URIs",
-                     "dnsname": "DNSNames", "rfc822name": "EmailAddresses"}
-            _f = _LIST.get(sub)
+            _f = _SAN_LIST.get(sub)
             if _f:
                 return dsl.ListAllMatch(_f, dsl.ItemMatchesRegex("Re_AsciiOnly"))
     tag = _GN_TAG.get(sub)
@@ -986,6 +1051,13 @@ def _dc_ordered_atom(subject: str, c: dict):
     if "orderedsequence" in blob or ("ordered" in blob and "sequence" in blob):
         return dsl.DomainComponentOrdered()
     return None
+
+
+# _nc_subtree_bothtypes_atom: OMITTED — the "UNLESS excludedSubtrees exclude all names of that type"
+# clause makes this unsound as a simple And(FieldNonEmpty(...)). Honest residual.
+# The semantics require checking both presence AND the excludedSubtrees counter-condition,
+# which cannot be expressed as a flat atomic pattern. Correct fix = richer IR extraction.
+
 
 
 def _crldp_namerelative_atom(subject: str, pred: str, c: dict):
@@ -1246,6 +1318,33 @@ def _wellformed(node) -> bool:
     return True  # ExtPresent-free atoms (IsCA, KeyUsageHas, RSA*, regex, ...) are sound by construction
 
 
+def _looks_like_truncated_rule_text(ir: dict, c: dict) -> bool:
+    """High-precision guard for table/prose fragments that lost the right-hand
+    constraint clause. Such rows can carry a plausible subject path in IR while
+    the original text is not a self-contained rule, so codegen should refuse."""
+    desc = str(ir.get("description") or "")
+    raw = str((c or {}).get("raw_text") or "")
+    text = re.sub(r"[`*]", "", desc).strip()
+    raw_clean = re.sub(r"[`*]", "", raw).strip()
+    if not text:
+        return False
+    lowered = text.lower().strip(" .")
+    if lowered.endswith((" which", " that", " where", " unless", " if")):
+        return True
+    cells = [re.sub(r"[`*]", "", x).strip() for x in desc.split("|")]
+    if len(cells) >= 3:
+        nonempty = [c for c in cells if c]
+        if nonempty:
+            last = nonempty[-1].lower().strip(" .")
+            if last in ("the ca", "ca", "the subscriber", "subscriber", "the certificate"):
+                return True
+    raw_l = raw_clean.lower().strip(" .")
+    return raw_l in (
+        "the ca", "ca", "the subscriber", "subscriber",
+        "ipaddress | must | the ca", "directoryname must",
+    )
+
+
 def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
     """Convert a flat IR dict (from rules.ir_data.ir) to a DSL Compound atom.
 
@@ -1268,9 +1367,17 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
     c = ir.get("constraint") or {}
     ctype = (c.get("type") or "").lower()
     ext_oid = ir.get("extension_oid_const") or ""
+    if _looks_like_truncated_rule_text(ir, c):
+        return None
 
     # ---- Resolve subject ----
     subj_kind, subj_val = _resolve_subject(subject)
+
+    # Derive ext_oid for ext_oid subjects from subj_val if not explicitly set.
+    # This allows _dispatch to handle "extensions.KeyUsage" without needing
+    # extension_oid_const in the IR.
+    if not ext_oid and subj_kind == "ext_oid":
+        ext_oid = subj_val
 
     # ---- RSA key-parameter rules (recognized BEFORE the unresolved gate) ----
     # Subjects like 'subjectPublicKeyInfo[.modulus|.publicExponent]' don't map to a
@@ -1309,6 +1416,35 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
         if guard is not None:
             atom = dsl.When(guard, atom)
 
+    # Apply negation if the predicate is negative (must_not_*).
+    # This handles MUST NOT exceed, MUST NOT be present, MUST NOT be in set, etc.
+    # The atom is built for the positive case; negation wraps it here.
+    if atom is not None:
+        neg = pred_raw in ("must_not_include", "must_not_be_present", "must_not_be_in_set",
+                           "must_not_equal", "must_not_conform_to", "must_not_exceed",
+                           "must_not_be_longer", "must_not_be_shorter",
+                           "must_not_be_greater", "must_not_be_less")
+        # Some atoms already apply negation internally (e.g., FieldNotInSet, Not(Or(...))
+        # already carry NOT semantics). Skip wrapping those.
+        if neg and not isinstance(atom, dsl.Not):
+            # Special case: FieldNumericInRange with must_not_exceed means "value > hi".
+            # Wrapping Not() gives !(lo <= x <= hi) = x < lo OR x > hi, which is too broad
+            # when lo=0 (we want only x > hi). Convert to FieldNumericInRange with
+            # flipped bounds: lo=hi+1, hi=MAX_INT. Only for must_not_exceed/must_not_*
+            # (geometric comparisons that are pure upper/lower bounds, not both).
+            if isinstance(atom, dsl.FieldNumericInRange) and pred_raw == "must_not_exceed":
+                atom = dsl.FieldNumericInRange(atom.field, atom.hi + 1, "MAX_INT")
+            elif isinstance(atom, dsl.FieldLenInRange) and pred_raw == "must_not_be_longer":
+                atom = dsl.FieldLenInRange(atom.field, atom.hi + 1, "MAX_INT")
+            elif isinstance(atom, dsl.FieldLenInRange) and pred_raw == "must_not_be_shorter":
+                atom = dsl.FieldLenInRange(atom.field, 0, atom.lo - 1)
+            elif isinstance(atom, dsl.FieldNumericInRange) and pred_raw == "must_not_be_greater":
+                atom = dsl.FieldNumericInRange(atom.field, 0, atom.lo - 1)
+            elif isinstance(atom, dsl.FieldNumericInRange) and pred_raw == "must_not_be_less":
+                atom = dsl.FieldNumericInRange(atom.field, atom.hi + 1, "MAX_INT")
+            else:
+                atom = dsl.Not(atom)
+
     # Soundness gate for profile-conditional "pathLenConstraint MUST NOT be present":
     # the absent-check FieldEq(MaxPathLen,-1) over-flags legitimate CA certs (which
     # validly carry a pathLenConstraint) UNLESS scoped by an applicability guard.
@@ -1317,6 +1453,16 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
     # ("Subscriber Certificate", "OCSP Responder", "unless cA asserted"), which the
     # current IR does not carry as a STRUCTURED precondition → re-extraction
     # territory (do not free-text-parse it here).
+    # Soundness gate: "URIs that specify https, ldaps" → subject=extensions but the
+    # actual check is on URI scheme VALUES, not Extension objects. FieldNotInSet on
+    # the Extensions field is wrong. R31338 is an honest residual (needs URI scheme
+    # atom, not FieldNotInSet on Extensions).
+    if (isinstance(atom, (dsl.FieldInSet, dsl.FieldNotInSet))
+            and atom.field == "Extensions"
+            and ir.get("constraint", {}).get("raw_text", "").lower().startswith(
+                ("uri", "uris", "url", "urls", "https", "http", "ldaps"))):
+        return None  # Refuse honestly: wrong field target
+
     if isinstance(atom, dsl.FieldEq) and atom.field == "MaxPathLen" and atom.value == -1:
         return None  # unguarded ⇒ unsound; refuse honestly
 
@@ -1343,8 +1489,20 @@ def _structured_fallback(subj_kind, subj_val, pred, c, ext_oid):
         "", c.get("field"), c.get("raw_text") or "")
     if not field:
         return None
+    raw = (c.get("raw_text") or "").lower()
+    if field == "KeyUsage" and ctype == "key_usage_bits":
+        # Needs an RSA public-key guard; without it the lint applies to every
+        # subscriber certificate and over-expresses the rule.
+        if "rsa public key" in raw or "rsa public keys" in raw:
+            return None
+    if field in ("KeyUsage", "ExtKeyUsage") and "any other value" in raw:
+        # Table residual: without preserved row/column context, "any other value"
+        # is not a standalone allowed-set constraint.
+        return None
     neg = pred in ("must_not_include", "must_not_be_present", "must_not_be_in_set",
-                   "must_not_equal", "must_not_conform_to")
+                   "must_not_equal", "must_not_conform_to", "must_not_exceed",
+                   "must_not_be_longer", "must_not_be_shorter",
+                   "must_not_be_greater", "must_not_be_less")
     # 1) enumerated value set -> FieldInSet / FieldNotInSet
     av = c.get("allowed_values")
     # Tolerate the common alias keys an extractor/repair step may emit for the same
@@ -1367,7 +1525,20 @@ def _structured_fallback(subj_kind, subj_val, pred, c, ext_oid):
             if all(x is not None for x in _co):
                 vals = _co
         return dsl.FieldNotInSet(field, vals) if neg else dsl.FieldInSet(field, vals)
-    # 2) numeric / length range -> FieldLenInRange / FieldNumericInRange
+
+    # 2) scalar must_equal / must_not_equal with single value
+    val = c.get("value")
+    if val is not None and pred in ("must_equal", "must_not_equal"):
+        # Version is an int field; coerce string labels ("v2","v3") to ints.
+        if field == "Version":
+            val = _version_to_int(val)
+            if val is None:
+                return None
+        if pred == "must_not_equal":
+            return dsl.Not(dsl.FieldEq(field, val))
+        return dsl.FieldEq(field, val)
+
+    # 3) numeric / length range -> FieldLenInRange / FieldNumericInRange
     # GUARD: cardinality on KeyUsage/EKU is extension cardinality, not numeric value.
     # R29738 "at most 1 key usage extension" has max_value=1 but must emit FieldCount
     # on the extension (not FieldNumericInRange on the bitstring field).
@@ -1379,14 +1550,17 @@ def _structured_fallback(subj_kind, subj_val, pred, c, ext_oid):
             unit = (c.get("unit") or "").lower()
             ct = (c.get("type") or "").lower()
             if ct == "length" or unit in ("bytes", "octets", "characters", "labels", "digits"):
-                return dsl.FieldLenInRange(field, lo, hi)
-            # GUARD: KeyUsage is a bitstring field; FieldNumericInRange on it would be
-            # semantically wrong (counting bit positions, not extension occurrences).
-            # This fires when cardinality branch above skipped due to oid not in
-            # _EXT_CONTENT_COUNT_FIELD. Emit FieldCount on Extensions as a safe fallback.
-            if field == "KeyUsage" and (lo, hi) == (0, 1):
-                return dsl.FieldCount("Extensions", 0, 1)
-            return dsl.FieldNumericInRange(field, lo, hi)
+                range_atom = dsl.FieldLenInRange(field, lo, hi)
+            else:
+                # GUARD: KeyUsage is a bitstring field; FieldNumericInRange on it would be
+                # semantically wrong (counting bit positions, not extension occurrences).
+                if field == "KeyUsage" and (lo, hi) == (0, 1):
+                    range_atom = dsl.FieldCount("Extensions", 0, 1)
+                else:
+                    range_atom = dsl.FieldNumericInRange(field, lo, hi)
+            if neg:
+                return dsl.Not(range_atom)
+            return range_atom
     # 3) ASN.1 encoding type(s) -> FieldEncodedAs (only real ASN.1 string tags;
     #    a GeneralName CHOICE like 'rfc822Name' is NOT an encoding -> drop it).
     at = c.get("asn1_types")
@@ -1414,6 +1588,12 @@ def _structured_fallback(subj_kind, subj_val, pred, c, ext_oid):
     if mc is not None or xc is not None:
         lo = int(mc) if isinstance(mc, (int, float)) else 0
         hi = int(xc) if isinstance(xc, (int, float)) else "MAX_INT"
+        if subj_kind == "ext_oid" and subj_val == "NameConstOID" and ctype == "cardinality":
+            # NameConstraints cardinality in the corpus usually targets inner
+            # subtrees (permittedSubtrees/excludedSubtrees/GeneralName types), not
+            # the number of extension OIDs. Without subtree-level atoms, falling
+            # back to FieldCount("Extensions", ...) is a wrong-field lint.
+            return None
         # GUARD: cardinality on an extension OID. Two distinct meanings:
         #  (a) "this extension MUST appear at most N times in the chain" → count of
         #      the extension OID in c.Extensions (FieldCount("Extensions", ...));
@@ -1426,12 +1606,12 @@ def _structured_fallback(subj_kind, subj_val, pred, c, ext_oid):
         # lower bound ≥1 ⇒ inner-content count (case b); map to the content list when
         # known, else refuse (None) rather than emit the unsound Extensions tree.
         if subj_kind == "ext_oid" and ctype == "cardinality":
-            _raw = (c.get("raw_text") or raw_text or "").lower()
+            _raw = raw
             _inner = (lo >= 1) and any(k in _raw for k in (
                 "contain", "one or more", "at least one", "only a single",
                 "only the", "must contain only"))
             if _inner:
-                content = _EXT_CONTENT_COUNT_FIELD.get(oid)
+                content = _EXT_CONTENT_COUNT_FIELD.get(subj_val)
                 if content:
                     return dsl.FieldCount(content, lo, hi)
                 return None  # inner-content count with no known content list: honest residual
@@ -1575,6 +1755,18 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
     import sys
     cvalue = c.get("value")
     pattern_name = c.get("pattern_name") or ""
+    # A named regex pattern may land in allowed_values/values instead of the
+    # pattern_name slot (the extractor files a single-element list of the pattern
+    # constant name for pattern/regex constraints). Recover it AT DISPATCH from
+    # those slots when pattern_name is empty — GENERAL slot-normalization keyed on
+    # the value being a known NAMED_REGEX constant, not a per-rule literal.
+    if not pattern_name and ctype in ("pattern", "regex_pattern", "regex"):
+        for _slot in ("allowed_values", "values"):
+            _v = c.get(_slot)
+            if isinstance(_v, list) and len(_v) == 1 and isinstance(_v[0], str) \
+                    and _v[0] in NAMED_REGEX_NAMES:
+                pattern_name = _v[0]
+                break
     raw_text = c.get("raw_text") or ""
     field = None  # populated in ext_oid block for _infer_field_from_subject fallback
 
@@ -1606,6 +1798,56 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
             if "dnsname" in _raw and "ipaddress" in _raw:
                 return dsl.Or(parts=[dsl.FieldNonEmpty("DNSNames"),
                                      dsl.FieldNonEmpty("IPAddresses")])
+
+        # EKU table rows like "anyExtendedKeyUsage present -> any other value MUST
+        # NOT be included" constrain the EKU KeyPurposeId list itself. The faithful
+        # OK condition is: when anyExtendedKeyUsage is present, the EKU list has
+        # exactly one entry. Counting c.Extensions would be a wrong-field lint.
+        if oid == "EkuSynOid" and ctype == "cardinality":
+            vals = c.get("allowed_values") if isinstance(c.get("allowed_values"), list) else []
+            norm_vals = {_norm_oid_const(v) for v in vals}
+            _raw = (c.get("raw_text") or raw_text or "").lower()
+            if "Any" in norm_vals and ("other" in _raw or pred in ("must_not_include", "must_be_absent")):
+                hi = c.get("max_count")
+                try:
+                    hi = int(hi)
+                except Exception:
+                    hi = 1
+                if hi == 1:
+                    return dsl.FieldCount("ExtKeyUsage", 1, 1)
+            return None
+
+        # ---- Extension subfield presence (PolicyConstraints, AKI subfields) ----
+        # "either inhibitPolicyMapping or requireExplicitPolicy MUST be present"
+        # → Or(ExtSubfieldPresent(oid, tag1), ExtSubfieldPresent(oid, tag2))
+        # Driven by constraint.allowed_values (subfield names) + _EXT_SUBFIELD_TAGS map.
+        # GENERIC: parameterized by extension OID + ASN.1 tag, not per-rule.
+        if (pred in ("must_be_present", "must_include", "must_not_include")
+                and ctype == "cardinality"
+                and isinstance(c.get("allowed_values"), list)
+                and len(c.get("allowed_values")) > 0):
+            subfield_names = [v.lower().replace("_", "").replace(" ", "")
+                             for v in c.get("allowed_values")]
+            subfield_atoms = []
+            for name in subfield_names:
+                tag = _EXT_SUBFIELD_TAGS.get((oid, name))
+                if tag is not None:
+                    subfield_atoms.append(
+                        dsl.ExtSubfieldPresent(oid=oid, tag=tag, subfield=name, path="")
+                    )
+
+            if subfield_atoms:
+                # "must_include" → at least one subfield present → Or
+                # "must_not_include" → none present → Not(Or(...))
+                if len(subfield_atoms) == 1:
+                    atom = subfield_atoms[0]
+                else:
+                    atom = dsl.Or(parts=tuple(subfield_atoms))
+
+                if pred == "must_not_include":
+                    atom = dsl.Not(inner=atom)
+
+                return atom
 
         # Cardinality on an extension whose CONTENT list zcrypto exposes as a flat
         # countable field -> FieldCount (GENERAL atom, already cert-oracle certified).
@@ -1672,6 +1914,70 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                     return dsl.And(parts=[dsl.FieldCount("PolicyIdentifiers", mc, hi), val_atom])
                 return val_atom
 
+        # ---- PolicyQualifier OID checking (CPS pointer / User Notice restriction) ----
+        # Fires when the IR targets extensions.certificatepolicies with a constraint
+        # on qualifier types (e.g., "MUST contain only permitted policyQualifiers from
+        # the table below" / "MUST NOT contain CPS pointer" / "MUST contain only
+        # {cps-pointer, user-notice}"). The extractor populates:
+        #   - allowed_values: list of literal strings ("cps-pointer", "user-notice",
+        #     "id-qt-cps", "id-qt-unotice", "any other qualifier")
+        #   - raw_text: the prose constraint for fallback parsing
+        # The atom re-parses CertificatePolicies DER to walk into PolicyInformation →
+        # PolicyQualifiers → PolicyQualifierInfo → policyQualifierId OID.
+        # GENERAL: OID constants (IdQtCps, IdQtUnotice) are standard PKI vocabulary.
+        if oid == "CertPolicyOID":
+            raw = (c.get("raw_text") or raw_text or "").lower()
+            av = c.get("allowed_values") or []
+            neg = pred in ("must_not_include", "must_not_be_present", "must_not_contain",
+                           "must_not_be_in_set")
+            # Map colloquial names to OID consts (closed vocabulary, not free prose)
+            _QUALIFIER_NAME_TO_OID = {
+                "cps": "IdQtCps",
+                "cps-pointer": "IdQtCps",
+                "id-qt-cps": "IdQtCps",
+                "certification practice statement": "IdQtCps",
+                "notice": "IdQtUnotice",
+                "user-notice": "IdQtUnotice",
+                "id-qt-unotice": "IdQtUnotice",
+                "explicittext": "IdQtUnotice",
+                "displaytext": "IdQtUnotice",
+                "any other qualifier": None,  # special sentinel
+            }
+            # Collect allowed/forbidden qualifier OIDs from allowed_values
+            oids_to_check = []
+            for v in av:
+                v_key = re.sub(r"[^a-z0-9]", "", v.lower())
+                oid_const = None
+                for name, const in _QUALIFIER_NAME_TO_OID.items():
+                    if name in v_key:
+                        oid_const = const
+                        break
+                if oid_const:
+                    oids_to_check.append(oid_const)
+            # Also try to extract from raw_text if allowed_values didn't yield OIDs
+            if not oids_to_check:
+                for name, const in _QUALIFIER_NAME_TO_OID.items():
+                    if name in raw:
+                        if const is None:  # "any other qualifier" → forbid everything
+                            oids_to_check = ["IdQtCps", "IdQtUnotice"]  # exhaustive negation
+                            break
+                        oids_to_check.append(const)
+            if oids_to_check:
+                # Deduplicate while preserving order
+                seen, unique = set(), []
+                for o in oids_to_check:
+                    if o not in seen:
+                        seen.add(o); unique.append(o)
+                oids_tuple = tuple(unique)
+                if len(oids_tuple) == 1:
+                    inner = dsl.PolicyQualifierOIDInSet(oids_tuple[0])
+                else:
+                    inner = dsl.Or(parts=tuple(
+                        dsl.PolicyQualifierOIDInSet(o) for o in oids_tuple))
+                if neg:
+                    inner = dsl.Not(inner)
+                return inner
+
         # Presence / criticality
         if pred == "must_be_present":
             return dsl.ExtPresent(oid)
@@ -1681,6 +1987,18 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
             # "must be present and non-empty". For an extension, present ≡
             # non-empty (ASN.1 structure), so ExtPresent is the faithful reading.
             raw = (c.get("raw_text") or "").lower()
+            # Value-level CertificatePolicies absence: "anyPolicy Policy
+            # Identifier MUST NOT be present" is not equivalent to forbidding the
+            # entire certificatePolicies extension.
+            if oid == "CertPolicyOID":
+                pol_oids = _resolve_policy_value(c.get("value")) or _resolve_policy_value(raw)
+                if pol_oids:
+                    atoms = [dsl.OidListContains("PolicyIdentifiers", o) for o in pol_oids]
+                    inner = atoms[0] if len(atoms) == 1 else dsl.Or(parts=atoms)
+                    return dsl.Not(inner)
+                # Unknown policy qualifier/value-level prohibition: no precise atom.
+                if any(k in raw for k in ("qualifier", "policy identifier", "any other")):
+                    return None
             if "not be empty" in raw or "not be an empty" in raw or "non-empty" in raw:
                 return dsl.ExtPresent(oid)  # presence ≡ non-empty for ASN.1 ext
             return dsl.Not(dsl.ExtPresent(oid))
@@ -1694,6 +2012,10 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
         # coverage matcher relate the rule to zlint's nameConstraints lint.
         if (pred == "must_include" and ctype == "cardinality"
                 and oid == "NameConstOID"):
+            _raw = (c.get("raw_text") or raw_text or "").lower()
+            if not ("not be empty" in _raw or "not be an empty" in _raw or
+                    "non-empty" in _raw or "empty sequence" in _raw):
+                return None
             mc = c.get("min_count")
             if isinstance(mc, int) and mc >= 1:
                 return dsl.ExtContentNonEmpty(oid)
@@ -1764,9 +2086,10 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
         # Bit set — KU / EKU
         if ctype == "bit_set":
             bk = c.get("bit_kind", "")
-            bits = c.get("bits") or []
+            raw_bits = c.get("bits") or []
             if bk == "key_usage" and oid == "KeyUsageOID":
-                valid = [b for b in bits if b in KU_BY_NAME]
+                # Normalize bits (e.g., "keyCertSign" -> "CertSign") before checking KU_BY_NAME
+                valid = [_norm_bit(b) for b in raw_bits if _norm_bit(b) in KU_BY_NAME]
                 if not valid:
                     return None
                 if len(valid) == 1:
@@ -1780,7 +2103,8 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                 return inner
 
             if bk == "ext_key_usage" and oid == "EkuSynOid":
-                valid = [b for b in bits if b in EKU_BY_NAME]
+                # Normalize bits before checking EKU_BY_NAME
+                valid = [_norm_bit(b) for b in raw_bits if _norm_bit(b) in EKU_BY_NAME]
                 if not valid:
                     return None
                 if len(valid) == 1:
@@ -1845,6 +2169,13 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
         # Enum / string ctype with KU/EKU bits: enum bits parsed as list (not bit_set).
         # Use _norm_bit for general camelCase/synonym normalization.
         if ctype in ("enum", "string") and pred in ("must_not_include", "must_be_in_set", "allowed_values"):
+            _raw = (c.get("raw_text") or raw_text or "").lower()
+            # Table residuals whose entire text is "Any other value ... MUST NOT"
+            # need the surrounding row/column context to know the allowed set and
+            # profile. If extraction did not preserve that context as a structured
+            # precondition, a bare FieldNotInSet is over-broad.
+            if "any other value" in _raw and not isinstance(c.get("precondition"), dict):
+                return None
             bits = cvalue if isinstance(cvalue, list) else []
             norm_bits = [_norm_bit(b) for b in bits]
             if oid == "KeyUsageOID":
@@ -2091,6 +2422,28 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
         # the (closed, general) syntax name→a pre-audited named regex, then
         # ListAllMatch(ItemMatchesRegex). Sound necessary condition; mirrors the
         # IDN→ACE handler below. Falls through if no recognized subtype/syntax.
+        # ---- matches_pattern on SAN subtype: named regex over the list field ----
+        # "dNSName MUST match <named FQDN regex>" → ListAllMatch(field, ItemMatchesRegex).
+        # The raw subject path (extensions.subjectaltname.dnsname) collapsed to
+        # SubjectAltNameOID inside _dispatch, so recover the SAN subtype from the
+        # constraint's raw_text and map it to its flat list field. pattern_name was
+        # already recovered from allowed_values/values at the top of _dispatch.
+        # GENERAL: subtype→field map + a pre-audited named regex, not a per-rule literal.
+        if oid == "SubjectAltNameOID" and (pred == "matches_pattern" or ctype in ("pattern", "regex_pattern")) \
+                and pattern_name in NAMED_REGEX_NAMES:
+            _v = (str(cvalue or "") + " " + raw_text).lower()
+            _san_field = None
+            if "dnsname" in _v or "dns name" in _v or "fqdn" in _v \
+                    or "fully qualified domain" in _v or "fully-qualified domain" in _v \
+                    or "domain name" in _v:
+                _san_field = "DNSNames"
+            elif "rfc822" in _v or "mail" in _v or "email" in _v:
+                _san_field = "EmailAddresses"
+            elif "uniformresource" in _v or "uri" in _v:
+                _san_field = "URIs"
+            if _san_field:
+                return dsl.ListAllMatch(_san_field, dsl.ItemMatchesRegex(pattern_name))
+
         if oid == "SubjectAltNameOID" and pred in ("conform_to", "must_match") and ctype in ("syntax", "format"):
             # NOTE: inside _dispatch the raw subject path is collapsed to subj_val
             # ("SubjectAltNameOID"); recover the SAN subtype + syntax from the
@@ -3040,6 +3393,81 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
     # =================================================================
     if subj_kind in ("cert_field", "dn_field"):
         field = subj_val
+
+        # ---- Subject/Issuer DN empty sequence ----
+        # "subject MUST be an empty sequence" → DNEmpty(Subject)
+        # Fires regardless of whether subject was parsed as cert_field or dn_field
+        # (the ambiguity is semantic: Subject is both a cert field and a DN).
+        # GENERIC: empty DN is a universal X.509 concept (RFC 5280 §4.1.2.6),
+        # parameter-free check, single-cert observable.
+        if pred == "must_equal" and ctype == "string" and field in ("Subject", "Issuer"):
+            val_lower = str(cvalue or "").lower()
+            raw_lower = raw_text.lower()
+            if "empty" in val_lower or "empty sequence" in raw_lower or "empty sequence" in val_lower:
+                return dsl.DNEmpty(field)
+            # Fall through to other handlers if not empty-related
+
+        # ---- DirectoryString encoding constraint (must_not_include forbidden types) ----
+        # "TeletexString/BMPString/UniversalString SHOULD NOT be used" (RFC 5280 §4.1.2.4)
+        # → DNDirectoryStringValuesEncodedAs(Subject, ('PrintableString', 'UTF8String'))
+        # The forbidden set {T1, BMPString, UniversalString} inverts to the allowed set
+        # {PrintableString, UTF8String} per RFC 5280 DirectoryString standard.
+        # GENERIC: DirectoryString type vocabulary is standard ASN.1, not per-rule.
+        if pred == "must_not_include" and ctype == "enum" and field in ("Subject", "Issuer"):
+            forbidden = set(c.get('allowed_values', []))
+            # Standard DirectoryString types per RFC 5280
+            all_directorystring_types = {
+                'TeletexString', 'PrintableString', 'UniversalString',
+                'UTF8String', 'BMPString'
+            }
+            allowed = all_directorystring_types - forbidden
+            if allowed:
+                # Convert to tuple and generate atom
+                allowed_tuple = tuple(sorted(allowed))  # Sort for determinism
+                _dn = "Issuer" if field == "Issuer" else "Subject"
+                return dsl.DNDirectoryStringValuesEncodedAs(_dn, allowed_tuple)
+            # If no allowed types remain, something is wrong with IR → return None
+            return None
+
+        # ---- Subject/Issuer non-empty DN ----
+        # "issuer MUST contain a non-empty distinguished name"
+        # → FieldNonEmpty(Issuer) or Not(DNEmpty(Issuer))
+        # Detects via "non-empty" keyword in value or raw_text.
+        if pred == "must_equal" and ctype in ("syntax", "string") and field in ("Subject", "Issuer"):
+            val_lower = str(cvalue or "").lower()
+            raw_lower = raw_text.lower()
+            if "non-empty" in val_lower or "non-empty" in raw_lower:
+                # Non-empty DN = has at least one RDN
+                return dsl.Not(dsl.DNEmpty(field))
+
+        # ---- Cross-field equality (Subject/Issuer fields) ----
+        # "issuer MUST contain same algorithm identifier as Certificate.signatureAlgorithm"
+        # → CrossFieldEq(TBSSignature, SignatureAlgorithm) — cross-field OID equality
+        # "SKI MUST equal AKI keyIdentifier" → CrossFieldEq(SubjectKeyId, AuthorityKeyId)
+        # Detects via "same" / "equal" keywords + another field name in value/raw_text.
+        if pred == "must_equal" and field in ("Issuer", "Subject", "SubjectKeyId"):
+            val_lower = str(cvalue or "").lower()
+            raw_lower = raw_text.lower()
+            blob = val_lower + " " + raw_lower
+
+            # Issuer.SignatureAlgorithm == TBSCertificate.signature
+            if field == "Issuer" and ("same algorithm" in blob or "signaturealgorithm" in blob):
+                # RFC 5280 §4.1.1.2 & §4.1.2.3: both fields must be identical
+                return dsl.CrossFieldEq("TBSSignature", "SignatureAlgorithm")
+
+            # SubjectKeyIdentifier == AuthorityKeyIdentifier.keyIdentifier
+            if field == "SubjectKeyId" and ("authority" in blob or "aki" in blob):
+                # CA's SKI must match subordinate cert's AKI keyIdentifier
+                # This is cross-cert, not single-cert → return None (irred)
+                return None  # Cross-certificate constraint
+
+        # "At least one Key Usage MUST be set for RSA Public Keys" needs an RSA
+        # public-key precondition. The current IR carries only a subscriber profile
+        # guard, so emitting a generic subscriber KeyUsage set check is over-broad.
+        if field == "KeyUsage" and ctype == "key_usage_bits":
+            _raw = (c.get("raw_text") or "").lower()
+            if "rsa public key" in _raw or "rsa public keys" in _raw:
+                return None
 
         # ---- OID-valued scalar field equality (e.g. SPKI algorithm OID) ----
         # GENERIC: must_equal / must_not_equal on an oid-semantic cert field whose

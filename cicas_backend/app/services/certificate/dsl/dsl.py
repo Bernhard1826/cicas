@@ -24,6 +24,18 @@ class ExtPresent:
 
 
 @dataclass(frozen=True)
+class HasAnyExtension:
+    """True iff certificate has at least one extension (version >= 3 with non-empty
+    Extensions field). Used for version guards: 'when extensions are used, version
+    MUST be 3' maps to When(HasAnyExtension(), FieldEq(Version, 2)).
+
+    GENERIC ATOM: parameter-free, applies universally to X.509 v3 certificates.
+    Cert-oracle verified: can be tested on real certificates by checking
+    len(cert.Extensions) > 0."""
+    pass
+
+
+@dataclass(frozen=True)
 class ExtContentNonEmpty:
     """True iff the named extension's parsed content is a non-empty SEQUENCE
     (>=1 element) — for 'MUST NOT be an empty sequence' rules. Faithful only
@@ -212,6 +224,12 @@ class IsCA:
 @dataclass(frozen=True)
 class IsRootCA:
     """True iff certificate is a self-signed CA root."""
+    pass
+
+
+@dataclass(frozen=True)
+class IsSubCA:
+    """True iff certificate is a subordinate CA (not a trust anchor)."""
     pass
 
 

@@ -363,6 +363,25 @@ NAMED_REGEXES: dict[str, tuple[str, str]] = {
                                "multiple addresses in one entry, non-ASCII (pre-ACE) domain labels, "
                                "whitespace; use for rfc822Name / subjectDN EmailAddress format checks "
                                "(R4038 RFC 5321 Mailbox, R4455 IDN-to-ACE host-part)"),
+    # R29804: Tor v3 onion address syntax (RFC 7686). v3 onion addresses use
+    # 56 base32 characters (encoding 32 bytes of key material) followed by
+    # ".onion". Total format: <base32-56chars>.onion
+    "Re_TorV3Onion":          (r"^[a-z2-7]{56}\.onion$",
+                               "Tor v3 onion address: exactly 56 base32 characters (a-z, 2-7) "
+                               "followed by .onion (RFC 7686). Use for subjectAltName dNSName "
+                               "Tor hidden service address checks (R29804)."),
+    # R4719: CN=serialNumber requirement — checks that a DN component's value
+    # is a decimal string of digits. Matches RFC 4519 serialNumber syntax.
+    "Re_SerialNumberString":  (r"^[0-9]+$",
+                               "Decimal digit string only (RFC 4519 serialNumber syntax). "
+                               "Use for DN AttributeTypeAndValue serialNumber field checks."),
+    # R4059: FQDN with at least 2 labels where rightmost label is a valid
+    # TLD (at least 2 chars, no leading hyphen, alphanumeric at ends).
+    "Re_FQDN_AtLeastTwoLabels": (r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\."
+                                  r"([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)+$",
+                               "FQDN with at least 2 dot-separated labels; each label "
+                               "is an LDH label (1-63 chars, no leading/trailing hyphen); "
+                               "use for multi-label DNS name format checks (R4059)."),
 }
 
 NAMED_REGEX_NAMES: set[str] = set(NAMED_REGEXES.keys())
@@ -405,6 +424,10 @@ _EXTRA_OIDS = [
     # Edwards-curve sig (RFC 8410) — for completeness
     ("OidEd25519",                    "asn1.ObjectIdentifier{1, 3, 101, 112}"),
     ("OidEd448",                      "asn1.ObjectIdentifier{1, 3, 101, 113}"),
+    # Certificate Transparency Precertificate Signing Certificate EKU.
+    # zlint exposes this as util.PreCertificateSigningCertificateEKU, but the
+    # generic OID whitelist only imports *OID/*Oid constants.
+    ("PreCertificateSigningCertificateEKU", "asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 4, 4}"),
     # AIA access-method OIDs (RFC 5280 §4.2.2.1, RFC 5697). Needed by
     # AIAHasMethodOtherThan / AIAMethodLocations* atoms — zlint util has
     # only the extension OID (AiaOID) and not the per-method ids.
@@ -422,8 +445,21 @@ _EXTRA_OIDS = [
     ("OidPolicyOrganizationValidated", "asn1.ObjectIdentifier{2, 23, 140, 1, 2, 2}"),  # OV
     ("OidPolicyIndividualValidated",   "asn1.ObjectIdentifier{2, 23, 140, 1, 2, 3}"),  # IV
     ("OidPolicyExtendedValidation",    "asn1.ObjectIdentifier{2, 23, 140, 1, 1}"),     # EV
+    # Policy qualifier OIDs (RFC 5280 §4.2.1.4) — needed by PolicyQualifierOIDInSet/NotInSet.
+    # Override the util.* references from the whitelist with actual inline OID literals.
+    ("CpsOID",                        "asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 2, 1}"),  # CPS
+    ("UserNoticeOID",                 "asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 2, 2}"),  # UserNotice
 ]
 
+OID_CONSTS.extend(
+    FieldDef(name, expr, "asn1.ObjectIdentifier", "oid")
+    for name, expr in _EXTRA_OIDS
+)
+
+# Override existing CpsOID/UserNoticeOID entries that came from the whitelist
+# (they have util.* references; we need inline OID literals for rendering)
+_extra_names = {name for name, _ in _EXTRA_OIDS}
+OID_CONSTS = [f for f in OID_CONSTS if f.name not in _extra_names]
 OID_CONSTS.extend(
     FieldDef(name, expr, "asn1.ObjectIdentifier", "oid")
     for name, expr in _EXTRA_OIDS

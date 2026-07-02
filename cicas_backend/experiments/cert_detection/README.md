@@ -21,13 +21,19 @@ blame ledger empty. The audit is **cross-validated by three independent parsers*
 (openssl / Python `cryptography` / `pyasn1`): every finding is confirmed by at
 least two of them, with **0 disagreements** on any cert two parsers could read.
 
-Two of the detections are defects **upstream zlint does not catch**:
-- 36 firings of `cicasgen_not_any_policy_list_contains_29324` — a **Subordinate CA**
-  certificate that asserts `anyPolicy` (CABF BR 7.1.2.2.6 forbids it). openssl
-  reverse-check: every cert is a non-self-signed CA carrying `anyPolicy`.
+Notable detections on upstream zlint's uncovered paths:
 - `cicasgen_when_oid_policy_organization_validated_list_contains_29475` on
   `legalChar.pem` — an Organization Validated cert (policy `2.23.140.1.2.2`) that
-  carries `givenName` (CABF BR 7.1.2.7.4 forbids it).
+  carries `givenName` (CABF BR 7.1.2.7.4 forbids it). Higher confidence: the
+  prohibition on givenName in OV certs is direct and needs no additional context.
+  **This is the only genuine detection in the current result set.**
+- 36 firings of `cicasgen_not_any_policy_list_contains_29324` (CABF BR 7.1.2.2.6):
+  these are **false positives from an overly broad lint**. The independent audit
+  confirmed the structural presence of `anyPolicy` in each certificate, but the
+  generated lint is too broad — it fires on any Sub CA containing `anyPolicy`
+  without checking whether the CA is in the CABF "Policy Restricted" branch
+  (Table 70). CABF allows `anyPolicy` for "No Policy Restrictions" CAs (Table 69).
+  These 36 hits are false positives, not genuine CABF violations.
 
 ## Why the independent audit matters (triage is necessary but not sufficient)
 triage's REAL verdict answers a **weaker** question than the paper needs: it means
@@ -148,12 +154,19 @@ shipped binary.
 - `outputs/audit_independent.jsonl` — independent structural verdict per finding.
 - `outputs/blame.jsonl` — SAIV feedback ledger (empty = clean gate).
 
+External CT/Tranco-style corpus scans are exploratory and write outside this
+paper-gate directory, under `experiments/new_lint_corpus_scan/outputs/`.
+
 ## Run
 ```
 # build the augmented binary once (system step):
 python scripts/system_metrics/inject_and_build.py --emit --build
 # then evaluate (fails if any finding is spurious or independently refuted):
 python experiments/cert_detection/run.py --snapshot
+# report-only external corpus mode; shows exactly which problems came from the
+# CICAS-added zlint lints, separated from upstream zlint findings.
+# Output goes to experiments/new_lint_corpus_scan/outputs/<corpus-name>/:
+python experiments/cert_detection/run.py --certs /path/to/flat-pem-corpus
 # standalone independent audit (exit 1 on any conflict):
 python scripts/system_metrics/audit_cert_findings.py
 ```

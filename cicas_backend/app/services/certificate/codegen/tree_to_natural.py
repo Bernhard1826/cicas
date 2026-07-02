@@ -55,6 +55,12 @@ REGEX_SEMANTIC_HINTS: dict[str, str] = {
         "does not contain consecutive '..' (no empty DNS labels)",
     "Re_AnyUri":
         "begins with a valid URI scheme",
+    "Re_TorV3Onion":
+        "is a valid Tor v3 onion service address (.onion with 56-char base32)",
+    "Re_SerialNumberString":
+        "is a valid positive decimal integer (serial number string format, per RFC 5280)",
+    "Re_FQDN_AtLeastTwoLabels":
+        "is an LDH-labeled hostname with at least one dot (FQDN multi-label structure: per-label LDH compliance AND ≥2 labels)",
 }
 
 
@@ -129,6 +135,8 @@ def _atom(n) -> str:
         return "the certificate is a CA certificate"
     if isinstance(n, dsl.IsRootCA):
         return "the certificate is a Root CA certificate"
+    if isinstance(n, dsl.IsSubCA):
+        return "the certificate is a Subordinate CA certificate"
     if isinstance(n, dsl.PathLenConstraintPresent):
         return "the basicConstraints extension carries a pathLenConstraint field (it is present)"
     if isinstance(n, dsl.IsServerCert):
@@ -171,9 +179,25 @@ def _atom(n) -> str:
             return f"length of {n.field} is at most {n.hi} octet(s)"
         return f"length of {n.field} is in range [{n.lo}, {n.hi}]"
     if isinstance(n, dsl.FieldNumericInRange):
+        # An open upper bound (MAX_INT) is NOT a real constraint — the Go emitter
+        # renders it as `&& true`. Phrase it as an open-ended lower bound so the
+        # synonymy judge does not read "[0, MAX_INT]" as an invented implementation
+        # ceiling (e.g. "serialNumber MUST be a non-negative integer").
+        if n.hi == "MAX_INT" or n.hi is None:
+            if n.lo == 0:
+                return f"numeric value of {n.field} is non-negative (>= 0, no upper bound)"
+            return f"numeric value of {n.field} is at least {n.lo} (no upper bound)"
+        if n.lo == n.hi:
+            return f"numeric value of {n.field} equals {n.lo}"
         return f"numeric value of {n.field} is in range [{n.lo}, {n.hi}]"
     if isinstance(n, dsl.FieldCount):
         hi = n.hi
+        if n.field == "ExtKeyUsage":
+            if hi == "MAX_INT" or hi is None:
+                return f"the ExtendedKeyUsage extension contains at least {n.lo} KeyPurposeId value(s)"
+            if n.lo == hi:
+                return f"the ExtendedKeyUsage extension contains exactly {n.lo} KeyPurposeId value(s)"
+            return f"the ExtendedKeyUsage extension contains between {n.lo} and {hi} KeyPurposeId value(s)"
         if hi == "MAX_INT" or hi is None:
             return f"field {n.field} occurs at least {n.lo} time(s)"
         if n.lo == 0:
@@ -247,6 +271,12 @@ def _atom(n) -> str:
         return f"the SubjectPublicKey algorithm is {n.algorithm}"
     if isinstance(n, dsl.DNEmpty):
         return f"the {n.holder} DN is the empty SEQUENCE"
+    if isinstance(n, dsl.RDNCountInRange):
+        return f"the {n.holder} DN contains between {n.lo} and {n.hi} RDNs"
+    if isinstance(n, dsl.RDNHasSingleAttribute):
+        return f"each RDN in the {n.holder} DN carries exactly one attribute-value pair"
+    if isinstance(n, dsl.RDNSequenceHasCountryBefore):
+        return f"if both countryName and stateOrProvinceName appear in the {n.holder} DN, countryName precedes stateOrProvinceName"
     if isinstance(n, dsl.ExtRawValueEqualsHex):
         return (f"the extension with OID {n.oid} is present "
                 f"AND its raw extnValue equals hex {n.hex_lit}")
@@ -365,10 +395,28 @@ def _atom(n) -> str:
         return (f"the ASN.1 encoding tag of validity date {n.date_field} "
                 f"(in the raw TBSCertificate) is one of [{tags}]")
     if isinstance(n, dsl.CertPolicyExplicitTextHasEncodingTagInSet):
-        tags = ", ".join(n.allowed_tags)
+        tags = ", ".join(str(t) for t in n.allowed_tags)
         return (f"the CertificatePolicies extension contains at least one "
                 f"UserNotice explicitText whose DisplayText CHOICE tag is "
                 f"one of [{tags}]")
+    if isinstance(n, dsl.PolicyQualifierOIDInSet):
+        oid_name = n.oid_const
+        return (f"the CertificatePolicies extension contains a policy qualifier "
+                f"with OID {oid_name}")
+    if isinstance(n, dsl.PolicyQualifierOIDNotInSet):
+        oid_name = n.oid_const
+        return (f"the CertificatePolicies extension contains no policy qualifier "
+                f"with OID {oid_name}")
+    if isinstance(n, dsl.AlgorithmIdentifierBytesMatch):
+        if n.neg:
+            return f"the algorithm identifier is NOT {n.oid_const}"
+        return f"the algorithm identifier is {n.oid_const}"
+    # ---- SerialNumber constraints (RFC 5280 §4.1.2.4) ----
+    if isinstance(n, dsl.SerialNumberPositive):
+        return "the certificate serial number is a positive integer (greater than zero)"
+    if isinstance(n, dsl.SerialNumberOctetLengthInRange):
+        return (f"the certificate serial number has a byte length in the range "
+                f"[{n.lo}, {n.hi}]")
     raise dsl.DSLError(f"tree_to_natural: unhandled atom type {type(n).__name__}")
 
 
@@ -487,7 +535,7 @@ def tree_branches_to_natural(branches: list) -> str:
 # Short, readable verb per atom class. Anything not listed falls back to a
 # snake_cased class name, so new atoms still get a sensible (if longer) slug.
 _SLUG_VERB: dict[str, str] = {
-    "IsCA": "is_ca", "IsRootCA": "root_ca", "IsServerCert": "server_cert",
+    "IsCA": "is_ca", "IsRootCA": "root_ca", "IsSubCA": "sub_ca", "IsServerCert": "server_cert",
     "IsSubscriberCert": "subscriber_cert", "IsEndEntity": "end_entity",
     "ExtPresent": "present", "ExtCritical": "critical", "ExtNotCritical": "not_critical",
     "ExtContentNonEmpty": "content_non_empty",

@@ -619,9 +619,20 @@ def judge_expresses(rule_text: str, code_sem: str, *,
     if profile_scope:
         psb = (
             f"\nPROFILE SCOPE: rule (A) is from certificate-profile section "
-            f'"{profile_scope}". A precondition in (B) restricting the check to '
-            "that profile's certificate type (Root CA / Subscriber / etc.) "
-            "EXPRESSES the rule's scope FAITHFULLY.\n"
+            f'"{profile_scope}". Treat this profile scope as an implicit '
+            "antecedent of (A), especially when (A) is a single extracted "
+            "table row. A precondition in (B) that matches the profile "
+            "scope EXPRESSES that scope faithfully and is NOT an extra "
+            "narrowing condition. Examples: Root CA profile -> Root CA guard; "
+            "Subscriber Certificate profile -> Subscriber certificate guard; "
+            "EV/OV/IV/DV profile -> matching reserved certificate policy OID "
+            "guard; Precertificate Signing / Precertificate profile -> "
+            "PreCertificateSigningCertificateEKU guard; TLS/Subordinate/CA "
+            "profile -> CA/Subordinate-CA guard. If (B)'s only apparent "
+            "extra condition is one of these profile markers, IGNORE it as "
+            "scope, not semantics. Reject a scope guard only when it is "
+            "incompatible with the named profile or adds an unrelated "
+            "condition not entailed by the profile.\n"
         )
     else:
         psb = ""

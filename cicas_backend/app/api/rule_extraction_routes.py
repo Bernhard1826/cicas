@@ -39,6 +39,21 @@ def _text_similarity(text1: str, text2: str) -> float:
     return intersection / union if union > 0 else 0.0
 
 
+def _jsonable_text(value):
+    """Serialize complex extractor objects before writing text columns."""
+    if value is None or isinstance(value, str):
+        return value
+    if hasattr(value, "model_dump"):
+        value = value.model_dump()
+    elif hasattr(value, "dict"):
+        value = value.dict()
+    elif hasattr(value, "__dict__") and not isinstance(value, (int, float, bool)):
+        value = value.__dict__
+    if isinstance(value, (list, dict, tuple)):
+        return json.dumps(value, ensure_ascii=False, default=str)
+    return str(value)
+
+
 # ==================== Request/Response Models ====================
 
 class ExtractionRequest(BaseModel):
@@ -259,25 +274,11 @@ async def extract_rules_full_pipeline(
                         continue
                     saved_hashes.add(rule_hash)
 
-                    # 序列化 condition, conditions 和 expected_value 字段（如果是 list/dict，转换为 JSON 字符串）
-                    import json
-
-                    condition_value = rule_data.get('condition')
-                    if isinstance(condition_value, (list, dict)):
-                        condition_value = json.dumps(condition_value, ensure_ascii=False)
-                        app_logger.debug(f"Serialized condition for rule {idx+1}: {type(condition_value)}")
-
-                    conditions_value = rule_data.get('conditions')
-                    if isinstance(conditions_value, (list, dict)):
-                        conditions_value = json.dumps(conditions_value, ensure_ascii=False)
-                        app_logger.debug(f"Serialized conditions for rule {idx+1}: {type(conditions_value)}")
-
-                    expected_value_data = rule_data.get('expected_value')
-                    if isinstance(expected_value_data, (list, dict)):
-                        expected_value_data = json.dumps(expected_value_data, ensure_ascii=False)
-                        app_logger.debug(f"Serialized expected_value for rule {idx+1}: {type(expected_value_data)}")
-                    else:
-                        expected_value_data = expected_value_data  # Use as-is if already string/None
+                    # 序列化复杂 extractor 对象，避免 Pydantic/自定义对象直接写 text 列。
+                    condition_value = _jsonable_text(rule_data.get('condition'))
+                    conditions_value = _jsonable_text(rule_data.get('conditions'))
+                    expected_value_data = _jsonable_text(rule_data.get('expected_value'))
+                    context_value = _jsonable_text(rule_data.get('context'))
 
                     # sentence_hash 仅作溯源/统计字段保留；不再据此跨 section 去重
                     # （跨章节同措辞是不同规则；去重已由含 section+rule_type+sentence_index 的 rule_hash 处理）
@@ -295,7 +296,7 @@ async def extract_rules_full_pipeline(
                         # (2026-06-10 schema 迁移; 删了 modality/condition/subject_role/
                         #  affected_field/operation/expected_value 这些已废/错名列)。
                         conditions=conditions_value,
-                        context=rule_data.get('context'),
+                        context=context_value,
                         hash=rule_hash,
                         # ⭐ CRITICAL: Deduplication fields
                         sentence_index=rule_data.get('sentence_index'),  # Track sentence position

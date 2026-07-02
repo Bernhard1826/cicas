@@ -34,6 +34,7 @@ def collect_imports(node: dsl.Compound) -> set[str]:
     imps: set[str] = {
         "github.com/zmap/zcrypto/x509",        # always
         "github.com/zmap/zlint/v3/lint",       # always (caller wraps)
+        "math/big",                            # big.Int for serialNumber checks
     }
     _walk_imports(node, imps)
     return imps
@@ -76,6 +77,8 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         return "(c.IsCA && c.BasicConstraintsValid)"
     if isinstance(n, dsl.IsRootCA):
         return "(c.IsCA && c.SelfSigned)"
+    if isinstance(n, dsl.IsSubCA):
+        return "util.IsSubCA(c)"
     if isinstance(n, dsl.PathLenConstraintPresent):
         # pathLenConstraint present. zcrypto encodes (see x509.go MaxPathLen doc):
         #   ext absent           -> MaxPathLen==0,  MaxPathLenZero==false
@@ -138,6 +141,10 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         ])
 
     # ----- extension presence / criticality -----
+    if isinstance(n, dsl.HasAnyExtension):
+        # "when extensions are used" → any extension present → version must be v3.
+        # len(cert.Extensions) > 0 is the direct check. Generic, parameter-free.
+        return "len(c.Extensions) > 0"
     if isinstance(n, dsl.ExtPresent):
         oid = V.OID_BY_NAME[n.oid].go_expr  # e.g. "util.AiaOID"
         return f"util.IsExtInCert(c, {oid})"
@@ -238,6 +245,19 @@ def _emit(n, *, in_item: bool, item_var) -> str:
     if isinstance(n, dsl.FieldNumericInRange):
         f = _lookup_field(n.field)
         return _emit_field_numeric_range(f, n.lo, n.hi)
+
+    # ----- serial number -----
+    if isinstance(n, dsl.SerialNumberPositive):
+        # serialNumber > 0: matches pattern used in existing generated lints
+        # Rendered as: c.SerialNumber != nil && c.SerialNumber.Cmp(big.NewInt(0)) > 0
+        return "(c.SerialNumber != nil && c.SerialNumber.Cmp(big.NewInt(0)) > 0)"
+    if isinstance(n, dsl.SerialNumberOctetLengthInRange):
+        # serialNumber byte length in [lo, hi]
+        # Rendered as: len(c.SerialNumber.Bytes()) >= lo && len(c.SerialNumber.Bytes()) <= hi
+        lo, hi = n.lo, n.hi
+        return (f"(len(c.SerialNumber.Bytes()) >= {lo} && "
+                f"len(c.SerialNumber.Bytes()) <= {hi})")
+
     if isinstance(n, dsl.FieldEncodedAs):
         if n.field in ("Subject", "Issuer", "subject", "issuer"):
             return _emit_dn_values_encoded_as(n.field, n.types)
@@ -396,6 +416,32 @@ def _emit(n, *, in_item: bool, item_var) -> str:
     if isinstance(n, dsl.DNEmpty):
         # empty SEQUENCE: every pkix.Name slice/string field is empty + no extra entries
         return f"(len(c.{n.holder}.Names) == 0 && len(c.{n.holder}.ExtraNames) == 0)"
+
+    if isinstance(n, dsl.RDNCountInRange):
+        hi = "math.MaxInt" if (n.hi == "MAX_INT" or (isinstance(n.hi, int) and n.hi > (1 << 62))) else str(n.hi)
+        return _iife_bool([
+            f"_n := len(c.{n.holder}.Names)",
+            f"return _n >= {n.lo} && _n <= {hi}",
+        ])
+    if isinstance(n, dsl.RDNHasSingleAttribute):
+        return _iife_bool([
+            f"for _, _rdn := range c.{n.holder}.Names {{",
+            "\tif len(_rdn.TypeAndValue) != 1 { return false }",
+            "}",
+            "return true",
+        ])
+    if isinstance(n, dsl.RDNSequenceHasCountryBefore):
+        return _iife_bool([
+            "var _cIdx, _sIdx = -1, -1",
+            f"for _i, _rdn := range c.{n.holder}.Names {{",
+            "\tfor _, _tv := range _rdn.TypeAndValue {",
+            "\t\t_oid := _tv.Type.String()",
+            '\t\tif _oid == "2.5.4.6" && _cIdx < 0 { _cIdx = _i }',  # countryName
+            '\t\tif _oid == "2.5.4.8" && _sIdx < 0 { _sIdx = _i }',  # stateOrProvinceName
+            "\t}",
+            "}",
+            "\treturn _cIdx < 0 || _sIdx < 0 || _cIdx < _sIdx",
+        ])
 
     if isinstance(n, dsl.ExtRawValueEqualsHex):
         oid = V.OID_BY_NAME[n.oid].go_expr
@@ -649,9 +695,157 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "return false",
         ])
 
+    if isinstance(n, dsl.PolicyQualifierOIDInSet):
+        oid_field = V.OID_BY_NAME[n.oid]
+        oid_expr = oid_field.go_expr
+        # Parse OID to get arc values for asn1.ObjectIdentifier literal
+        import re as _re
+        if oid_expr.startswith("asn1.ObjectIdentifier{"):
+            arcs = ",".join(_re.findall(r"\d+", oid_expr))
+        elif oid_expr.startswith("util."):
+            # For util references, try to get from OID_BY_NAME or use dotted comparison
+            arcs = None
+            if n.oid in V.OID_BY_NAME:
+                ref_expr = V.OID_BY_NAME[n.oid].go_expr
+                if ref_expr.startswith("asn1.ObjectIdentifier{"):
+                    arcs = ",".join(_re.findall(r"\d+", ref_expr))
+        else:
+            arcs = None
+
+        if arcs:
+            oid_lit = f"asn1.ObjectIdentifier{{{arcs}}}"
+            oid_compare = f"_q.PolicyQualifierId.Equal({oid_lit})"
+        else:
+            # Fallback: compare by dotted string
+            dotted = ".".join(_re.findall(r"\d+", oid_expr))
+            oid_lit = f'"{dotted}"'
+            oid_compare = f'_q.PolicyQualifierId.String() == {oid_lit}'
+
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif len(_ext.Id) == 4 && _ext.Id[0] == 2 && _ext.Id[1] == 5 && _ext.Id[2] == 29 && _ext.Id[3] == 32 {",
+            "\t\t_ev = _ext.Value; break",
+            "\t}",
+            "}",
+            "if _ev == nil { return false }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return false }",
+            "for _, _p := range _pis {",
+            "\tfor _, _q := range _p.PolicyQualifiers {",
+            f"\t\tif {oid_compare} {{ return true }}",
+            "\t}",
+            "}",
+            "return false",
+        ])
+
+    if isinstance(n, dsl.PolicyQualifierOIDNotInSet):
+        import re as _re
+        oid_const = n.oid_const if hasattr(n, 'oid_const') else n.oid if hasattr(n, 'oid') else None
+        if oid_const and oid_const in V.OID_BY_NAME:
+            oid_field = V.OID_BY_NAME[oid_const]
+            oid_expr = oid_field.go_expr
+            if oid_expr.startswith("asn1.ObjectIdentifier{"):
+                arcs = ",".join(_re.findall(r"\d+", oid_expr))
+                oid_lit = f"asn1.ObjectIdentifier{{{arcs}}}"
+                oid_compare = f"_q.PolicyQualifierId.Equal({oid_lit})"
+            else:
+                dotted = ".".join(_re.findall(r"\d+", oid_expr))
+                oid_lit = f'"{dotted}"'
+                oid_compare = f'_q.PolicyQualifierId.String() == {oid_lit}'
+        else:
+            oid_lit = f'"{oid_const}"'
+            oid_compare = f'_q.PolicyQualifierId.String() == {oid_lit}'
+
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif len(_ext.Id) == 4 && _ext.Id[0] == 2 && _ext.Id[1] == 5 && _ext.Id[2] == 29 && _ext.Id[3] == 32 {",
+            "\t\t_ev = _ext.Value; break",
+            "\t}",
+            "}",
+            "if _ev == nil { return true }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return true }",
+            "for _, _p := range _pis {",
+            "\tfor _, _q := range _p.PolicyQualifiers {",
+            f"\t\tif {oid_compare} {{ return false }}",
+            "\t}",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.AlgorithmIdentifierBytesMatch):
+        # Matches: 'publicKeyAlgorithm MUST be id-ecPublicKey' etc.
+        # Looks up OID constant and generates byte-level comparison
+        import re as _re
+        oid_const = n.oid_const
+        oid_field = V.OID_BY_NAME.get(oid_const)
+        if oid_field:
+            oid_expr = oid_field.go_expr
+            if oid_expr.startswith("asn1.ObjectIdentifier{"):
+                arcs = ",".join(_re.findall(r"\d+", oid_expr))
+                oid_lit = f"asn1.ObjectIdentifier{{{arcs}}}"
+            else:
+                dotted = ".".join(_re.findall(r"\d+", oid_expr))
+                oid_lit = f'"{dotted}"'
+        else:
+            oid_lit = f'"{oid_const}"'
+
+        if n.neg:
+            # MUST NOT be these bytes
+            return _iife_bool([
+                "var _alg asn1.ObjectIdentifier",
+                "switch t := any(c).(type) {",
+                "\tcase interface{ GetSignatureAlgorithm() asn1.ObjectIdentifier }:",
+                "\t\t_alg = t.GetSignatureAlgorithm()",
+                "\tcase interface{ SignatureAlgorithm asn1.ObjectIdentifier }:",
+                "\t\t_alg = t.SignatureAlgorithm",
+                "\tdefault:",
+                "\t\t// No algorithm field accessible; reject as non-match",
+                "\t\treturn false",
+                "}",
+                f"\treturn !_alg.Equal({oid_lit})",
+            ])
+        else:
+            # MUST be these bytes
+            return _iife_bool([
+                "var _alg asn1.ObjectIdentifier",
+                "switch t := any(c).(type) {",
+                "\tcase interface{ GetSignatureAlgorithm() asn1.ObjectIdentifier }:",
+                "\t\t_alg = t.GetSignatureAlgorithm()",
+                "\tcase interface{ SignatureAlgorithm asn1.ObjectIdentifier }:",
+                "\t\t_alg = t.SignatureAlgorithm",
+                "\tdefault:",
+                "\t\t// No algorithm field accessible",
+                "\t\treturn false",
+                "}",
+                f"\treturn _alg.Equal({oid_lit})",
+            ])
+
     if isinstance(n, dsl.OidEq):
         f = V.lookup_anyfield(n.field)
         oid = V.OID_BY_NAME[n.oid].go_expr
+        if oid.startswith("asn1.ObjectIdentifier{"):
+            import re as _re
+            dotted = ".".join(_re.findall(r"\d+", oid[oid.find("{"):]))
+            return f'({f.go_expr}.String() == "{dotted}")'
         return f"{f.go_expr}.Equal({oid})"
 
     if isinstance(n, dsl.SubtreeIPListAnyHasOctetCount):
@@ -1121,28 +1315,33 @@ def _lookup_field(name: str) -> V.FieldDef:
     return f
 
 
-# KeyUsage / EKU bit name normalization (prose -> zcrypto Go constants).
-# zcrypto uses PascalCase names: DigitalSignature, NonRepudiation, ...
+# KeyUsage / EKU bit name normalization (prose/RFC spellings -> zcrypto/x509 constants).
+# RFC nonRepudiation is exposed by zcrypto/x509 as ContentCommitment.
 _BIT_ALIASES = {
     "any extended key usage": "Any",
     "anyextendedkeyusage": "Any",
     "anyeku": "Any",
     "digital signature": "DigitalSignature",
     "digitalsignature": "DigitalSignature",
-    "nonrepudiation": "NonRepudiation",
-    "non repudiation": "NonRepudiation",
+    "nonrepudiation": "ContentCommitment",
+    "non_repudiation": "ContentCommitment",
+    "non repudiation": "ContentCommitment",
     "keyencipherment": "KeyEncipherment",
     "key encipherment": "KeyEncipherment",
     "dataencipherment": "DataEncipherment",
     "dataencipherment": "DataEncipherment",
     "keyagreement": "KeyAgreement",
     "key agreement": "KeyAgreement",
-    "keycertsign": "KeyCertSign",
-    "key cert sign": "KeyCertSign",
+    "keycertsign": "CertSign",
+    "key_cert_sign": "CertSign",
+    "key cert sign": "CertSign",
     "crlsign": "CRLSign",
+    "crl_sign": "CRLSign",
     "crl sign": "CRLSign",
     "encipheronly": "EncipherOnly",
+    "encipher_only": "EncipherOnly",
     "decipheronly": "DecipherOnly",
+    "decipher_only": "DecipherOnly",
     "server auth": "ServerAuth",
     "client auth": "ClientAuth",
     "code signing": "CodeSigning",
@@ -1161,6 +1360,8 @@ def _norm_bit_name(s: str) -> str:
     """Normalize a prose bit name to PascalCase zcrypto constant suffix.
     e.g. 'digitalSignature' -> 'DigitalSignature', 'nonRepudiation' -> 'NonRepudiation'."""
     s = s.strip()
+    if s in V.KU_BY_NAME or s in V.EKU_BY_NAME:
+        return s
     lower = s.lower()
     if lower in _BIT_ALIASES:
         return _BIT_ALIASES[lower]
@@ -1168,7 +1369,8 @@ def _norm_bit_name(s: str) -> str:
     # "digitalSignature" -> "DigitalSignature", "nonRepudiation" -> "NonRepudiation"
     import re
     words = re.split(r'[\s_-]+', s)
-    return "".join(w.capitalize() for w in words if w)
+    canonical = "".join(w.capitalize() for w in words if w)
+    return _BIT_ALIASES.get(canonical, canonical)
 
 
 def _oid_dotted(name: str) -> Optional[str]:
@@ -1278,22 +1480,21 @@ def _emit_field_in_set(f: V.FieldDef, values: tuple, *, negate: bool) -> str:
                 f"}}",
                 f"return false",
             ])
-    # keyusage_bits: FieldInSet(KeyUsage, {DigitalSignature, KeyEncipherment}) means
-    # the KeyUsage bitmask includes any of those bits. Emit c.KeyUsage.HasBit(...) || ...
+    # keyusage_bits: FieldInSet(KeyUsage, {DigitalSignature, KeyEncipherment})
+    # means the KeyUsage bitmask includes at least one of those bits.
     if f.semantic == "keyusage_bits":
         if not values:
             raise dsl.DSLError(f"FieldInSet: empty values for keyusage_bits field {f.name}")
         bit_exprs = []
         for v in values:
-            v_str = str(v)
-            # Normalize the bit name to canonical PascalCase
-            bit_normalized = _norm_bit_name(v_str)
-            bit_exprs.append(f"{f.go_expr}.HasBit(zcrypto.KeyUsageBit_{bit_normalized})")
-        op_str = "||" if not negate else "&&"
-        join_str = f" {op_str} ".join(bit_exprs)
+            bit_normalized = _norm_bit_name(str(v))
+            if bit_normalized not in V.KU_BY_NAME:
+                raise dsl.DSLError(f"FieldInSet: unknown KEY_USAGE_BIT '{v}'")
+            bit = V.KU_BY_NAME[bit_normalized].go_expr
+            bit_exprs.append(f"(({f.go_expr} & {bit}) != 0)")
         if negate:
-            return f"({join_str})"
-        return f"({join_str})"
+            return "!(" + " || ".join(bit_exprs) + ")"
+        return "(" + " || ".join(bit_exprs) + ")"
     raise dsl.DSLError(f"FieldInSet: unsupported semantic {f.semantic}")
 
 
@@ -1618,7 +1819,7 @@ def _walk_imports(n, imps: set[str]):
 
     needs_util = (
         dsl.ExtPresent, dsl.ExtCritical, dsl.ExtNotCritical,
-        dsl.ExtKeyUsageHas, dsl.IsServerCert, dsl.ExtHasGeneralNameWithTag,
+        dsl.ExtKeyUsageHas, dsl.IsServerCert, dsl.IsSubCA, dsl.ExtHasGeneralNameWithTag,
         dsl.ExtHasAnyGeneralNameOfTag,
     )
     if isinstance(n, needs_util):
@@ -1741,8 +1942,13 @@ def _walk_imports(n, imps: set[str]):
         imps.add("encoding/asn1")
     if isinstance(n, dsl.CertPolicyExplicitTextHasEncodingTagInSet):
         imps.add("encoding/asn1")
+    if isinstance(n, (dsl.PolicyQualifierOIDInSet, dsl.PolicyQualifierOIDNotInSet)):
+        imps.add("encoding/asn1")
+        imps.add("bytes")
     if isinstance(n, dsl.OidEq):
-        imps.add("github.com/zmap/zlint/v3/util")
+        _ge = V.OID_BY_NAME[n.oid].go_expr if n.oid in V.OID_BY_NAME else ""
+        if "util." in _ge:
+            imps.add("github.com/zmap/zlint/v3/util")
     if isinstance(n, dsl.BytesContainsOidDer):
         imps.add("bytes")
     # SubtreeIPListAnyHasOctetCount: no extra imports needed (operates on
@@ -1809,6 +2015,10 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, dsl.CertPolicyExplicitTextHasEncodingTagInSet):
         bump(out, "oids")  # CertPolicyOID + UserNoticeOID (implicit)
         for _ in n.allowed_tags: bump(out, "asn1_types")
+    elif isinstance(n, (dsl.PolicyQualifierOIDInSet, dsl.PolicyQualifierOIDNotInSet)):
+        bump(out, "oids")  # PolicyQualifierOID
+    elif isinstance(n, dsl.AlgorithmIdentifierBytesMatch):
+        bump(out, "oids")  # oid_const
     elif isinstance(n, dsl.OidEq):
         bump(out, "fields")
         bump(out, "oids")
