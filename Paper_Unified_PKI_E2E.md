@@ -159,7 +159,7 @@ $$
 - **$C_3$（运行时边界）**：$C_3(r) \equiv (r.\text{enforcement\_phase} = \text{Encoding})$，将"可在已签发字节中观测的义务"与"在链处理、名称比较、撤销处理或 CAA 获取等阶段才触发的义务"分开；
 - **$C_4$（过程边界，取反）**：$C_4(r) \equiv (r.\text{rule\_category} \in N)$，其中 $N = \{\text{definition}, \text{capability}, \text{algorithm\_ref}, \text{display}, \dots\}$ 为承载术语定义、CA 能力声明、对外部算法规范的委派、UI 呈现等**不对证书编码施加静态检查**的类别集合；可 lint 要求 $r.\text{rule\_category} \notin N$，即 $\neg C_4$。$C_4$ 与 $C_2$ **正交**：$C_4$ 回答"这是哪一**类型**的义务"（定义？能力声明？编码约束？），$C_2$ 回答"裁决它需要**哪些数据**"（仅此一张证书，还是更多）——一条规则可以是编码约束（不在 $N$ 中，即 $\neg C_4$）却仍需访问签发者证书做密钥比对、或与配对的（预）证书逐字节比对（不通过 $C_2$）；这一正交性是 $C_2$ 不可被 $C_3$/$\neg C_4$ 替代的根据。
 
-记 $\phi_C : r \mapsto \mathbb{1}[C_1 \wedge C_2 \wedge C_3 \wedge \neg C_4]$，则 $\mathcal{R}_L = \{r : \phi_C(r) = 1\}$ 即 $\phi_G$ 的定义域。obligation 同时固定严重级别（MUST 类 $\mapsto$ Error，SHOULD 类 $\mapsto$ Warning），故严重级别是对 obligation 的直接读取、而非第二个分类器。三个非道义条件刻画主体（含数据范围）、运行时、过程三条正交边界——其中 $C_2$ 把一类此前依赖人工审计的"静态可观测"边界（$\mathrm{StaticallyObservable}$）前移为提取阶段即确定的 IR 字段 $\mathrm{assertion\_subject}$。由于每个 $C_i$ 都是单一 IR 字段的确定性函数，$\mathrm{lintable}(r)$ 从 IR 计算而非 LLM 预测：同一 IR 每次给出逐位一致的标签；若标签不合预期，可直接检查参与判定的字段取值。
+记 $\phi_C : r \mapsto \mathbb{1}[C_1 \wedge C_2 \wedge C_3 \wedge \neg C_4]$（$\mathbb{1}[\cdot]$ 为指示函数：方括号内条件为真取 1、否则取 0），则 $\mathcal{R}_L = \{r : \phi_C(r) = 1\}$ 即 $\phi_G$ 的定义域。obligation 同时固定严重级别（MUST 类 $\mapsto$ Error，SHOULD 类 $\mapsto$ Warning），故严重级别是对 obligation 的直接读取、而非第二个分类器。三个非道义条件刻画主体（含数据范围）、运行时、过程三条正交边界——其中 $C_2$ 把一类此前依赖人工审计的"静态可观测"边界（$\mathrm{StaticallyObservable}$）前移为提取阶段即确定的 IR 字段 $\mathrm{assertion\_subject}$。由于每个 $C_i$ 都是单一 IR 字段的确定性函数，$\mathrm{lintable}(r)$ 从 IR 计算而非 LLM 预测：同一 IR 每次给出逐位一致的标签；若标签不合预期，可直接检查参与判定的字段取值。
 
 ![](figures/fig8_lintability_gate.png)
 
@@ -178,12 +178,12 @@ $$
 \tag{1}
 $$
 
-其中 $a \in \mathcal{A}$ 为原子模板谓词，$\bar{v}$ 为其参数列表。$\mathcal{A}$ 是一个**有限闭合**的原子模板集合，实验中所使用到的原子模板共79个，按通用性分为 62 个 GENERIC 与 17 个 NON_GENERIC；分级判据与代表性示例见附录 C；$\{\neg, \wedge, \vee\}$ 为命题逻辑组合。一条 lint 规则的代码体建模为有序对 $(p, q) \in \mathcal{T}_\perp \times \mathcal{T}$，其中 $p \in \mathcal{T}_\perp = \mathcal{T} \cup \{\perp\}$ 为可选前提，$q \in \mathcal{T}$ 为主断言，执行语义为：
+其中 $a \in \mathcal{A}$ 为原子模板谓词，$\bar{v}$ 为其参数列表。$\mathcal{A}$ 是一个**有限闭合**的原子模板集合，实验中所使用到的原子模板共79个，按通用性分为 62 个 GENERIC 与 17 个 NON_GENERIC；分级判据与代表性示例见附录 C；$\{\neg, \wedge, \vee\}$ 为命题逻辑组合。一条 lint 规则的代码体建模为有序对 $(p, q) \in \mathcal{T}_\varepsilon \times \mathcal{T}$，其中 $q \in \mathcal{T}$ 为主断言、$p \in \mathcal{T}_\varepsilon = \mathcal{T} \cup \{\varepsilon\}$ 为可选前提（$\varepsilon$ 是"无前提"占位符，是一个正常取值，与 §6.4 表"合成失败"的 $\bot$ 不同）。下式中 $c$ 为单张证书；$\lVert u \rVert(c) \in \{\mathrm{true}, \mathrm{false}\}$ 记 DSL 树或前提 $u$ 在 $c$ 上求值的布尔结果（原子模板按其语义求值，$\neg/\wedge/\vee$ 按经典命题逻辑）。执行语义为：
 
 $$
 \lVert (p, q) \rVert(c) \;=\; \begin{cases}
-\mathrm{NA}, & p \neq \perp \;\land\; \lVert p \rVert(c) = \mathrm{false} \\
-\mathrm{Pass}, & (p = \perp \;\lor\; \lVert p \rVert(c) = \mathrm{true}) \;\land\; \lVert q \rVert(c) = \mathrm{true} \\
+\mathrm{NA}, & p \neq \varepsilon \;\land\; \lVert p \rVert(c) = \mathrm{false} \\
+\mathrm{Pass}, & (p = \varepsilon \;\lor\; \lVert p \rVert(c) = \mathrm{true}) \;\land\; \lVert q \rVert(c) = \mathrm{true} \\
 \mathrm{Severity}(r), & \text{otherwise}
 \end{cases}
 \tag{2}
@@ -213,11 +213,11 @@ $$
 
 ### 6.4 树合成：确定性主路径与受限 LLM 回退
 
-上文描述了 §6.1 的 IR 填充与 §6.2 的参数封闭性如何把一棵 DSL 树约束在 $\mathcal{T}_{\mathcal{V}}$ 内，但"哪种原子模板承载哪个 IR 谓词"以及"能否把 IR 的所有 subject/constraint 填入所选原子模板"仍需合成。本节给出 $\phi_G$ 的实现：生成器先尝试确定性合成，返回 $\bot$ 时才触发 LLM 合成。两条路径都以"渲染并通过 `go build`"为接受门——确定性返回一棵树并不算数，须真能编译，否则视同未解决、转入 LLM。两条路径都受同一套结构检查约束，且都不判定"代码是否忠实于规范"（这由 §6.5 的验证链负责），只把产出约束在可追溯的空间内。
+上文描述了 §6.1 的 IR 填充与 §6.2 的参数封闭性如何把一棵 DSL 树约束在 $\mathcal{T}_{\mathcal{V}}$ 内，但"哪种原子模板承载哪个 IR 谓词"以及"能否把 IR 的所有 subject/constraint 填入所选原子模板"仍需合成。本节给出 $\phi_G$ 的实现：生成器先尝试确定性合成，返回 $\bot$（此处 $\bot$ 表"合成失败 / 无结果"，区别于 §6.1 表"无前提"的正常取值 $\varepsilon$）时才触发 LLM 合成。两条路径都以"渲染并通过 `go build`"为接受门——确定性返回一棵树并不算数，须真能编译，否则视同未解决、转入 LLM。两条路径都受同一套结构检查约束，且都不判定"代码是否忠实于规范"（这由 §6.5 的验证链负责），只把产出约束在可追溯的空间内。
 
 **确定性主路径。** 当 IR 谓词能经 $\mu$ 选定原子模板、且 subject/constraint 能填满其参数槽时，生成器直接、确定地归约出一棵树，全程不调用 LLM；本研究多数可 lint 规则由这条路径覆盖。
 
-**受限 LLM 合成。** 当确定性合成返回失败时，生成器转入 LLM 合成——模型拿到规则上下文、结构化 IR、候选原子模板集，以及 $\mathcal{V}$、$\mathcal{A}$ 的可读枚举与签名表（实际提示的四区段拼接见附录 E），只输出两种结果之一：一棵序列化的 DSL 树，或一个显式的"无模板"弃权标记 $\perp_{\mathrm{NT}}$。
+**受限 LLM 合成。** 当确定性合成返回失败时，生成器转入 LLM 合成——模型拿到规则上下文、结构化 IR、候选原子模板集，以及 $\mathcal{V}$、$\mathcal{A}$ 的可读枚举与签名表（实际提示的四区段拼接见附录 E），只输出两种结果之一：一棵序列化的 DSL 树，或一个显式的"无模板"弃权标记 $\perp_{\mathrm{NT}}$（$\perp_{\mathrm{NT}}$ 与合成失败 $\bot$ 同属"无可用结果"，故共用 $\bot$ 形；而 $\varepsilon$ 表示正常的"无前提"）。LLM 原始输出先经解析函数 $\eta$ 校验——$\eta$ 将其解析为合法 DSL 树 $t \in \mathcal{T}_{\mathcal{V}}$、类型错误或 $\perp_{\mathrm{NT}}$，任何 $\mathcal{V}/\mathcal{A}$ 之外的标识符在此被拒；通过后的树经渲染 $\rho$，再由确定性后处理器 $\Phi_{\mathrm{post}}$ 绑定 `Description`/`Citation`/`Name` 及各规范源元数据（细节见附录 C、E）。
 
 ![](figures/fig6_restricted_codegen_factory.png)
 
@@ -249,7 +249,7 @@ $$
 \Pi = \phi_V \circ \phi_G \circ \phi_C \circ \phi_R
 $$
 
-其中提取模块 $\phi_R$ 提取出中间语言，分类模块 $\phi_C$（§5 的四条件lintability判定）筛出lintable的规则，生成模块 $\phi_G$（受限于 §6 的 DSL 代码空间 $\mathcal{T}_{\mathcal{V}}$）合成检查代码，验证模块 $\phi_V$（§6 的三层语义对齐）把关。SAIV 根据这些模块产生的可计算信号选择下一轮修复操作。
+其中提取模块 $\phi_R$ 提取出中间语言，分类模块 $\phi_C$（§5 的四条件lintability判定）筛出lintable的规则，生成模块 $\phi_G$（受限于 §6 的 DSL 代码空间 $\mathcal{T}_{\mathcal{V}}$）合成检查代码，验证模块 $\phi_V$（§6 的三层语义对齐）把关。这里 $\phi_C$ 是 §5 定义的**单规则**可 lint 谓词（$r \mapsto \{0,1\}$）；算法 1 中出现的 $\psi_C$ 则是它的**集合级**提升：先从关键词召回集 $\mathcal{R}_{\mathrm{kw}}$ 剥离 Layer-1 假阳性得噪声集 $\mathcal{R}_N$，再对其余真实规则逐条施加 $\phi_C$，输出三分区 $(\mathcal{R}_N, \mathcal{R}_L, \mathcal{R}_U)$。SAIV 根据这些模块产生的可计算信号选择下一轮修复操作。
 
 ### 7.2 三个迭代目标（优化标签）
 
@@ -264,7 +264,7 @@ SAIV 借鉴反向传播的思路：先定下整个流程要优化的目标，再
   |\mathcal{R}_{\mathrm{kw}}(\mathcal{D})| = |\mathcal{R}_N| + |\mathcal{R}_L| + |\mathcal{R}_U| \tag{3}
   $$
 
-  式中 $\mathcal{R}_N$ 为噪声也就是虽然包含rfc2119关键词但不是真正的规则、$\mathcal{R}_L$ 为 lintable 规则、$\mathcal{R}_U$ 为 not lintable 规则。可执行类 $\mathcal{R}_L$ 进一步按"是否已被现有外部 lint 工具实现"二分：
+  式中 $\mathcal{D}$ 为标准文档语料（算法 1 的代码块内以 ASCII 记作 D），$\mathcal{R}_N$ 为噪声（虽含 RFC 2119 关键词但不是真正的规则）、$\mathcal{R}_L$ 为 lintable 规则、$\mathcal{R}_U$ 为 not lintable 规则。可执行类 $\mathcal{R}_L$ 进一步按"是否已被现有外部 lint 工具实现"二分：
 
   $$
   |\mathcal{R}_L| = |\mathcal{R}_L^{\mathrm{cov}}| + |\mathcal{R}_L^{\mathrm{uncov}}| \tag{4}
@@ -274,7 +274,7 @@ SAIV 借鉴反向传播的思路：先定下整个流程要优化的目标，再
 
   残差为召回守恒残差 $\mathcal{L}_{\mathrm{recall}}$，无需人工真值即可计算，当前已闭合（§8.2）。
 
-- **G2（未覆盖规则的代码—规范同义）**：对于未覆盖子集 $\mathcal{R}_L^{\mathrm{uncov}}$，要求代码摘要 $\sigma(\phi_G(r))$ 与规范原文同义。残差为代码忠实残差 $\mathcal{L}_{\mathrm{code}}$。
+- **G2（未覆盖规则的代码—规范同义）**：对于未覆盖子集 $\mathcal{R}_L^{\mathrm{uncov}}$，要求代码摘要 $\sigma_{\mathrm{mech}}(t_r)$（规则 $r$ 的 DSL 树 $t_r$ 的 code_summary，$\sigma_{\mathrm{mech}}$ 见 §6.3）与规范原文同义。残差为代码忠实残差 $\mathcal{L}_{\mathrm{code}}$。
 
 - **G3（已覆盖规则的反向可执行性）**：规则若在 zlint等lint工具中存在对应实现，则必然 lintable，目标是违反计数 $N_{\mathrm{viol}}=0$。
 
@@ -296,12 +296,12 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
 
 **阶段路由。** 每轮用可直接计算的量选择下一步修复操作：召回守恒残差、可 lint 集上的编译失败率、平均结构得分、实体必要条件筛查结果与同义置信度。该路由只决定下一轮尝试哪类修复。
 
-**修复操作。** SAIV 包含 IR 内容修复、分类修复、生成修复与验证修复四类操作。路由器根据上述信号选择下一轮操作；修复仅在指标下降时接受。
+**修复操作。** SAIV 包含 IR 内容修复、分类修复、生成修复与验证修复四类操作，分别记为 $\mathcal{P}_R / \mathcal{P}_C / \mathcal{P}_G / \mathcal{P}_V$（下标与被修模块 $\phi_\bullet$ 一一对应；修复算子 $\mathcal{P}$ 与 §6.3 的渲染函数 $\rho$ 是不同符号，勿混）。路由器根据上述信号选择下一轮操作；修复仅在指标下降时接受。
 
-- **IR 内容修复 $\rho_R$**：当路由器选择该操作时，把失败轨迹——当前 IR、不可归约类别、机械摘要、判官裁定与理由、同义置信度、本会话已试过的历史 IR——回传 LLM，要求其输出 `REPAIR(ir')` 或 `NO_FIX`。
-- **分类修复 $\rho_C$**：修复四条件框架对应字段的提取，重新提取IR，修复lintability判断。
-- **生成修复 $\rho_G$**：先试确定性修复；失败则把失败码片段与 IR 约束差异、或解析阶段的原子模板签名/封闭性错误作为反馈注入提示、触发 LLM 在 $\mathcal{T}_{\mathcal{V}}$ 内重新合成；若持续弃权，则进入离线词汇扩展通道 $\rho_A$——分析弃权原因、在受控数据集上训练新原子模板候选、经 cert-oracle 认证后并入 $\mathcal{A}$。
-- **验证修复 $\rho_V$**：扩大同义判定的语义邻域，如允许否定/肯定互换、一对多分解，或修正双判定源输出之间的不一致。
+- **IR 内容修复 $\mathcal{P}_R$**：当路由器选择该操作时，把失败轨迹——当前 IR、不可归约类别、机械摘要、判官裁定与理由、同义置信度、本会话已试过的历史 IR——回传 LLM，要求其输出 `REPAIR(ir')` 或 `NO_FIX`。
+- **分类修复 $\mathcal{P}_C$**：修复四条件框架对应字段的提取，重新提取IR，修复lintability判断。
+- **生成修复 $\mathcal{P}_G$**：先试确定性修复；失败则把失败码片段与 IR 约束差异、或解析阶段的原子模板签名/封闭性错误作为反馈注入提示、触发 LLM 在 $\mathcal{T}_{\mathcal{V}}$ 内重新合成；若持续弃权，则进入离线词汇扩展通道 $\mathcal{P}_A$——分析弃权原因、在受控数据集上训练新原子模板候选、经 cert-oracle 认证后并入 $\mathcal{A}$。
+- **验证修复 $\mathcal{P}_V$**：扩大同义判定的语义邻域，如允许否定/肯定互换、一对多分解，或修正双判定源输出之间的不一致。
 
 ### 7.4 迭代算法与终止条件
 
@@ -320,13 +320,13 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
  6:      if 全部残差 < θ then break                       // 多目标同时闭合
  7:      stage ← StageAttribution(...)                    // 式(9)
  8:      if stage = φ_R then                              // IR 内容修复
- 9:          for each r routed to ρ_R do
-10:              rep ← ρ_R(失败轨迹(r))                    // 自反思，返 REPAIR(ir') 或 NO_FIX
+ 9:          for each r routed to P_R do
+10:              rep ← P_R(失败轨迹(r))                    // 自反思，返 REPAIR(ir') 或 NO_FIX
 11:              if rep = NO_FIX  or  对照原文重抽结构校验(rep.ir', text(r)) ≠ ∅ then
 12:                  r → R^irred_code                     // 自动闸门否决 ⇒ 诚实留残差
 13:              else if 重测(rep.ir') 通过（归约∧认证∧编译∧忠实）then
 14:                  IR(r) ← rep.ir'                      // 接受修复
-15:      else apply ρ_{stage}∈{ρ_C, ρ_G, ρ_V}             // 并列，按路由分支触发
+15:      else apply P_{stage}∈{P_C, P_G, P_V}             // 并列，按路由分支触发
 16:      更新 (R_kw, R_N, R_L, R_U) 与 C
 17:      t ← t + 1
 18: until t ≥ K 或 本轮无任何残差下降（loop-until-dry）
@@ -655,7 +655,7 @@ $\sigma_{\mathrm{mech}}$（定义见 §6.3）由原子模板-短语字典 $\math
 | `ListAllMatch(F, T)` | "every entry of {F} satisfies ({σ_mech(T)})" |
 | `SubtreeIPListAnyHasOctetCountAndNotAllZero(F, n)` | "the NameConstraints IP subtree {F} contains a non-zero entry of {n} octets" |
 
-组合子归约：$\sigma_{\mathrm{mech}}(\neg t) =$ "NOT ($\sigma_{\mathrm{mech}}(t)$)"；$\sigma_{\mathrm{mech}}(t_1 \wedge t_2) =$ "($\sigma_{\mathrm{mech}}(t_1)$) AND ($\sigma_{\mathrm{mech}}(t_2)$)"；$\vee$ 同理；原子模板基例 $\sigma_{\mathrm{mech}}(a) = \mathcal{M}(a)$。对条件二元组 $(p,q)$：当 $p = \neg(p')$ 时输出 "WHEN NOT ($\sigma_{\mathrm{mech}}(p')$), THEN $\sigma_{\mathrm{mech}}(q)$"（消除双重否定的 NEG-PRE 模板），否则输出 "WHEN ($\sigma_{\mathrm{mech}}(p)$), THEN $\sigma_{\mathrm{mech}}(q)$"，$p=\perp$ 时输出 $\sigma_{\mathrm{mech}}(q)$ 单句。
+组合子归约：$\sigma_{\mathrm{mech}}(\neg t) =$ "NOT ($\sigma_{\mathrm{mech}}(t)$)"；$\sigma_{\mathrm{mech}}(t_1 \wedge t_2) =$ "($\sigma_{\mathrm{mech}}(t_1)$) AND ($\sigma_{\mathrm{mech}}(t_2)$)"；$\vee$ 同理；原子模板基例 $\sigma_{\mathrm{mech}}(a) = \mathcal{M}(a)$。对条件二元组 $(p,q)$：当 $p = \neg(p')$ 时输出 "WHEN NOT ($\sigma_{\mathrm{mech}}(p')$), THEN $\sigma_{\mathrm{mech}}(q)$"（消除双重否定的 NEG-PRE 模板），否则输出 "WHEN ($\sigma_{\mathrm{mech}}(p)$), THEN $\sigma_{\mathrm{mech}}(q)$"，$p=\varepsilon$ 时输出 $\sigma_{\mathrm{mech}}(q)$ 单句。
 
 **命题 2（$\sigma_{\mathrm{mech}}$ 可逆性）**。*给定 $\sigma_{\mathrm{mech}}(t)$ 的输出，原始 DSL 树 $t$ 在原子模板层等价意义下可机械恢复（同义原子模板被映射到同一短语时不可区分，其余结构保留）；故 $\sigma_{\mathrm{mech}}$ 在验证链路中保留 DSL 树结构信息。*
 
@@ -671,9 +671,9 @@ $\sigma_{\mathrm{mech}}$（定义见 §6.3）由原子模板-短语字典 $\math
 
 **SAIV 核心残差的精确式**（直觉与定义见 §7.3–§7.4 正文）：
 
-代码正确性标签（式 5）：
+代码正确性标签（式 5）。记 $t_r$ 为规则 $r$ 合成的 DSL 树、$\mathrm{code}(r)=\rho(t_r)$ 为其渲染出的 Go 代码；$\mathbb{1}[\cdot]$ 为指示函数，$\mathrm{compile}(\cdot)\in\{0,1\}$ 为是否编译通过，$s_{\mathrm{struct}}(\cdot)\in[0,1]$ 为结构完整度得分，$\mathrm{syn}(\cdot,\cdot)\in\{0,1\}$ 为同义判官输出，$\sigma_{\mathrm{mech}}(t_r)$ 为 code_summary（§6.3），$\mathrm{spec}(r)$ 为规则 $r$ 的规范原文：
 $$
-\lambda_{\mathrm{code}}(r) = \mathbb{1}[\mathrm{compile}(c)] \cdot s_{\mathrm{struct}}(c) \cdot c_{\mathrm{syn}}(\sigma(c),\; \mathrm{spec}(r)) \tag{5}
+\lambda_{\mathrm{code}}(r) = \mathbb{1}[\mathrm{compile}(\mathrm{code}(r))] \cdot s_{\mathrm{struct}}(\mathrm{code}(r)) \cdot \mathrm{syn}(\sigma_{\mathrm{mech}}(t_r),\; \mathrm{spec}(r)) \tag{5}
 $$
 
 召回守恒残差（式 6）：
@@ -702,16 +702,16 @@ $$
 \end{cases} \tag{9}
 $$
 
-其中 $p_{\mathrm{fail}}^{(t)} = \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}\mathbb{1}[\neg\mathrm{compile}(\phi_G(r))]$、$\bar{s}_{\mathrm{struct}}^{(t)} = \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}s_{\mathrm{struct}}(\phi_G(r))$。
+其中 $p_{\mathrm{fail}}^{(t)} = \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}\mathbb{1}[\neg\mathrm{compile}(\phi_G(r))]$、$\bar{s}_{\mathrm{struct}}^{(t)} = \frac{1}{|\mathcal{R}_L|}\sum_{r\in\mathcal{R}_L}s_{\mathrm{struct}}(\phi_G(r))$（此处 $\phi_G(r)$ 即上文的 $\mathrm{code}(r)$）。注意路由阈值 $\tau_R, \tau_C$ 决定"下一轮修哪个模块"，与 §7.4 的终止阈值 $\theta$（作用于总损失 $\mathcal{L}_{\mathrm{total}}$、默认 0.05）是不同的量。
 
 **命题 3（残差单调性）的完整陈述与证明**（正文见 §7.4）：
 
 *命题 3（残差单调性）。若二元仲裁判官 $\phi_J$ 在每条违反上均给出 FLIP（翻转）或 SPURIOUS（判伪）之一并被采纳，则一轮过程后 $N_{\mathrm{viol}}$ 严格下降至 0。*
 
-*证明。* 设违反集 $\mathcal{V}=\{r:\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial}\}\land\phi_C(r)\neq\mathrm{lintable}\}$，$N_{\mathrm{viol}}=|\mathcal{V}|$。对任意 $r\in\mathcal{V}$，$\phi_J$ 必给出且仅给出以下两支之一：
-- **FLIP**：采纳后 $\phi_C(r)$ 翻转为 $\mathrm{lintable}$，此时 $\phi_C(r)=\mathrm{lintable}\land\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial}\}$ 仍触发违反式左侧，但违反式右侧不再成立（lintable 的假阴性已修正），故 $r\notin\mathcal{V}$；
-- **SPURIOUS**：采纳后 $\mathrm{cov}_{\mathcal{T}}(r)$ 降级为 $\mathrm{none}$，此时违反式左侧 $\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial}\}$ 不再成立，故 $r\notin\mathcal{V}$。
+*证明。* 记 $\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial},\text{none}\}$ 为规则 $r$ 被外部工具（zlint）覆盖的档位（§8.2 算法 2），$\phi_C$ 为 §5 的可 lint 谓词。设违反集 $\mathcal{W}=\{r:\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial}\}\land\phi_C(r)\neq\mathrm{lintable}\}$（此处用 $\mathcal{W}$ 而非 $\mathcal{V}$，以免与 §6.2 的词汇表 $\mathcal{V}$ 混淆），$N_{\mathrm{viol}}=|\mathcal{W}|$。对任意 $r\in\mathcal{W}$，$\phi_J$ 必给出且仅给出以下两支之一：
+- **FLIP**：采纳后 $\phi_C(r)$ 翻转为 $\mathrm{lintable}$，此时 $\phi_C(r)=\mathrm{lintable}\land\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial}\}$ 仍触发违反式左侧，但违反式右侧不再成立（lintable 的假阴性已修正），故 $r\notin\mathcal{W}$；
+- **SPURIOUS**：采纳后 $\mathrm{cov}_{\mathcal{T}}(r)$ 降级为 $\mathrm{none}$，此时违反式左侧 $\mathrm{cov}_{\mathcal{T}}(r)\in\{\text{full},\text{partial}\}$ 不再成立，故 $r\notin\mathcal{W}$。
 
-两类修复均移除该 $r$ 而不引入新违反，故 $\mathcal{V}$ 在一轮内严格收缩至空集、$N_{\mathrm{viol}}=0$。$\square$
+两类修复均移除该 $r$ 而不引入新违反，故 $\mathcal{W}$ 在一轮内严格收缩至空集、$N_{\mathrm{viol}}=0$。$\square$
 
-*注：* FLIP 与 SPURIOUS 不可同时对同一条规则采纳（两者互斥），且采纳后该规则离开 $\mathcal{V}$，不参与后续判定，故该过程有界终止。
+*注：* FLIP 与 SPURIOUS 不可同时对同一条规则采纳（两者互斥），且采纳后该规则离开 $\mathcal{W}$，不参与后续判定，故该过程有界终止。
