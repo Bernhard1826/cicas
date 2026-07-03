@@ -610,6 +610,8 @@ GraphRAG 检索（§4.2）围绕一组核心关系构建上下文，并显式区
 
 **词汇表 $\mathcal{V}$ 的七个分量。** $\mathcal{V}$ 是七类在系统启动时冻结的有限集合的不相交并（§6.2）：证书字段 $\mathcal{F}_{\mathrm{cert}}$（~40，如 `c.Version`、`c.DNSNames`、`c.IPAddresses`）、DN 字段 $\mathcal{F}_{\mathrm{dn}}$（~15，如 `Subject.CommonName`、`Subject.Country`）、OID 常量 $\mathcal{O}$（~30，对应 zlint `util.*OID`）、KeyUsage 位 $\mathcal{B}_{\mathrm{KU}}$（9）、ExtKeyUsage 位 $\mathcal{B}_{\mathrm{EKU}}$（~10）、ASN.1 编码类型 $\mathcal{E}_{\mathrm{ASN1}}$（5，如 `UTF8String`、`PrintableString`、`IA5String`）、命名正则 $\mathcal{R}_{\mathrm{regex}}$（~20，每项为已审核的字面 RE2 模式）。所有分量均为冻结有限集合；LLM 在 prompt 中获得各分量全量枚举，故其输出中出现 $\mathcal{V}$ 之外的标识符即触发 $\eta$ 解析错误（命题 1）。
 
+**命题 1（词汇封闭性）**：若 DSL 树 $t$ 的某个叶参数标识符不属于 $\mathcal{V}$ 中签名所要求的分量，则解析函数 $\eta$ 必判其为错误、$t \notin \mathcal{T}_{\mathcal{V}}$；等价地，任何 $t \in \mathcal{T}_{\mathcal{V}}$ 都不含 $\mathcal{V}$ 之外的字段名、OID 或正则。该性质由 $\mathcal{V}$ 的有限枚举与每个原子模板的类型化签名 $\mathrm{sig}(a)$（§6.2）确定性保证。
+
 **代表性原子模板。** 原子模板集 $\mathcal{A}$（$|\mathcal{A}|=79$）按语义簇组织，每个原子模板有类型化签名 $\mathrm{sig}(a)$（§6.2）。下表按簇节选关键原子模板（完整 79 项随代码与数据一并公开）：
 
 | 簇 | 原子模板 | 签名 | 语义 |
@@ -664,6 +666,85 @@ $\sigma_{\mathrm{mech}}$（定义见 §6.3）由原子模板-短语字典 $\math
 §6.4 所述受约束 LLM 调用 $\phi_G$ 的系统提示明确四条硬约束（违反即被解析函数 $\eta$ 自动拒绝）：(1) 每个原子模板名须出现在所供目录 $\mathcal{A}$ 中；(2) 每个叶参数须为声明类型的字面量或出现在词汇表 $\mathcal{V}$ 中的名字，禁止编造标识符；(3) 输出须为一棵 DSL 树的 JSON（含 `predicate`/`precondition`/`severity`/`label`）或一个 `{"no_template": true, "reason": ...}` 弃权标记，其余形态一律解析失败；(4) `Description`/`Citation`/`Name` 不由 LLM 生成，由后处理器 $\Phi_{\mathrm{post}}$ 确定性绑定。
 
 每次调用的完整 prompt 由四区段依次拼接：**区段 A（Rule Context）**——源 ID、章节号、规则 ID、逐字 `rule_text` 与 `source` 元数据；**区段 B（Structured IR）**——扁平展开的 IR 四/五元组；**区段 C（DSL Schema）**——实现中的 $\mathcal{V}$ 与 $\mathcal{A}$ 目录（按分量分组的字段名清单与按语义簇分组的原子模板签名表，附每原子模板一行 PKI 语义注释；论文附录 C 仅列代表性示例）；**区段 D（Output Protocol）**——两种合法 JSON 形态的精确 schema 与一条 minimal positive 示例。
+
+### 附录 F：全文符号表（§5–§8 及相关附录）
+
+本表汇集正文 §5–§8 与附录 C/D/G 中出现的主要记号，供随查。**尤须区分几组易混记号**：正常取值 $\varepsilon$（无前提）↔ 失败标记 $\bot$（合成失败）↔ $\perp_{\mathrm{NT}}$（LLM 弃权）；渲染函数 $\rho$ ↔ 修复算子族 $\mathcal{P}_\bullet$；单规则谓词 $\phi_C$ ↔ 集合级分类器 $\psi_C$；词汇表 $\mathcal{V}$ ↔ 附录 G 证明中的违反集 $\mathcal{W}$；证书 $c$ ↔ 代码 $\mathrm{code}(r)$。
+
+**集合与空间**
+
+| 记号 | 含义 | 首见 |
+|---|---|---|
+| $\mathcal{D}$ | 标准文档语料（算法 1 代码块内记作 D） | §7.2 |
+| $\mathcal{R}_{\mathrm{kw}}$ | RFC 2119 关键词召回的候选规则集 | §4.3 |
+| $\mathcal{R}_N,\mathcal{R}_L,\mathcal{R}_U$ | 噪声 / 可 lint / 不可 lint 规则集 | §7.2 |
+| $\mathcal{R}_L^{\mathrm{cov}},\mathcal{R}_L^{\mathrm{uncov}}$ | 已 / 未被外部 lint 覆盖的可 lint 规则 | §7.2 |
+| $\mathcal{A}$ | 有限闭合的原子模板集（$\lvert\mathcal{A}\rvert=79$） | §6.1 |
+| $\mathcal{V}$ | 类型化词汇表（七分量不相交并） | §6.2 |
+| $\mathcal{T}$ | DSL 树空间（式 1） | §6.1 |
+| $\mathcal{T}_{\mathcal{V}}$ | 参数全部合法的 DSL 树子集（$\phi_G$ 值域） | §6.2 |
+| $\mathcal{T}_\varepsilon$ | $\mathcal{T}\cup\{\varepsilon\}$，含"无前提"的前提空间 | §6.1 |
+| $\mathcal{W}$ | （附录 G 证明）违反集，$N_{\mathrm{viol}}=\lvert\mathcal{W}\rvert$ | 附录 G |
+| $N$ | §5 中承载"非编码类"义务的类别集合 | §5 |
+
+**模块、算子与函数**
+
+| 记号 | 含义 | 首见 |
+|---|---|---|
+| $\Pi=\phi_V\circ\phi_G\circ\phi_C\circ\phi_R$ | 提取→分类→生成→验证全流程 | §7.1 |
+| $\phi_R,\phi_G,\phi_V$ | 提取 / 生成 / 验证模块 | §7.1 |
+| $\phi_C$ | 单规则可 lint 谓词 $r\mapsto\{0,1\}$（§5 四条件） | §5 |
+| $\psi_C$ | 集合级分类器：噪声过滤 + $\phi_C$，输出 $(\mathcal{R}_N,\mathcal{R}_L,\mathcal{R}_U)$ | §7.1 |
+| $\phi_J$ | 二元仲裁判官（FLIP / SPURIOUS） | 附录 G |
+| $\mu$ | IR 谓词 → 候选原子模板的多对多映射 | §6.1 |
+| $\rho$ | 渲染函数：DSL 树 → Go 代码 | §6.3 |
+| $\sigma_{\mathrm{mech}}$ | 机械翻译：DSL 树 → code_summary | §6.3 |
+| $\eta$ | LLM 输出解析函数（返合法树 / 类型错误 / $\perp_{\mathrm{NT}}$） | §6.4 |
+| $\Phi_{\mathrm{post}}$ | 确定性后处理器（绑定 `Description`/`Citation`/`Name` 及元数据） | §6.4 |
+| $\mathcal{P}_R,\mathcal{P}_C,\mathcal{P}_G,\mathcal{P}_V$ | SAIV 修复算子，下标对应被修模块 $\phi_\bullet$ | §7.3 |
+| $\mathcal{P}_A$ | 离线词汇扩展通道（新原子模板经 oracle 认证并入 $\mathcal{A}$） | §7.3 |
+| $\mathrm{code}(r)=\rho(t_r)$ | 规则 $r$ 的生成 Go 代码 | 附录 G |
+| $\mathrm{compile},\ s_{\mathrm{struct}},\ \mathrm{syn}$ | 编译通过 / 结构完整度 / 同义判官输出 | 附录 G |
+| $\mathrm{spec}(r)$ | 规则 $r$ 的规范原文 | 附录 G |
+| $\lambda_{\mathrm{code}}(r)$ | 代码正确性标签（式 5） | 附录 G |
+| $\mathrm{cov}_{\mathcal{T}}(r)$ | 外部工具覆盖档 {full, partial, none}（§8.2 算法 2） | §8.2 |
+| $\mathrm{Severity}(r)$ | 义务 → 严重级别（Error / Warn） | §6.1 |
+
+**判定、求值与逻辑**
+
+| 记号 | 含义 | 首见 |
+|---|---|---|
+| $C_1,C_2,C_3,C_4$ | 可 lint 四条件（道义 / 主体 / 运行时 / 过程） | §5 |
+| $\mathrm{lintable}(r)$ | 可 lint 标签（四条件合取） | §5 |
+| $\mathbb{1}[\cdot]$ | 指示函数（真取 1、否则取 0） | §5 |
+| $\lVert u\rVert(c)$ | DSL 树 / 前提 $u$ 在证书 $c$ 上求值的布尔结果 | §6.1 |
+| $(p,q)$ | 规则代码体：可选前提 $p$、主断言 $q$（式 2） | §6.1 |
+| $a(\bar v)$ | 原子模板谓词 $a\in\mathcal{A}$ 及其参数列表 $\bar v$ | §6.1 |
+
+**残差、阈值与迭代**
+
+| 记号 | 含义 | 首见 |
+|---|---|---|
+| $\mathcal{L}_{\mathrm{recall}}$ | 召回守恒残差（式 6） | §7.2 |
+| $\mathcal{L}_{\mathrm{code}}$ | 代码忠实残差（式 7） | §7.2 |
+| $\mathcal{L}_{\mathrm{total}}$ | 总损失（式 8），$w_R,w_C$ 为权重 | §7.2 |
+| $N_{\mathrm{viol}}$ | 双判定源一致性违反计数（目标为 0） | §7.2 |
+| $\theta$ | 终止阈值（作用于 $\mathcal{L}_{\mathrm{total}}$，默认 0.05） | §7.4 |
+| $\tau_R,\tau_C$ | 阶段路由阈值（式 9，决定下一轮修哪个模块） | 附录 G |
+| $p_{\mathrm{fail}}^{(t)},\ \bar{s}_{\mathrm{struct}}^{(t)}$ | 第 $t$ 轮编译失败率 / 平均结构得分 | 附录 G |
+| $K$ | 最大迭代数（默认 10） | §7.4 |
+
+**易混特殊值与等价记号**
+
+| 记号 | 含义 | 首见 |
+|---|---|---|
+| $\varepsilon$ | "无前提"占位符——**正常取值** | §6.1 |
+| $\bot$ | 确定性合成失败 / 无结果 | §6.4 |
+| $\perp_{\mathrm{NT}}$ | LLM"无模板"弃权（与 $\bot$ 同属"无可用结果"） | §6.4 |
+| $\mathrm{Code}\equiv\mathrm{IR}$ | 代码忠实于中间表示（证书级 oracle，确定性） | §6.5 |
+| $\mathrm{Code}\equiv\mathrm{Spec}$ | 代码与规范同义（判官判定，最终判据） | §6.5 |
+| $c$ | 单张证书 | §6.1 |
+| $r,\ t\,/\,t_r$ | 规则 / 其 DSL 树 | §6 |
 
 ### 附录 G：SAIV 残差与阶段路由的形式化细节
 
