@@ -24,7 +24,80 @@ from typing import Optional
 
 from . import det_codegen, tree_prompt, tree_codegen, synonym_judge
 from . import oracle_pipeline, runner
-from .tree_to_natural import tree_to_natural
+from .tree_to_natural import obligation_aware_summary, tree_to_natural
+
+
+def _is_profile_scope_marker(pc) -> bool:
+    """A precondition that only marks the CABF §7.1.2.N certificate-profile scope.
+
+    The extractor writes such a marker with `description: "profile scope: <title>"`.
+    It is NOT a per-certificate antecedent — the governing profile is already
+    conveyed to the synonymy judge separately (profile_scope, derived from the
+    section hierarchy) and to a real lint via CheckApplies.
+    """
+    if not isinstance(pc, dict):
+        return False
+    return (pc.get("description") or "").strip().lower().startswith("profile scope")
+
+
+def _neutralize_unmappable_profile_scope(ir: dict) -> dict:
+    """Drop a PROFILE-SCOPE precondition that is redundant with the rule body.
+
+    A profile-scoped rule carries its scope both as an IR precondition marked
+    "profile scope: …" AND implicitly via its §7.1.2.N section. The scope is
+    conveyed to the synonymy judge separately (profile_scope) and to a real lint
+    via CheckApplies, so a profile-scope precondition in the *body* is redundant.
+    We drop it in exactly two provably-redundant cases (else KEEP it — no
+    behaviour change):
+
+      1. UNMAPPABLE — the scope is a profile CLASS with no closed-vocabulary atom
+         (e.g. eku_present=TechnicallyConstrainedCA / PrecertificateSigningCA).
+         `deterministic_tree` already emits the bare consequent, but the LLM
+         prompt's scope-precondition rule makes the model REFUSE (no_template).
+      2. VACUOUS — the scope is a policy_oid whose OID is exactly what the rule's
+         consequent requires be asserted (OV/IV/DV "MUST assert the Reserved
+         Policy OID of X" living in the profile scoped by that same OID X). Keeping
+         it emits `if hasPolicy(X) then hasPolicy(X)` — a tautology the judge
+         rightly rejects.
+
+    GENERAL: keyed on the extractor's "profile scope" description + guard
+    mappability/vacuity, never on rule id or text.
+    """
+    if not isinstance(ir, dict):
+        return ir
+    pc = ir.get("precondition")
+    constraint = ir.get("constraint") if isinstance(ir.get("constraint"), dict) else {}
+    cpc = constraint.get("precondition") if isinstance(constraint, dict) else None
+    marker = pc if _is_profile_scope_marker(pc) else (cpc if _is_profile_scope_marker(cpc) else None)
+    if marker is None:
+        return ir
+    drop = False
+    # (1) unmappable: the guard builder (single source of truth) yields nothing.
+    try:
+        from app.services.certificate.dsl.rule_ir_to_dsl import _precondition_guard
+        if _precondition_guard(ir, constraint) is None:
+            drop = True
+    except Exception:
+        pass
+    # (2) vacuous policy_oid: the scope OID is exactly the asserted OID.
+    if not drop and (marker.get("type") or marker.get("kind")) == "policy_oid":
+        oid = str(marker.get("value") or "").strip()
+        asserted = {str(constraint.get("value") or "").strip()}
+        av = constraint.get("allowed_values")
+        if isinstance(av, list):
+            asserted |= {str(x).strip() for x in av}
+        if oid and oid in asserted:
+            drop = True
+    if not drop:
+        return ir  # real, non-redundant guard (cert_type / distinct policy_oid) — keep
+    ir2 = dict(ir)
+    if _is_profile_scope_marker(ir2.get("precondition")):
+        ir2["precondition"] = None
+    if isinstance(ir2.get("constraint"), dict) and _is_profile_scope_marker(ir2["constraint"].get("precondition")):
+        c2 = dict(ir2["constraint"])
+        c2["precondition"] = None
+        ir2["constraint"] = c2
+    return ir2
 
 
 def _render_and_compile(tree, precondition, rule: dict, workspace=None):
@@ -74,12 +147,18 @@ def generate_tree(rule: dict, *, workspace=None, allow_llm: bool = True) -> dict
       llm_raw      raw LLM reply (≤300 chars) for the ledger freeze; "" for det
     """
     rid = int(rule.get("id") or 0)
-    ir = rule.get("ir") or {}
+    ir = _neutralize_unmappable_profile_scope(rule.get("ir") or {})
+    if ir is not (rule.get("ir") or {}):
+        rule = {**rule, "ir": ir}  # so the LLM prompt sees the neutralized IR too
     section = rule.get("section")
 
     # --- path 1: deterministic (zero LLM) ---
     try:
-        tree = det_codegen.deterministic_tree(rid, ir, section=section)
+        det_ir = dict(ir)
+        det_ir.setdefault("_rule_title", rule.get("title") or "")
+        det_ir.setdefault("_rule_text", rule.get("text") or "")
+        det_ir.setdefault("_rule_source", rule.get("source") or "")
+        tree = det_codegen.deterministic_tree(rid, det_ir, section=section)
     except Exception:
         tree = None
     if tree is not None:
@@ -154,13 +233,14 @@ def generate_tree(rule: dict, *, workspace=None, allow_llm: bool = True) -> dict
 def synonymy_verdict(tree, rule_text: str, *,
                      precondition=None,
                      profile_scope: Optional[str] = None,
+                     obligation: Optional[str] = None,
                      k: int = 5) -> dict:
     """Synonymy gate (LLM denoised judge; Code ≡ Spec).
 
     Returns the judge tally: verdict ("EXPRESSES"|"DOES_NOT_EXPRESS"),
     n_expresses, n_dne, agreement, sample_why, plus path="judge".
     """
-    sm = tree_to_natural(tree, precondition)
+    sm = obligation_aware_summary(tree, precondition, obligation=obligation)
     res = synonym_judge.judge_vote(rule_text, sm, k=k, profile_scope=profile_scope)
     res["path"] = "judge"
     res.setdefault("judge_raw", res.get("sample_why", ""))

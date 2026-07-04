@@ -14,26 +14,26 @@ Domain (the "codegen definition domain" = lintable rules zlint does NOT cover):
     AND lint_coverage IS NOT NULL      -- coverage was actually computed
     AND NOT lint_covered               -- and zlint has no equivalent lint
 
-profile_scope
--------------
-CABF-BR normative rules live inside per-certificate-type PROFILE sections
-(§7.1.2.N: Root CA / Subordinate CA / Subscriber / OCSP Responder / OV-IV-DV-EV
-…). The extractor faithfully scopes such a rule with a profile guard (e.g.
-"WHEN Root CA, THEN …"). The synonymy judge must be told that profile scope,
-otherwise it reads the bare rule row, sees the guard as an *unjustified added
-precondition*, and returns DOES_NOT_EXPRESS for correct code. `profile_scope_for`
-derives that title from the spec's OWN section hierarchy (never hardcoded per
-rule); rules outside a profile section get None. Passing None (the prior
-harness's bug) systematically understated CABF synonymy.
+rule context
+------------
+Normative rows are often fragments of a section/table rather than standalone
+sentences. CABF-BR profile rows inherit the per-certificate-type profile
+(§7.1.2.N), and RFC 5280 rows such as "These fields ..." inherit their section
+title. The synonymy judge must be told that spec-owned context, otherwise it
+reads the row in isolation and can reject correct code as too narrow or too
+broad. `profile_scope_for` derives CABF profile titles from the spec's own
+section hierarchy (never hardcoded per rule); the harness then falls back to the
+row's section title for non-profile rows.
 
 Modes
 -----
   (default)     generate + judge every pending domain row, append to ledger
   --rejudge     reuse cached trees/code_semantics from the ledger and ONLY
-                re-run the synonymy judge (with profile_scope). Cheap: no
+                re-run the synonymy judge (with rule context). Cheap: no
                 recompile, no regeneration. Used to re-measure the judge after
-                a judge/profile_scope change without paying the codegen cost.
+                a judge/context change without paying the codegen cost.
   --summary-only  recompute summary + manifests from the existing ledger
+  --compact-ledger prune stale/duplicate ledger rows after targeted retries
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ if str(BACKEND) not in sys.path:
 
 from app.services.certificate.codegen import cascade, runner  # noqa: E402
 from app.services.certificate.codegen import det_codegen, intree_emitter, synonym_judge  # noqa: E402
-from app.services.certificate.codegen.tree_to_natural import tree_to_natural  # noqa: E402
+from app.services.certificate.codegen.tree_to_natural import obligation_aware_summary  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 OUTPUTS = HERE / "outputs"
@@ -106,6 +106,41 @@ def profile_scope_for(section: Optional[str], sec2title: dict[str, str]) -> Opti
         if prof_title and leaf_title and leaf_title != prof_title:
             return f"{prof_title} — {leaf_title}"
         return prof_title or leaf_title
+    return None
+
+
+def rule_context_for(source: str, section: Optional[str], title: Optional[str],
+                     sec2title: dict[str, str]) -> Optional[str]:
+    """Spec-owned context for a fragmentary rule row.
+
+    The ledger field is still named ``profile_scope`` for backward
+    compatibility with older experiment outputs, but the content is now broader:
+    CABF profile context when available, otherwise the row's own section title.
+    """
+    profile = profile_scope_for(section, sec2title)
+    def _with_reserved_policy_oid(ctx: str) -> str:
+        key = ctx.lower()
+        mapping = (
+            ("extended validation", "2.23.140.1.1"),
+            ("domain validated", "2.23.140.1.2.1"),
+            ("organization validated", "2.23.140.1.2.2"),
+            ("individual validated", "2.23.140.1.2.3"),
+        )
+        for label, oid in mapping:
+            if label in key:
+                return f"{ctx}; CABF reserved certificate policy identifier {oid}"
+        if "rsa" in key:
+            return (f"{ctx}; rsaEncryption AlgorithmIdentifier OID "
+                    "1.2.840.113549.1.1.1; id-RSASSA-PSS OID "
+                    "1.2.840.113549.1.1.10")
+        return ctx
+
+    if profile:
+        prefix = f"{source} §{section} " if section else f"{source} "
+        return _with_reserved_policy_oid(f"{prefix}{profile}")
+    if title:
+        prefix = f"{source} §{section} " if section else f"{source} "
+        return _with_reserved_policy_oid(f"{prefix}{title}")
     return None
 
 
@@ -176,6 +211,12 @@ def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
             if obligation and not ir.get("obligation"):
                 ir = dict(ir)
                 ir["obligation"] = obligation
+            context_scope = rule_context_for(
+                source_by_id.get(int(standard_id), str(standard_id)),
+                section,
+                title,
+                sec2title,
+            )
             rows.append(
                 {
                     "id": int(rid),
@@ -186,7 +227,7 @@ def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
                     "text": text or "",
                     "ir": ir,
                     "obligation": obligation or ir.get("obligation") or "",
-                    "profile_scope": profile_scope_for(section, sec2title),
+                    "profile_scope": context_scope,
                 }
             )
     if limit is not None:
@@ -233,27 +274,36 @@ def _rate(n: int, d: int) -> float | None:
 # ---------------------------------------------------------------------------
 def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Path) -> dict:
     total = len(domain)
-    generated = [r for r in latest.values() if r.get("generation_success")]
+    domain_ids = {int(r["id"]) for r in domain}
+    scoped_latest = {
+        rid: row for rid, row in latest.items()
+        if int(rid) in domain_ids
+    }
+    generated = [r for r in scoped_latest.values() if r.get("generation_success")]
     generated_count = len(generated)
-    expresses = [r for r in generated if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
-    dne = [r for r in generated if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
-    errors = [r for r in latest.values() if r.get("error")]
+    judged = [r for r in generated if r.get("synonymy", {}).get("verdict")]
+    expresses = [r for r in judged if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
+    dne = [r for r in judged if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
+    errors = [r for r in scoped_latest.values() if r.get("error")]
 
     by_source = {}
     for source in sorted({r["source"] for r in domain}):
         ids = {int(r["id"]) for r in domain if r["source"] == source}
-        src_rows = [latest[i] for i in ids if i in latest]
+        src_rows = [scoped_latest[i] for i in ids if i in scoped_latest]
         src_gen = [r for r in src_rows if r.get("generation_success")]
-        src_exp = [r for r in src_gen if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
-        src_dne = [r for r in src_gen if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
+        src_judged = [r for r in src_gen if r.get("synonymy", {}).get("verdict")]
+        src_exp = [r for r in src_judged if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
+        src_dne = [r for r in src_judged if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
         by_source[source] = {
             "domain_total": len(ids),
             "completed": len(src_rows),
             "generation_success": len(src_gen),
             "generation_rate": _rate(len(src_gen), len(ids)),
+            "synonymy_judged": len(src_judged),
+            "synonymy_not_judged": len(src_gen) - len(src_judged),
             "synonymy_expresses": len(src_exp),
             "synonymy_does_not_express": len(src_dne),
-            "synonymy_rate_over_generated": _rate(len(src_exp), len(src_gen)),
+            "synonymy_rate_over_generated": _rate(len(src_exp), len(src_judged)),
             "end_to_end_expresses_rate_over_domain": _rate(len(src_exp), len(ids)),
             "code_eq_ir_certified": sum(1 for r in src_gen if r.get("code_eq_ir_certified")),
         }
@@ -261,7 +311,7 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
     by_method = Counter()
     by_method_expresses = Counter()
     by_reason = Counter()
-    for r in latest.values():
+    for r in scoped_latest.values():
         if r.get("generation_success"):
             method = r.get("generation", {}).get("method") or "unknown"
             by_method[method] += 1
@@ -279,29 +329,42 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             "standard_id IN selected AND lintable AND lint_coverage IS NOT NULL "
             "AND lint_covered=false"
         ),
-        "profile_scope": "derived from CABF §7.1.2.N certificate-profile section title",
+        "profile_scope": "Rule context derived from CABF §7.1.2.N profile or row section/table title",
         "domain_total": total,
-        "completed": len(latest),
+        "completed": len(scoped_latest),
         "generation_success": generated_count,
         "generation_rate": _rate(generated_count, total),
         "generation_by_method": dict(sorted(by_method.items())),
         "generation_failure_by_reason": dict(sorted(by_reason.items())),
-        "synonymy_judged": generated_count,
+        "synonymy_judged": len(judged),
+        "synonymy_not_judged": generated_count - len(judged),
         "synonymy_expresses": len(expresses),
         "synonymy_does_not_express": len(dne),
-        "synonymy_rate_over_generated": _rate(len(expresses), generated_count),
+        "synonymy_rate_over_generated": _rate(len(expresses), len(judged)),
         "end_to_end_expresses_rate_over_domain": _rate(len(expresses), total),
         "synonymy_by_method": {
             method: {
                 "generated": count,
+                "judged": sum(
+                    1 for r in generated
+                    if (r.get("generation", {}).get("method") or "unknown") == method
+                    and r.get("synonymy", {}).get("verdict")
+                ),
                 "expresses": by_method_expresses.get(method, 0),
-                "rate_over_generated": _rate(by_method_expresses.get(method, 0), count),
+                "rate_over_generated": _rate(
+                    by_method_expresses.get(method, 0),
+                    sum(
+                        1 for r in generated
+                        if (r.get("generation", {}).get("method") or "unknown") == method
+                        and r.get("synonymy", {}).get("verdict")
+                    ),
+                ),
             }
             for method, count in sorted(by_method.items())
         },
         "code_eq_ir_certified": sum(1 for r in generated if r.get("code_eq_ir_certified")),
         "rule_errors": len(errors),
-        "pending": total - len(latest),
+        "pending": total - len(scoped_latest),
         "by_source": by_source,
         "ledger": str(ledger_path),
     }
@@ -346,9 +409,13 @@ def _write_rendered(rendered: dict, out_root: Path) -> str | None:
     return str(path)
 
 
-def _write_expresses_index(run_dir: Path, latest: dict[int, dict]) -> None:
+def _write_expresses_index(run_dir: Path, latest: dict[int, dict],
+                           domain_ids: set[int] | None = None) -> list[dict]:
     rows = []
     for row in latest.values():
+        rid = row.get("rule_id")
+        if domain_ids is not None and int(rid or 0) not in domain_ids:
+            continue
         if row.get("synonymy", {}).get("verdict") != "EXPRESSES":
             continue
         rows.append(
@@ -371,13 +438,21 @@ def _write_expresses_index(run_dir: Path, latest: dict[int, dict]) -> None:
     with (run_dir / "synonymous_lints_manifest.jsonl").open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return rows
 
 
-def export_synonymous_from_ledger(run_dir: Path) -> None:
+def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = None) -> None:
     ledger = run_dir / "codegen_synonymy.jsonl"
     summary_path = run_dir / "codegen_synonymy_summary.json"
     latest = load_done(ledger)
-    _write_expresses_index(run_dir, latest)
+    domain_ids = {int(r["id"]) for r in domain} if domain is not None else None
+    rows = _write_expresses_index(run_dir, latest, domain_ids)
+    expected_files = {r.get("filename") for r in rows if r.get("filename")}
+    rendered_root = run_dir / "synonymous_lints"
+    if rendered_root.exists():
+        for path in rendered_root.rglob("*.go"):
+            if path.name not in expected_files:
+                path.unlink()
     if summary_path.exists():
         try:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -385,6 +460,26 @@ def export_synonymous_from_ledger(run_dir: Path) -> None:
             summary = {}
         summary["synonymous_lints_manifest"] = str(run_dir / "synonymous_lints_manifest.json")
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def compact_ledger(domain: list[dict], run_dir: Path) -> dict:
+    """Keep only the latest completed row for each current-domain rule."""
+    ledger = run_dir / "codegen_synonymy.jsonl"
+    summary_path = run_dir / "codegen_synonymy_summary.json"
+    if not ledger.exists():
+        return summarize(domain, ledger, summary_path)
+    before = sum(1 for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip())
+    latest = load_done(ledger)
+    records = [
+        latest[int(rule["id"])]
+        for rule in domain
+        if int(rule["id"]) in latest
+    ]
+    rewrite_ledger(ledger, records)
+    summary = summarize(domain, ledger, summary_path)
+    export_synonymous_from_ledger(run_dir, domain)
+    print(f"[compact] ledger rows {before} -> {len(records)}", flush=True)
+    return summary
 
 
 # ---------------------------------------------------------------------------
@@ -396,11 +491,13 @@ def _judge(rule: dict, tree, precondition, code_semantics: str, k: int) -> dict:
         rule.get("text") or "",
         precondition=precondition,
         profile_scope=rule.get("profile_scope"),
+        obligation=rule.get("obligation") or (rule.get("ir") or {}).get("obligation"),
         k=k,
     )
 
 
-def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int, allow_llm: bool) -> dict:
+def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
+                 allow_llm: bool, skip_synonymy: bool) -> dict:
     rid = int(rule["id"])
     rec = {
         "complete": False,
@@ -427,11 +524,22 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int, allow_ll
             precondition = gen.get("precondition")
             rec["tree"] = tree
             rec["precondition"] = precondition
-            rec["code_semantics"] = tree_to_natural(tree, precondition)
+            rec["code_semantics"] = obligation_aware_summary(
+                tree,
+                precondition,
+                obligation=rule.get("obligation") or (rule.get("ir") or {}).get("obligation"),
+            )
             rec["code_eq_ir_certified"] = cascade.code_eq_ir_certified(
                 tree, precondition, rule=rule, workspace=workspace
             )
-            rec["synonymy"] = _judge(rule, tree, precondition, rec["code_semantics"], k)
+            if skip_synonymy:
+                rec["synonymy"] = {
+                    "verdict": None,
+                    "path": "skipped",
+                    "reason": "--skip-synonymy",
+                }
+            else:
+                rec["synonymy"] = _judge(rule, tree, precondition, rec["code_semantics"], k)
             if rec["synonymy"].get("verdict") == "EXPRESSES":
                 rendered = _render_synonymous_lint(rule, tree, precondition)
                 if rendered:
@@ -449,7 +557,7 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int, allow_ll
     return rec
 
 
-def iter_pending(domain, done, *, retry_errors, retry_generation_failures):
+def iter_pending(domain, done, *, retry_errors, retry_generation_failures, retry_dne):
     for idx, rule in enumerate(domain, 1):
         rid = int(rule["id"])
         prev = done.get(rid)
@@ -459,10 +567,14 @@ def iter_pending(domain, done, *, retry_errors, retry_generation_failures):
             yield idx, rule
         elif retry_generation_failures and not prev.get("generation_success"):
             yield idx, rule
+        elif (retry_dne
+              and prev.get("generation_success")
+              and prev.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"):
+            yield idx, rule
 
 
 # ---------------------------------------------------------------------------
-# --rejudge : reuse cached generation, re-run only the judge with profile_scope
+# --rejudge : reuse cached generation, re-run only the judge with rule context
 # ---------------------------------------------------------------------------
 def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
     ledger = run_dir / "codegen_synonymy.jsonl"
@@ -476,8 +588,8 @@ def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
         if not rec.get("generation_success") or rec.get("code_semantics") is None:
             continue
         ps = ps_by_id.get(rid)
-        # profile_scope only ADDS leniency -> it can only flip DNE->EXPRESSES.
-        # Skip rows that cannot change: EXPRESSES already, or no profile_scope.
+        # Rule context only supplies spec-owned section/profile context.
+        # Skip rows that cannot change: EXPRESSES already, or no context.
         cur = rec.get("synonymy", {}).get("verdict")
         if ps is None:
             continue
@@ -501,7 +613,7 @@ def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
               f"({res['n_expresses']}E/{res['n_dne']}D)", flush=True)
     rewrite_ledger(ledger, records)
     summary = summarize(domain, ledger, summary_path)
-    export_synonymous_from_ledger(run_dir)
+    export_synonymous_from_ledger(run_dir, domain)
     print(f"[rejudge] re-judged {n_rejudged} rows", flush=True)
     return summary
 
@@ -518,12 +630,22 @@ def main() -> int:
     ap.add_argument("--overwrite", action="store_true", help="discard existing run ledger")
     ap.add_argument("--retry-errors", action="store_true")
     ap.add_argument("--retry-generation-failures", action="store_true")
+    ap.add_argument("--retry-dne", action="store_true",
+                    help="retry rows whose cached synonymy verdict is DOES_NOT_EXPRESS")
+    ap.add_argument("--rule-id", type=int, action="append",
+                    help="only process this rule id this run; repeatable. Summary still uses the full domain.")
+    ap.add_argument("--force-rule-id", action="store_true",
+                    help="with --rule-id, reprocess those rules even if already complete")
     ap.add_argument("--no-llm-codegen", action="store_true", help="deterministic path only")
+    ap.add_argument("--skip-synonymy", action="store_true",
+                    help="do not call the LLM synonymy judge; report generation/oracle metrics only")
     ap.add_argument("--rejudge", action="store_true",
-                    help="reuse cached generation; re-run only the judge with profile_scope")
+                    help="reuse cached generation; re-run only the judge with rule context")
     ap.add_argument("--rejudge-all", action="store_true",
                     help="with --rejudge, re-judge every profile-scoped row (not just DNE)")
     ap.add_argument("--summary-only", action="store_true")
+    ap.add_argument("--compact-ledger", action="store_true",
+                    help="rewrite ledger to latest rows for the current domain and prune stale rendered lints")
     ap.add_argument("--zlint-v3", default=str(BACKEND / "zlint" / "v3"))
     args = ap.parse_args()
 
@@ -545,9 +667,14 @@ def main() -> int:
 
     domain = load_domain(standards, limit=args.limit)
 
+    if args.compact_ledger:
+        summary = compact_ledger(domain, run_dir)
+        print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
+        return 0
+
     if args.summary_only:
         summary = summarize(domain, ledger, summary_path)
-        export_synonymous_from_ledger(run_dir)
+        export_synonymous_from_ledger(run_dir, domain)
         print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
         return 0
 
@@ -557,8 +684,18 @@ def main() -> int:
         return 0
 
     done = load_done(ledger)
-    pending = list(iter_pending(domain, done, retry_errors=args.retry_errors,
-                                retry_generation_failures=args.retry_generation_failures))
+    if args.force_rule_id:
+        if not args.rule_id:
+            raise SystemExit("--force-rule-id requires at least one --rule-id")
+        wanted = {int(x) for x in args.rule_id}
+        pending = [(idx, rule) for idx, rule in enumerate(domain, 1) if int(rule["id"]) in wanted]
+    else:
+        pending = list(iter_pending(domain, done, retry_errors=args.retry_errors,
+                                    retry_generation_failures=args.retry_generation_failures,
+                                    retry_dne=args.retry_dne))
+        if args.rule_id:
+            wanted = {int(x) for x in args.rule_id}
+            pending = [(idx, rule) for idx, rule in pending if int(rule["id"]) in wanted]
     print(f"[domain] standards={','.join(standards)} rows={len(domain)} "
           f"complete={len(done)} pending={len(pending)} run={run_dir}", flush=True)
 
@@ -571,17 +708,18 @@ def main() -> int:
             print(f"[{idx}/{len(domain)}] R{rid} {rule['source']} {rule.get('section') or ''} "
                   f"ps={rule.get('profile_scope')!r}", flush=True)
             rec = process_rule(rule, rendered_root, workspace=workspace,
-                               k=args.k, allow_llm=not args.no_llm_codegen)
+                               k=args.k, allow_llm=not args.no_llm_codegen,
+                               skip_synonymy=args.skip_synonymy)
             append_jsonl(ledger, rec)
             summary = summarize(domain, ledger, summary_path)
-            export_synonymous_from_ledger(run_dir)
+            export_synonymous_from_ledger(run_dir, domain)
             sr = summary["synonymy_rate_over_generated"]
             print("[progress] completed={completed}/{domain_total} generated={generation_success} "
                   "expresses={synonymy_expresses} gen_rate={generation_rate:.3f} syn_rate={sr}".format(
                       **{**summary, "sr": f"{sr:.3f}" if sr is not None else "NA"}), flush=True)
 
     summary = summarize(domain, ledger, summary_path)
-    export_synonymous_from_ledger(run_dir)
+    export_synonymous_from_ledger(run_dir, domain)
     print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
     return 0 if summary["pending"] == 0 else 1
 

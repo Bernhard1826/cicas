@@ -5,7 +5,7 @@
   "sheet_yes": 17,
   "sheet_no": 233,
   "matched": 217,
-  "matching_recall": 0.868,
+  "matching_coverage": 0.868,
   "TP": 6,
   "FN": 6,
   "FP": 1,

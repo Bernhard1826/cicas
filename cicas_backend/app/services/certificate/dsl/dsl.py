@@ -295,6 +295,12 @@ class BytesContainsOidDer:
 
 
 @dataclass(frozen=True)
+class ExtensionURISchemeNotInSet:
+    """True iff no URI carried inside any extension uses a forbidden scheme."""
+    schemes: tuple
+
+
+@dataclass(frozen=True)
 class ExtensionURISchemeInSet:
     """True iff at least one extension's extnValue contains a URI matching one
     of the given schemes. Used for 'SHOULD NOT include https:// URIs in
@@ -338,6 +344,43 @@ class CertPolicyExplicitTextHasEncodingTagNotInSet:
     """True iff all explicitText in CertPolicy are encoded as types NOT in the given set."""
     excluded_types: tuple
 
+
+# =====================================================================
+# POLICY QUALIFIER ATOMS — CertificatePolicies extension
+# =====================================================================
+
+@dataclass(frozen=True)
+class CertPolicyHasQualifierOfType:
+    """True iff at least one PolicyInformation in CertificatePolicies extension
+    has a qualifier of the given type (CPSPointer=1 or UserNotice=2 per RFC 5280 §4.2.1.4).
+    GENERAL ATOM: parameterized by qualifier type integer, applies universally."""
+    qualifier_type: int  # 1=CPSPointer, 2=UserNotice
+
+
+@dataclass(frozen=True)
+class CertPolicyAnyQualifierOfType:
+    """True iff at least one policy identifier in CertificatePolicies extension
+    has a qualifier of the given type. Scans all PolicyInformation entries."""
+    qualifier_type: int  # 1=CPSPointer, 2=UserNotice
+
+
+@dataclass(frozen=True)
+class CertPolicyQualifierOidsInSet:
+    """True iff all policyQualifier OIDs in CertificatePolicies are in allowed_oids.
+    GENERAL ATOM: parameterized by OID tuple, sound for policy qualifier restrictions."""
+    allowed_oids: tuple  # tuple of OID strings
+
+
+@dataclass(frozen=True)
+class CertPolicyHasOnlyAllowedQualifiers:
+    """True iff each PolicyInformation in CertificatePolicies has only qualifiers
+    from the allowed set. Enforces that no disallowed qualifier types appear."""
+    allowed_qualifier_types: tuple  # tuple of int (1=CPSPointer, 2=UserNotice)
+
+
+# =====================================================================
+# LIST OPERATORS
+# =====================================================================
 
 @dataclass(frozen=True)
 class ListAllMatch:
@@ -487,6 +530,274 @@ class CrossFieldMatch:
     field_b: str
     op: str
     value: Union[int, None]
+
+
+# =====================================================================
+# NEW GENERIC ATOMS — for no_template gap closure
+# =====================================================================
+
+@dataclass(frozen=True)
+class PolicyHasQualifierOID:
+    """True iff the CertificatePolicies extension contains at least one PolicyInformation
+    entry whose policyQualifiers SEQUENCE contains a qualifier with the given OID.
+
+    Used for 'MUST contain only permitted policyQualifiers from the table' rules
+    (e.g., cPSurl / userNotice). Re-parses the raw DER to extract qualifier OIDs.
+    Generic: parameterized by OID constant name, applies to any CertPolicy extension."""
+    oid_const: str  # e.g. "CpsQualifierOID" (1.3.6.1.5.5.7.3.1 or custom)
+
+
+@dataclass(frozen=True)
+class PolicyQualifierCountInRange:
+    """True iff the number of policyQualifiers in at least one PolicyInformation
+    entry is within [lo, hi].
+
+    Used for 'MUST contain exactly N qualifiers' / 'MUST NOT have more than M'.
+    Re-parses raw DER of CertPolicy extension content."""
+    lo: int
+    hi: Union[int, str]  # "MAX_INT" for unbounded
+
+
+@dataclass(frozen=True)
+class PolicyQualifierOIDNotInSet:
+    """True iff no policyQualifier in any PolicyInformation entry has an OID
+    from the forbidden set.
+
+    Used for 'Any other qualifier MUST NOT be present' rules. Re-parses raw DER.
+    Generic: parameterized by forbidden OID set, applies universally to CertPolicy."""
+    forbidden_oids: tuple  # e.g. ("otherQualifierOID1", "otherQualifierOID2")
+
+
+@dataclass(frozen=True)
+class PolicyQualifierEncodedAsTag:
+    """True iff at least one policyQualifier's qualifier field is encoded as
+    one of the given ASN.1 tag types (e.g., ia5String for CPS pointer,
+    SEQUENCE for userNotice).
+
+    Used for 'MUST be formatted as follows' qualifier encoding rules.
+    Generic: parameterized by allowed ASN.1 type tags, universally applicable."""
+    types: tuple  # e.g. ("IA5String", "SEQUENCE")
+
+
+@dataclass(frozen=True)
+class PolicyQualifierOIDInSet:
+    """True iff each policyQualifier OID is in the allowed set.
+    When forbid_other=True, additionally asserts that no qualifier with an
+    OID outside the allowed set may appear — implements 'any other qualifier
+    MUST NOT be present'.
+
+    Used for 'policyQualifiers MUST only be CPS or UserNotice' and
+    'any other qualifier MUST NOT be present' rules. Re-parses raw DER.
+    Generic: parameterized by allowed OID tuple + forbid_other flag."""
+    allowed_oid_consts: tuple  # e.g. ("IdQtCps", "IdQtUnotice")
+    forbid_other: bool = False  # True → all non-listed OIDs must be absent
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageCountInRange:
+    """True iff the ExtKeyUsage extension contains between lo and hi entries inclusive.
+    Supports checking cardinality of EKU list (e.g., 'anyExtendedKeyUsage must be
+    the only EKU when present').
+    Generic: lo and hi are integers, handles any range check."""
+    lo: int
+    hi: object  # int OR "MAX_INT"
+
+
+@dataclass(frozen=True)
+class RDNHasSingleAttributeType:
+    """True iff each RelativeDistinguishedName in the RDN Sequence contains
+    exactly one AttributeTypeAndValue (i.e., no multi-AV RDN).
+
+    Used for 'Each RDN MUST contain exactly one AttributeTypeAndValue' rules.
+    Universal: single-certificate observable, no cross-certificate dependencies."""
+    pass
+
+
+@dataclass(frozen=True)
+class DNNoDuplicateAttributeTypes:
+    """True iff no AttributeType appears in more than one RDN across the
+    full Distinguished Name.
+
+    Used for 'Each Name MUST NOT contain more than one instance of a given
+    AttributeTypeAndValue across all RDNs' rules. General PKI concept."""
+    pass
+
+
+@dataclass(frozen=True)
+class ExtAccessLocationMatchesType:
+    """True iff each AccessDescription in the extension has accessLocation
+    encoded as the specified GeneralName CHOICE type.
+
+    Used for 'each accessLocation MUST be encoded as the specified GeneralName type'.
+    Parameterized by expected tag number (e.g., 6 for uniformResourceIdentifier).
+    Generic: applies to AIA, SIA, and any extension with AccessDescription SEQUENCE."""
+    tag: int  # GeneralName CHOICE tag: 0=otherName,1=rfc822Name,2=dNSName,3=x400Address,
+    # 4=directoryName,5=ediPartyName,6=uniformResourceIdentifier,7=iPAddress,8=registeredID
+
+
+@dataclass(frozen=True)
+class ExtAccessDescriptionOrdered:
+    """True iff AccessDescription entries in the extension are sorted by
+    accessMethod OID in ascending order.
+
+    Used for 'AccessDescription entries MUST be ordered by accessMethod priority'.
+    Generic: applies to AIA/SIA extensions with AccessDescription SEQUENCE."""
+    pass
+
+
+@dataclass(frozen=True)
+class OIDBytesMatchHex:
+    """True iff the OID constant's DER bytes equal the given hex string.
+
+    Used for 'AlgorithmIdentifier MUST be byte-for-byte identical with hex:...'
+    rules. Re-parses the OID to DER and compares. Generic: parameterized by
+    hex literal, universally applicable to any OID field."""
+    oid_const: str   # OID constant name (e.g., "OidEcdsaWithSHA256")
+    hex_bytes: str   # hex-encoded DER bytes (e.g., "300a06082a8648ce3d040302")
+
+
+@dataclass(frozen=True)
+class DNComponentOrderMatches:
+    """True iff the sequence of DN components (RDNs or AVA order) matches
+    the specified canonical order (e.g., country before locality, DNS reversed).
+
+    Used for 'Domain Labels MUST be encoded in reverse order to DNS protocol'.
+    Generic: parameterized by expected ordering rule, applies to Subject/Issuer DNs."""
+    order_type: str  # e.g., "dns_reverse", "rfc2253", "profile_section_7"
+
+
+@dataclass(frozen=True)
+class FieldMatchesNoForbiddenChars:
+    """True iff the string field contains none of the forbidden characters.
+
+    Used for 'MUST NOT contain colons, spaces, or line feeds' rules.
+    Generic: parameterized by forbidden character set, applies to any string field."""
+    field: str
+    forbidden_chars: tuple  # e.g. (":", " ", "\n")
+
+
+@dataclass(frozen=True)
+class ExtPolicyQualifierOIDInSet:
+    """True iff the Certificate Policies extension contains a policy qualifier
+    with one of the specified OIDs (CPS pointer or UserNotice).
+
+    Used for 'policy qualifiers MUST be either CPS or UserNotice' rules.
+    Generic: parameterized by allowed OID set, applies to CertPolicy extension."""
+    allowed_oid_consts: tuple  # e.g. ("CpsOID", "UserNoticeOID")
+
+
+@dataclass(frozen=True)
+class ExtPolicyQualifierOIDNotInSet:
+    """True iff the Certificate Policies extension does NOT contain any
+    policy qualifier with the specified OID.
+
+    Used for 'MUST NOT have CPS pointer' rules.
+    Generic: parameterized by forbidden OID, applies to CertPolicy extension."""
+    forbidden_oid_const: str  # e.g. "CpsOID"
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageHasBit:
+    """True iff the KeyUsage extension has the specified bit set.
+
+    Used for 'keyUsage MUST have digitalSignature set' rules.
+    Generic: parameterized by bit name, applies to KeyUsage extension."""
+    bit: str  # e.g. "DigitalSignature", "KeyCertSign", "CRLSign"
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageNotHasBit:
+    """True iff the KeyUsage extension does NOT have the specified bit set.
+
+    Used for 'keyUsage MUST NOT have keyCertSign for end-entity' rules.
+    Generic: parameterized by bit name, applies to KeyUsage extension."""
+    bit: str  # e.g. "KeyCertSign", "CRLSign"
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageAllBitsInSet:
+    """True iff the KeyUsage extension has EXACTLY the specified bits set.
+
+    Used for 'keyUsage MUST have only digitalSignature and keyEncipherment' rules.
+    Generic: parameterized by allowed bit set, applies to KeyUsage extension."""
+    bits: tuple  # e.g. ("DigitalSignature", "KeyEncipherment")
+
+
+@dataclass(frozen=True)
+class SerialNumberLengthInRange:
+    """True iff the serial number byte length is within [lo, hi].
+
+    Used for 'serialNumber MUST be at least 8 octets' rules.
+    Generic: parameterized by byte length range."""
+    lo: int
+    hi: int
+
+
+@dataclass(frozen=True)
+class ExtHasAllGeneralNameTags:
+    """True iff the extension (SAN / subjectAltName) contains ALL of the
+    specified GeneralName tag types.
+
+    Used for 'subjectAlternativeName MUST contain both dNSName and iPAddress' rules.
+    Generic: parameterized by required tag set, applies to subjectAltName extension."""
+    required_tags: tuple  # e.g. (7,) for IPAddress, (2,) for rfc822Name
+
+
+@dataclass(frozen=True)
+class ExtHasAnyGeneralNameTags:
+    """True iff the extension (SAN / subjectAltName) contains AT LEAST ONE
+    of the specified GeneralName tag types.
+
+    Used for 'subjectAlternativeName MUST contain either dNSName or iPAddress' rules.
+    Generic: parameterized by allowed tag set, applies to subjectAltName extension."""
+    allowed_tags: tuple  # e.g. (2, 7) for email or IP
+
+
+@dataclass(frozen=True)
+class SubjectCommonNameMatchesSAN:
+    """True iff the Subject CommonName matches at least one SAN entry.
+
+    Used for 'commonName MUST match a subjectAlternativeName entry' rules.
+    Generic: no parameters, compares CN against existing SAN entries."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class IssuerOrgMatchesSAN:
+    """True iff the Issuer Organization (O) matches the domain of a SAN entry.
+
+    Used for 'issuer organization MUST match the domain in SAN' rules.
+    Generic: no parameters, checks SAN domains against issuer O field."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class ExtAIAHasOCSPNoHTTP:
+    """True iff the Authority Information Access extension has an OCSP
+    responder URL that does NOT use HTTP scheme.
+
+    Used for 'OCSP responder MUST NOT use HTTP' rules.
+    Generic: no parameters, checks AIA OCSP URLs for scheme."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class ExtHasDuplicateGeneralNames:
+    """True iff the extension (SAN) contains duplicate GeneralName values.
+
+    Used for 'subjectAlternativeName MUST NOT contain duplicate DNS names' rules.
+    Generic: no parameters, checks for duplicates within the SAN extension."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class ExtNotPresentOrHasProperty:
+    """True iff the extension is absent, OR present AND satisfies the property.
+
+    Used for 'if the extension is present, it MUST have property X' rules.
+    Generic: parameterized by the property check."""
+    oid: str  # e.g. "AiaOID"
+    property: object  # nested atom to check if extension is present
 
 
 # =====================================================================

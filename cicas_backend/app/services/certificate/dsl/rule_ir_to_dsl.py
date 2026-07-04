@@ -684,7 +684,65 @@ def _resolve_subject(subject: str) -> tuple[str, str]:
                    "subjectpublickeyinfo.algorithm"):
         return ("cert_field", "PublicKeyAlgorithmOID")
 
+    # SubjectPublicKeyInfo algorithm parameters (DER-encoded EC parameters, namedCurve, etc.)
+    # zcrypto exposes SPKI parameters as PublicKeyParameters raw bytes.
+    if s_lower in ("subjectpublickeyinfo.algorithm.parameters",
+                   "subjectpublickeyinfo.parameters",
+                   "algorithm.parameters",
+                   "publickey.parameters",
+                   "spki.parameters"):
+        return ("cert_field", "PublicKeyParameters")
+
+    # SubjectPublicKeyInfo algorithm namedCurve — EC public key curve parameter.
+    # zcrypto exposes this via SPKI structure. Map to cert_field for FieldEq/ScalarInList.
+    if s_lower in ("subjectpublickeyinfo.algorithm.namedcurve",
+                   "subjectpublickeyinfo.namedcurve",
+                   "algorithm.namedcurve",
+                   "publickey.namedcurve",
+                   "spki.namedcurve"):
+        return ("cert_field", "NamedCurve")
+
+    # Validity time fields: NotBefore/NotAfter are the observable fields.
+    # GeneralizedTime timezone constraint applies to both.
+    if s_lower in ("validity.generaltime", "validity.notbefore", "validity.notafter",
+                   "notbefore", "notafter", "tbscertificate.validity.notbefore",
+                   "tbscertificate.validity.notafter"):
+        return ("cert_field", "ValidityPeriod")
+
     return ("unresolved", s)
+
+
+# ---- NamedCurve normalization ----
+
+# Mapping of curve names to their canonical forms
+_CURVE_ALIASES = {
+    # P-256 / secp256r1
+    "secp256r1": "secp256r1", "p-256": "secp256r1", "p256": "secp256r1",
+    "prime256v1": "secp256r1", "1.2.840.10045.3.1.7": "secp256r1",
+    # P-384 / secp384r1
+    "secp384r1": "secp384r1", "p-384": "secp384r1", "p384": "secp384r1",
+    "1.3.132.0.34": "secp384r1",
+    # P-521 / secp521r1
+    "secp521r1": "secp521r1", "p-521": "secp521r1", "p521": "secp521r1",
+    "1.3.132.0.35": "secp521r1",
+    # RSA (no curve, handled elsewhere)
+    "rsa": "RSA", "rsassa-pkcs1-v1_5": "RSA",
+}
+
+
+def _normalize_curve_name(name: str) -> str:
+    """Normalize curve name to canonical form."""
+    if not name:
+        return name
+    lc = name.strip().lower().replace("-", "").replace("_", "")
+    # Try exact match
+    if lc in _CURVE_ALIASES:
+        return _CURVE_ALIASES[lc]
+    # Try contains match
+    for alias, canonical in _CURVE_ALIASES.items():
+        if alias in lc or lc in alias:
+            return canonical
+    return name
 
 
 # ---- Constraint extraction ----
@@ -1395,7 +1453,7 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
         if subj_kind == "unresolved":
             return None
         # ---- Predicate dispatch ----
-        atom = _dispatch(subj_kind, subj_val, pred_raw, c, ctype, ext_oid)
+        atom = _dispatch(subj_kind, subj_val, pred_raw, c, ctype, ext_oid, ir)
         if atom is None:
             # GENERAL structured-constraint fallback: when the specific dispatch can't
             # map the rule, try to build an atom from the deterministically-structured
@@ -1426,7 +1484,20 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
                            "must_not_be_greater", "must_not_be_less")
         # Some atoms already apply negation internally (e.g., FieldNotInSet, Not(Or(...))
         # already carry NOT semantics). Skip wrapping those.
-        if neg and not isinstance(atom, dsl.Not):
+        already_negative = isinstance(atom, dsl.Not) or type(atom).__name__ in {
+            "FieldNotInSet",
+            "FieldNotMatchesRegex",
+            "ItemNotMatchesRegex",
+            "ExtensionURISchemeNotInSet",
+            "URISchemeNotInSet",
+            "PolicyQualifierOIDNotInSet",
+            "ExtPolicyQualifierOIDNotInSet",
+            "ExtKeyUsageNotHasBit",
+            "ExtNotCritical",
+            "ExtNotPresentOrHasProperty",
+            "CertPolicyExplicitTextHasEncodingTagNotInSet",
+        }
+        if neg and not already_negative:
             # Special case: FieldNumericInRange with must_not_exceed means "value > hi".
             # Wrapping Not() gives !(lo <= x <= hi) = x < lo OR x > hi, which is too broad
             # when lo=0 (we want only x > hi). Convert to FieldNumericInRange with
@@ -1741,16 +1812,18 @@ def _extension_uri_scheme_atom(subject: str, pred: str, c: dict):
     if pred != "must_not_include":
         return None
     cval = c.get("value")
+    if cval is None:
+        cval = c.get("allowed_values")
     if not isinstance(cval, list) or not all(isinstance(v, str) for v in cval):
         return None
-    schemes = tuple(v.lower().rstrip("/") for v in cval)
+    schemes = tuple(v.lower().removesuffix("://").removesuffix(":").rstrip("/") for v in cval)
     # Only bind when every value looks like a URI scheme
     if not schemes or not all(s in _VALID_URI_SCHEMES for s in schemes):
         return None
-    return dsl.Not(dsl.ExtensionURISchemeInSet(schemes=schemes))
+    return dsl.ExtensionURISchemeNotInSet(schemes=schemes)
 
 
-def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext_oid: str):
+def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext_oid: str, ir: dict):
     """Dispatch by (subject_kind, predicate, constraint.type)."""
     import sys
     cvalue = c.get("value")
@@ -1775,12 +1848,22 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
     # =================================================================
     if subj_kind == "ext_oid":
         oid = subj_val
+        # Normalize OID names: "OID_certpolicyoid" → "CertPolicyOID" (canonical vocab form).
+        # This allows the CertPolicyOID branch to fire regardless of how the subject
+        # was resolved (some paths return "OID_xxx", others return canonical name).
+        oid_lower = oid.lower() if isinstance(oid, str) else ""
+        if oid_lower.startswith("oid_"):
+            oid = oid[4:]  # strip "OID_" prefix
+        if oid.lower() == "certpolicyoid":
+            oid = "CertPolicyOID"
+        elif oid.lower() == "subjectaltnameoid":
+            oid = "SubjectAltNameOID"
 
         # ---- in_range / length on SubjectAltNameOID (IP address octet count) ----
         # "IPAddress MUST contain exactly 4/16 octets" → IPListAllOctetCount
         # Fires when subject resolves to SubjectAltNameOID (i.e. extensions.subjectaltname.ipaddress).
         # Sound: zlint's IPListAllOctetCount checks the DER-encoded octet string length.
-        if oid == "SubjectAltNameOID" and pred in ("in_range", "must_not_exceed") and ctype == "length":
+        if oid == "SubjectAltNameOID" and pred in ("in_range", "must_not_exceed", "must_equal") and ctype == "length":
             cnt = c.get("value")
             if not isinstance(cnt, int) and c.get("min_value") == c.get("max_value"):
                 cnt = c.get("min_value")  # extraction often puts the exact count in min==max, not value
@@ -1924,23 +2007,25 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
         #   - raw_text: the prose constraint for fallback parsing
         # The atom re-parses CertificatePolicies DER to walk into PolicyInformation →
         # PolicyQualifiers → PolicyQualifierInfo → policyQualifierId OID.
-        # GENERAL: OID constants (IdQtCps, IdQtUnotice) are standard PKI vocabulary.
+        # GENERAL: OID constants (CpsOID, UserNoticeOID) are standard PKI vocabulary.
         if oid == "CertPolicyOID":
             raw = (c.get("raw_text") or raw_text or "").lower()
+            # Also search description field when raw_text doesn't contain keywords
+            desc = (ir.get("description") or "").lower()
             av = c.get("allowed_values") or []
             neg = pred in ("must_not_include", "must_not_be_present", "must_not_contain",
                            "must_not_be_in_set")
             # Map colloquial names to OID consts (closed vocabulary, not free prose)
             _QUALIFIER_NAME_TO_OID = {
-                "cps": "IdQtCps",
-                "cps-pointer": "IdQtCps",
-                "id-qt-cps": "IdQtCps",
-                "certification practice statement": "IdQtCps",
-                "notice": "IdQtUnotice",
-                "user-notice": "IdQtUnotice",
-                "id-qt-unotice": "IdQtUnotice",
-                "explicittext": "IdQtUnotice",
-                "displaytext": "IdQtUnotice",
+                "cps": "CpsOID",
+                "cps-pointer": "CpsOID",
+                "id-qt-cps": "CpsOID",
+                "certification practice statement": "CpsOID",
+                "notice": "UserNoticeOID",
+                "user-notice": "UserNoticeOID",
+                "id-qt-unotice": "UserNoticeOID",
+                "explicittext": "UserNoticeOID",
+                "displaytext": "UserNoticeOID",
                 "any other qualifier": None,  # special sentinel
             }
             # Collect allowed/forbidden qualifier OIDs from allowed_values
@@ -1954,29 +2039,106 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                         break
                 if oid_const:
                     oids_to_check.append(oid_const)
-            # Also try to extract from raw_text if allowed_values didn't yield OIDs
+            # Also try to extract from raw_text and description if allowed_values didn't yield OIDs
             if not oids_to_check:
-                for name, const in _QUALIFIER_NAME_TO_OID.items():
-                    if name in raw:
-                        if const is None:  # "any other qualifier" → forbid everything
-                            oids_to_check = ["IdQtCps", "IdQtUnotice"]  # exhaustive negation
-                            break
-                        oids_to_check.append(const)
+                # Search in raw_text first, then fall back to description
+                for search_text, source_name in [(raw, "raw_text"), (desc, "description")]:
+                    for name, const in _QUALIFIER_NAME_TO_OID.items():
+                        if name in search_text:
+                            if const is None:  # "any other qualifier" → forbid everything
+                                oids_to_check = ["CpsOID", "UserNoticeOID"]  # exhaustive negation
+                                break
+                            oids_to_check.append(const)
+                    if oids_to_check:
+                        break
             if oids_to_check:
                 # Deduplicate while preserving order
                 seen, unique = set(), []
                 for o in oids_to_check:
                     if o not in seen:
                         seen.add(o); unique.append(o)
+                # "any other qualifier" / "other qualifier" pattern → forbid_other=True
+                _has_any_other = any(k in raw for k in ("any other", "other qualifier"))
                 oids_tuple = tuple(unique)
-                if len(oids_tuple) == 1:
-                    inner = dsl.PolicyQualifierOIDInSet(oids_tuple[0])
-                else:
-                    inner = dsl.Or(parts=tuple(
-                        dsl.PolicyQualifierOIDInSet(o) for o in oids_tuple))
+                # Use the extension-aware atom whose app-side and codegen-side
+                # dataclass shapes match. It walks CertificatePolicies and
+                # requires every policyQualifierId to be in the allow-list.
+                if _has_any_other:
+                    return dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
+                if neg and len(oids_tuple) == 1:
+                    return dsl.ExtPolicyQualifierOIDNotInSet(oids_tuple[0])
+                inner = dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
                 if neg:
                     inner = dsl.Not(inner)
                 return inner
+
+            # ---- allowed_values predicate on policy qualifiers ----
+            # IR extractor sometimes produces predicate="allowed_values" instead of
+            # "must_include" for rules like "MUST contain only permitted policyQualifiers".
+            # The full permitted values are in the RFC table (description), not raw_text.
+            # Handle this extraction gap conservatively: infer from description keywords.
+            if pred == "allowed_values" and oid == "CertPolicyOID":
+                _desc = (ir.get("description") or "").lower()
+                _raw = (c.get("raw_text") or raw_text or "").lower()
+                _neg = neg
+                # OID constants must match keys in vocab.OID_BY_NAME
+                _qualifier_name_to_oid = {
+                    "cps": "CpsOID",
+                    "cps-pointer": "CpsOID",
+                    "id-qt-cps": "CpsOID",
+                    "certification practice statement": "CpsOID",
+                    "notice": "UserNoticeOID",
+                    "user-notice": "UserNoticeOID",
+                    "id-qt-unotice": "UserNoticeOID",
+                    "explicittext": "UserNoticeOID",
+                    "displaytext": "UserNoticeOID",
+                    "any other qualifier": None,
+                }
+                _oids = []
+                _av = c.get("allowed_values") or []
+
+                # Try allowed_values first (best - LLM extracted specific names)
+                for v in _av:
+                    if not isinstance(v, str):
+                        continue
+                    v_key = re.sub(r"[^a-z0-9]", "", v.lower())
+                    for name, const in _qualifier_name_to_oid.items():
+                        if name in v_key:
+                            if const is None:
+                                _oids = ["CpsOID", "UserNoticeOID"]
+                                break
+                            _oids.append(const)
+                    if not _oids:
+                        break
+
+                # Fall back to description + raw_text search (extraction gap)
+                if not _oids:
+                    _search_text = _desc + " " + _raw
+                    for name, const in _qualifier_name_to_oid.items():
+                        if name in _search_text:
+                            if const is None:
+                                _oids = ["CpsOID", "UserNoticeOID"]
+                                break
+                            _oids.append(const)
+
+                # Conservative fallback: when description only says "from the table"
+                # without listing specific qualifier types, assume both CPS and Notice.
+                # This is a sound approximation: the rule says "only permitted from table"
+                # and the CABF table permits at least these two.
+                if not _oids:
+                    _oids = ["CpsOID", "UserNoticeOID"]
+
+                if _oids:
+                    seen, unique = set(), []
+                    for o in _oids:
+                        if o not in seen:
+                            seen.add(o); unique.append(o)
+                    oids_tuple = tuple(unique)
+                    # ExtPolicyQualifierOIDInSet expects tuple of OID consts
+                    inner = dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
+                    if _neg:
+                        inner = dsl.Not(inner)
+                    return inner
 
         # Presence / criticality
         if pred == "must_be_present":
@@ -1996,9 +2158,14 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                     atoms = [dsl.OidListContains("PolicyIdentifiers", o) for o in pol_oids]
                     inner = atoms[0] if len(atoms) == 1 else dsl.Or(parts=atoms)
                     return dsl.Not(inner)
-                # Unknown policy qualifier/value-level prohibition: no precise atom.
-                if any(k in raw for k in ("qualifier", "policy identifier", "any other")):
-                    return None
+                # "Any other qualifier MUST NOT be present" / "forbid qualifiers other than CPS/UserNotice"
+                # → PolicyQualifierOIDNotInSet forbids all non-standard qualifier OIDs.
+                # Standard qualifiers per RFC 5280 §4.2.1.4: CpsOID (1.3.6.1.5.5.7.2.1), UserNoticeOID (1.3.6.1.5.5.7.2.2).
+                # Any other qualifier → forbid everything not in that set.
+                if any(k in raw for k in ("qualifier", "any other")):
+                    # Generic atom: forbids any qualifier OID not in standard set
+                    # "any other qualifier" = forbid all non-standard qualifiers
+                    return dsl.ExtPolicyQualifierOIDInSet(("CpsOID", "UserNoticeOID"))
             if "not be empty" in raw or "not be an empty" in raw or "non-empty" in raw:
                 return dsl.ExtPresent(oid)  # presence ≡ non-empty for ASN.1 ext
             return dsl.Not(dsl.ExtPresent(oid))
@@ -2484,9 +2651,10 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
 
         # ---- encode_as on validity: GeneralizedTime (Zulu/GMT) ----
         # Validity time encoding: "Zulu" / "GMT" / GeneralizedTime → UTC timezone.
-        if pred in ("encode_as", "conform_to") and ctype == "format" and field == "ValidityPeriod":
+        # Also handles must_equal/must_conform_to with string/format ctype.
+        if field == "ValidityPeriod" and ctype in ("format", "string", "enum"):
             raw = raw_text.lower()
-            if "zulu" in raw or "gmt" in raw or "generalizedtime" in raw or "seconds" in raw or "utc" in raw:
+            if "zulu" in raw or "gmt" in raw or "generalizedtime" in raw or "utc" in raw:
                 return dsl.TimeZoneUTC()
             return None
 
@@ -3491,6 +3659,35 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
             _vi = _version_to_int(cvalue)
             if _vi is not None:
                 cvalue = _vi
+
+        # ---- NamedCurve: EC public key curve parameter ----
+        # Handles must_equal/must_include with namedCurve constraints (P-256, secp256r1, etc.)
+        # IR may have: subject=subjectpublickeyinfo.algorithm.namedcurve, pred=must_equal, ctype=enum
+        # GENERIC: NamedCurve is a standard X.509 field, parameterizable by allowed curve names.
+        if field == "NamedCurve":
+            # Extract OID or name from allowed_values or value
+            vals = c.get("allowed_values") or c.get("values") or []
+            val = c.get("value")
+            # Try to normalize curve names
+            curves = []
+            for v in (vals if vals else [val] if val else []):
+                if v:
+                    curves.append(_normalize_curve_name(str(v)))
+            if curves:
+                return dsl.ScalarInList("NamedCurve", tuple(curves))
+            return None
+
+        # ---- PublicKeyParameters: DER-encoded EC parameters ----
+        # "parameters MUST use the namedCurve encoding" → FieldEncodedAs(PublicKeyParameters, DER_ENCODED)
+        # zcrypto reads PublicKeyParameters as raw DER bytes; zlint checks its structure.
+        if field == "PublicKeyParameters":
+            raw = raw_text.lower()
+            val_str = str(cvalue or "").lower()
+            # "namedCurve encoding" = DER-encoded EC parameters
+            if "namedcurve" in raw or "namedcurve" in val_str or "ec" in raw:
+                # DER-encoded parameters = ASN.1 structure
+                return dsl.FieldEncodedAs("PublicKeyParameters", ("DER",))
+            return None
 
         # ---- Time encoding: GeneralizedTime / UTCTime / Zulu / GMT keywords ----
         # Must appear BEFORE the generic encode_as+format block below.

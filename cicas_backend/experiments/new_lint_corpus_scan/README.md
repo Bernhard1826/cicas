@@ -1,9 +1,13 @@
 # Experiment: CICAS new-lint corpus scan
 
-Exploratory scans over external certificate corpora such as CT-log samples or
-Tranco-derived TLS certificates. This directory is intentionally separate from
-`experiments/cert_detection/`, which remains the paper's SAIV gate over zlint
+Exploratory, report-only scans over external certificate corpora such as CT-log
+samples or Tranco-derived TLS certificates. This directory is intentionally
+separate from `experiments/cert_detection/`, which is the SAIV gate over zlint
 testdata.
+
+These outputs are **not** paper figures of record. Use them for follow-up
+inspection only, and rerun after rebuilding zlint from the current
+`codegen_metrics/outputs/full_current_db/synonymous_lints_manifest.json`.
 
 The report answers: which findings came from CICAS-added zlint lints
 (`cicasgen_`), and which came from upstream zlint?
@@ -11,7 +15,7 @@ The report answers: which findings came from CICAS-added zlint lints
 ## Run
 
 ```
-python3 experiments/cert_detection/run.py --certs /path/to/flat-pem-corpus
+python3 cicas_backend/experiments/cert_detection/run.py --certs /path/to/flat-pem-corpus
 ```
 
 Default output:
@@ -32,6 +36,14 @@ Key files:
 Input corpus convention: a flat directory of `*.pem` certificates. For CT or
 Tranco collection, keep acquisition metadata outside this directory or in a
 parallel manifest so the scanner sees only PEM files.
+
+Retained input/output pairs are current inspection artifacts only:
+
+- `inputs/ct_recent/` -> `outputs/ct_recent/`
+- `inputs/tranco_1m/` -> `outputs/tranco_1m/`
+
+Probe, smoke, generic overwritten `outputs/certs/`, and older corpus runs are
+intentionally not kept.
 
 ## Collection notes
 

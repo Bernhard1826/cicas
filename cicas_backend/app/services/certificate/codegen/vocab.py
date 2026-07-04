@@ -241,6 +241,11 @@ EKU_BITS: list[FieldDef] = [
         ("TimeStamping",       "TimeStamping"),
         ("OcspSigning",        "OcspSigning"),
     ]
+] + [
+    # CABF BR §7.1.2.7 Technically Constrained CA EKU requirements
+    # These are RFC 5280 Extended Key Usage OIDs not in stdlib x509.ExtKeyUsage.
+    # Renderer emits util.<Name> references (verified against zlint util whitelist).
+    FieldDef("TechnicallyConstrainedCA", "util.TechnicallyConstrainedCAEKU", "asn1.ObjectIdentifier", "eku_oid"),
 ]
 
 # ---------------------------------------------------------------------
@@ -449,20 +454,24 @@ _EXTRA_OIDS = [
     # Override the util.* references from the whitelist with actual inline OID literals.
     ("CpsOID",                        "asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 2, 1}"),  # CPS
     ("UserNoticeOID",                 "asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 2, 2}"),  # UserNotice
+    # Additional policy qualifier OIDs for generic policy checks
+    ("OidIdQtCps",                    "asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 2, 1}"),  # CPS (alias)
+    ("OidIdQtUnotice",                "asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 2, 2}"),  # UserNotice (alias)
+    # PolicyConstraints extension OIDs (RFC 5280 §4.2.1.11) — needed by
+    # PolicyConstraints atoms that check InhibitAnyPolicy / RequireExplicitPolicy.
+    ("InhibitAnyPolicyOID",           "asn1.ObjectIdentifier{2, 5, 29, 54}"),  # 2.5.29.54
+    ("PolicyConstOID",                "asn1.ObjectIdentifier{2, 5, 29, 36}"),  # 2.5.29.36 (alias)
 ]
-
-OID_CONSTS.extend(
-    FieldDef(name, expr, "asn1.ObjectIdentifier", "oid")
-    for name, expr in _EXTRA_OIDS
-)
 
 # Override existing CpsOID/UserNoticeOID entries that came from the whitelist
 # (they have util.* references; we need inline OID literals for rendering)
-_extra_names = {name for name, _ in _EXTRA_OIDS}
-OID_CONSTS = [f for f in OID_CONSTS if f.name not in _extra_names]
+_override_extra_oids = {"CpsOID", "UserNoticeOID"}
+OID_CONSTS = [f for f in OID_CONSTS if f.name not in _override_extra_oids]
+_existing_oid_names = {f.name for f in OID_CONSTS}
 OID_CONSTS.extend(
     FieldDef(name, expr, "asn1.ObjectIdentifier", "oid")
     for name, expr in _EXTRA_OIDS
+    if name in _override_extra_oids or name not in _existing_oid_names
 )
 
 # Non-OID util constants (LLM-facing for INT/STRING substitution where applicable)
@@ -519,6 +528,8 @@ _APP_OID_ALIASES = {
     # CRL extension OIDs (app-side names used by ir_to_dsl on CRL-document rules)
     "IssuingDistributionPoint": "IssuingDistOID",       # 2.5.29.28
     "DeltaCRLIndicator":        "DeltaCRLIndicatorOID", # 2.5.29.27
+    # PolicyConstraints sub-fields
+    "InhibitAnyPolicyOID":  "InhibitAnyPolicyOID",      # 2.5.29.54
 }
 for _app_oid, _util_oid in _APP_OID_ALIASES.items():
     if _util_oid in OID_BY_NAME and _app_oid not in OID_BY_NAME:

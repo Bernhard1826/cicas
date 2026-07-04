@@ -6,19 +6,20 @@ versions (1.4.8 and 2.0.2)?
 
 **Result (figures of record).**
 
-| version | sheet rows (Yes/No) | backend | recall | TP/FN/FP/TN | agree | κ | P | F1 |
-|---|---:|---:|---:|:--:|---:|---:|---:|---:|
-| BR 1.4.8 | 122 (75/47) | 422 | 86.9% | 60/9/0/37 | 91.5% | **0.823** | 1.000 | 0.930 |
-| BR 2.0.2 | 250 (17/233) | 1024 | 86.8% | 6/6/1/204 | 96.8% | **0.616** | 0.857 | 0.632 |
+| version | sheet rows (Yes/No) | backend | match coverage | Yes recall | TP/FN/FP/TN | agree | κ | Yes P | F1 |
+|---|---:|---:|---:|---:|:--:|---:|---:|---:|---:|
+| BR 1.4.8 | 122 (75/47) | 422 | 86.9% | 87.0% | 60/9/0/37 | 91.5% | **0.823** | 1.000 | 0.930 |
+| BR 2.0.2 | 250 (17/233) | 1024 | 86.8% | 50.0% | 6/6/1/204 | 96.8% | **0.616** | 0.857 | 0.632 |
 
-The two versions match on recall (~87%) but differ in κ: BR 2.0.2's sheet is heavily
-No-skewed (6.8% Yes), so its high raw agreement is inflated by class imbalance and κ gives
-the more honest read.
+The two versions have nearly identical match coverage (~87%), but their Yes-class recall
+differs sharply. BR 2.0.2's sheet is heavily No-skewed (6.8% Yes), so its high raw
+agreement is inflated by class imbalance and κ gives the more honest read.
 
 ## Method
 Per sheet row, the maintainer marks lint-scope (Yes/No); CICAS marks whether its
-same-clause backend rule is lint-able. The confusion matrix + Cohen's κ are computed over
-the **matched** rows (sheet clause routed to a backend rule in the same BR section). The
+same-clause backend rule is lint-able. Match coverage is `matched / sheet rows`. The
+confusion matrix, Cohen's κ, Yes precision, Yes recall, and F1 are computed over the
+**matched** rows (sheet clause routed to a backend rule in the same BR section). The
 matched-only view is the figure of record.
 
 ## Reproducibility note
@@ -45,6 +46,7 @@ deterministically from that ledger, so the result reproduces without the externa
 
 ## Run
 ```bash
-python experiments/external_validation/run.py
+python3 cicas_backend/experiments/external_validation/run.py
 ```
-`run.py` asserts the recorded κ values (0.823 / 0.616) so any drift is caught.
+`run.py` asserts the recorded κ values (0.823 / 0.616) and Yes recall values
+(87.0% / 50.0%) so any drift is caught.

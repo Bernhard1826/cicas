@@ -31,13 +31,14 @@ def main():
     if not args.emit and not args.build and not args.manifest_only:
         ap.error("need at least one of --emit, --build, --manifest-only")
 
+    zlint_entries = []
+
     # --- manifest ---
     if args.emit or args.manifest_only:
         if not MANIFEST_SRC.exists():
             sys.exit(f"[error] manifest not found: {MANIFEST_SRC}")
         manifest = json.loads(MANIFEST_SRC.read_text())
         # Transform into the format cert_detection expects
-        zlint_entries = []
         for item in manifest:
             output_path = item.get("output_path", "")
             if not output_path:
@@ -72,6 +73,16 @@ def main():
         if not src_dir.exists():
             sys.exit(f"[error] lint source dir not found: {src_dir}")
 
+        removed = 0
+        for old in (ZLINT / "lints").glob("*/lint_cicasgen_*.go"):
+            old.unlink()
+            removed += 1
+        print(f"[inject] removed {removed} stale cicasgen lint files")
+
+        allowed = {
+            (entry["pkg"], Path(entry["file"]).name)
+            for entry in zlint_entries
+        }
         injected = 0
         for pkg_dir in src_dir.iterdir():
             if not pkg_dir.is_dir():
@@ -81,6 +92,8 @@ def main():
             dest_dir.mkdir(parents=True, exist_ok=True)
             for f in pkg_dir.iterdir():
                 if not f.is_file() or not f.name.endswith(".go"):
+                    continue
+                if (pkg, f.name) not in allowed:
                     continue
                 # Copy (don't overwrite existing zlint-authored files)
                 dst = dest_dir / f.name
@@ -104,6 +117,18 @@ def main():
             print(f"[build] FAILED (exit {result.returncode}):")
             print(result.stderr[-2000:])
             sys.exit(1)
+        result = subprocess.run(
+            ["go", "build", "-o", "zlint", "./cmd/zlint"],
+            cwd=ZLINT,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        if result.returncode != 0:
+            print(f"[build] binary FAILED (exit {result.returncode}):")
+            print(result.stderr[-2000:])
+            sys.exit(1)
+        (ZLINT / "zlint").chmod(0o755)
         print("[build] OK")
 
 

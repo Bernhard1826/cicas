@@ -1,20 +1,22 @@
 {
-  "total": 4959,
-  "REAL": 4514,
-  "SPURIOUS": 347,
-  "UNCERTAIN": 98,
+  "total": 7508,
+  "REAL": 6891,
+  "SPURIOUS": 539,
+  "UNCERTAIN": 78,
   "total_certs": 1128,
-  "n_shipped_lints": 78,
+  "n_shipped_lints": 89,
   "uncertain_verified": {
-    "REMAINS_UNCERTAIN": 32,
-    "CONFIRMED_REAL": 66
+    "CONFIRMED_REAL": 66,
+    "REMAINS_UNCERTAIN": 12
   },
   "independent_audit": {
-    "NOCHECK": 4448,
-    "CONFIRMED": 507,
-    "REFUTED": 4
+    "NOCHECK": 5419,
+    "CONFIRMED": 2037,
+    "REFUTED": 52
   },
-  "independent_conflicts": 4,
-  "genuine": 4580,
-  "false_positives": 347
+  "independent_conflicts": 52,
+  "independent_unverified": 5419,
+  "strict_reportable_findings": 22,
+  "genuine": 6957,
+  "false_positives": 539
 }

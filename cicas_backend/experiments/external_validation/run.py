@@ -28,11 +28,11 @@ Outputs (outputs/):
   table3.md                                       TABLE III rendered
 
 Run:
-  python experiments/external_validation/run.py
+  python3 cicas_backend/experiments/external_validation/run.py
 
 Expected (current paper snapshot):
-  BR 1.4.8: recall 86.9%  TP/FN/FP/TN 60/9/0/37   κ 0.823  P 1.000  F1 0.930
-  BR 2.0.2: recall 86.8%  TP/FN/FP/TN  6/6/1/204  κ 0.616  P 0.857  F1 0.632
+  BR 1.4.8: match 86.9%  Yes recall 87.0%  TP/FN/FP/TN 60/9/0/37   κ 0.823  P 1.000  F1 0.930
+  BR 2.0.2: match 86.8%  Yes recall 50.0%  TP/FN/FP/TN  6/6/1/204  κ 0.616  P 0.857  F1 0.632
 """
 import json
 from collections import Counter
@@ -67,12 +67,13 @@ def evaluate(judgments, label):
     rec = tp / (tp + fn) if (tp + fn) else None
     f1 = (2 * prec * rec / (prec + rec)) if (prec and rec) else None
 
+    matching_coverage = round(len(matched) / total, 4) if total else 0.0
     return {
         "version": label,
         "backend_size": BACKEND_SIZE.get(label),
         "sheet_rows": total, "sheet_yes": yes, "sheet_no": no,
         "matched": len(matched),
-        "matching_recall": round(len(matched) / total, 4) if total else 0.0,
+        "matching_coverage": matching_coverage,
         "TP": tp, "FN": fn, "FP": fp, "TN": tn,
         "agreement": round(po, 4), "kappa": round(kappa, 4),
         "yes_precision": round(prec, 4) if prec is not None else None,
@@ -83,12 +84,13 @@ def evaluate(judgments, label):
 
 def render_table3(rows):
     L = ["# TABLE III — BR 1.4.8 / BR 2.0.2 external validation\n",
-         "| 版本 | Sheet 行数 (Yes/No) | 后端规则数 | 召回率 | TP/FN/FP/TN | 一致率 | Cohen's κ | 精确率 | F1 |",
-         "|---|---:|---:|---:|:--:|---:|---:|---:|---:|"]
+         "| 版本 | Sheet 行数 (Yes/No) | 后端规则数 | 匹配覆盖率 | Yes 召回率 | TP/FN/FP/TN | 一致率 | Cohen's κ | Yes 精确率 | F1 |",
+         "|---|---:|---:|---:|---:|:--:|---:|---:|---:|---:|"]
     for r in rows:
         L.append(
             f"| **{r['version']}** | {r['sheet_rows']} ({r['sheet_yes']}/{r['sheet_no']}) | "
-            f"{r['backend_size']} | **{r['matching_recall']*100:.1f}%** | "
+            f"{r['backend_size']} | **{r['matching_coverage']*100:.1f}%** | "
+            f"{r['yes_recall']*100:.1f}% | "
             f"{r['TP']}/{r['FN']}/{r['FP']}/{r['TN']} | {r['agreement']*100:.1f}% | "
             f"**{r['kappa']:.3f}** | {r['yes_precision']:.3f} | {r['yes_f1']:.3f} |")
     return "\n".join(L) + "\n"
@@ -104,7 +106,8 @@ def main():
         r = evaluate(load(name), label)
         (OUTPUTS / fname).write_text(json.dumps(r, indent=2, ensure_ascii=False))
         rows.append(r)
-        print(f"{label}: recall {r['matching_recall']*100:.1f}%  "
+        print(f"{label}: match {r['matching_coverage']*100:.1f}%  "
+              f"Yes recall {r['yes_recall']*100:.1f}%  "
               f"TP/FN/FP/TN {r['TP']}/{r['FN']}/{r['FP']}/{r['TN']}  "
               f"κ {r['kappa']:.3f}  P {r['yes_precision']:.3f}  F1 {r['yes_f1']:.3f}")
 
@@ -116,6 +119,8 @@ def main():
     by = {r["version"]: r for r in rows}
     assert by["BR 1.4.8"]["kappa"] == 0.8231, by["BR 1.4.8"]["kappa"]
     assert by["BR 2.0.2"]["kappa"] == 0.6159, by["BR 2.0.2"]["kappa"]
+    assert by["BR 1.4.8"]["yes_recall"] == 0.8696, by["BR 1.4.8"]["yes_recall"]
+    assert by["BR 2.0.2"]["yes_recall"] == 0.5, by["BR 2.0.2"]["yes_recall"]
     print(f"[ok] wrote outputs/ -> {OUTPUTS}")
 
 

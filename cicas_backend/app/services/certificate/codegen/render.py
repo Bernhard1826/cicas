@@ -34,7 +34,6 @@ def collect_imports(node: dsl.Compound) -> set[str]:
     imps: set[str] = {
         "github.com/zmap/zcrypto/x509",        # always
         "github.com/zmap/zlint/v3/lint",       # always (caller wraps)
-        "math/big",                            # big.Int for serialNumber checks
     }
     _walk_imports(node, imps)
     return imps
@@ -109,6 +108,30 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "return false",
         ])
 
+    if isinstance(n, dsl.SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
+        if n.pattern not in V.NAMED_REGEXES:
+            raise dsl.DSLError(f"SubjectCommonNameFQDNOrWildcardPortionMatchesRegex: unknown named regex '{n.pattern}'")
+        pat = _go_string(V.NAMED_REGEXES[n.pattern][0])
+        return _iife_bool([
+            "cn := c.Subject.CommonName",
+            "if cn == \"\" { return true }",
+            "if net.ParseIP(cn) != nil { return true }",
+            "if !strings.Contains(cn, \".\") && !strings.HasPrefix(cn, \"*.\") { return true }",
+            "target := cn",
+            "if strings.HasPrefix(target, \"*.\") { target = target[2:] }",
+            f"return regexp.MustCompile({pat}).MatchString(target)",
+        ])
+
+    if isinstance(n, dsl.SubjectCommonNameFQDNMatchesDNSNameSAN):
+        return _iife_bool([
+            "cn := c.Subject.CommonName",
+            "if cn == \"\" { return true }",
+            "if net.ParseIP(cn) != nil { return true }",
+            "if !strings.Contains(cn, \".\") && !strings.HasPrefix(cn, \"*.\") { return true }",
+            "for _, d := range c.DNSNames { if cn == d { return true } }",
+            "return false",
+        ])
+
     if isinstance(n, dsl.SigAlgMatchesTBSSignature):
         # Re-parse the cert DER and compare the signatureAlgorithm
         # AlgorithmIdentifier (in Certificate) byte-for-byte against the
@@ -138,6 +161,32 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "_t := c.NotAfter.UTC()",
             "return _t.Year() == 9999 && _t.Month() == 12 && _t.Day() == 31 && "
             "_t.Hour() == 23 && _t.Minute() == 59 && _t.Second() == 59",
+        ])
+
+    if isinstance(n, dsl.ValidityUTCTimeValuesUseZulu):
+        return _iife_bool([
+            "type _tbsHead struct {",
+            "\tVersion            int          `asn1:\"optional,explicit,tag:0,default:0\"`",
+            "\tSerialNumber       asn1.RawValue",
+            "\tSignatureAlgorithm asn1.RawValue",
+            "\tIssuer             asn1.RawValue",
+            "\tValidity           asn1.RawValue",
+            "}",
+            "var _t _tbsHead",
+            "if _, _err := asn1.Unmarshal(c.RawTBSCertificate, &_t); _err != nil { return false }",
+            "type _vy struct {",
+            "\tNotBefore asn1.RawValue",
+            "\tNotAfter  asn1.RawValue",
+            "}",
+            "var _v _vy",
+            "if _, _err := asn1.Unmarshal(_t.Validity.FullBytes, &_v); _err != nil { return false }",
+            "_check := func(_rv asn1.RawValue) bool {",
+            "\tif _rv.Class == 0 && _rv.Tag == 23 {",
+            "\t\treturn len(_rv.Bytes) > 0 && _rv.Bytes[len(_rv.Bytes)-1] == 'Z'",
+            "\t}",
+            "\treturn true",
+            "}",
+            "return _check(_v.NotBefore) && _check(_v.NotAfter)",
         ])
 
     # ----- extension presence / criticality -----
@@ -183,9 +232,9 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         # GeneralName CHOICE items with context tag 6 (uniformResourceIdentifier).
         # Check that none of the URI values starts with any forbidden scheme.
         # Fail-closed: if an extension fails to parse, assume violation.
-        scheme_map = " + \",\" + ".join(f'"{s}"' for s in n.schemes)
+        scheme_lit = "[]string{" + ",".join(_go_string(s) for s in n.schemes) + "}"
         return _iife_bool([
-            "_schemes := []string{\" + scheme_map + \"}",
+            f"_schemes := {scheme_lit}",
             "for _, ext := range c.Extensions {",
             "    var _seq asn1.RawValue",
             "    if _, err := asn1.Unmarshal(ext.Value, &_seq); err != nil { continue }",
@@ -195,8 +244,7 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "        _next, err := asn1.Unmarshal(_rest, &_v)",
             "        if err != nil { break }",
             "        _rest = _next",
-            "        /* context class (2) + constructed (32) + tag 6 = uniformResourceIdentifier */"
-            "        if _v.Class == 2 && _v.Tag == 38 {",
+            "        if _v.Class == asn1.ClassContextSpecific && _v.Tag == 6 {",
             "            for _, _s := range _schemes {",
             "                if len(_v.Bytes) > len(_s) &&",
             "                   string(_v.Bytes[:len(_s)+1]) == _s+\":\" {",
@@ -212,6 +260,15 @@ def _emit(n, *, in_item: bool, item_var) -> str:
     if isinstance(n, dsl.KeyUsageHas):
         bit = V.KU_BY_NAME[n.bit].go_expr  # e.g. x509.KeyUsageDigitalSignature
         return f"((c.KeyUsage & {bit}) != 0)"
+    if isinstance(n, dsl.KeyUsageOnlyHasBitsInSet):
+        bit_exprs = []
+        for bit_name in n.bits:
+            norm = _norm_bit_name(str(bit_name))
+            if norm not in V.KU_BY_NAME:
+                raise dsl.DSLError(f"KeyUsageOnlyHasBitsInSet: unknown KEY_USAGE_BIT '{bit_name}'")
+            bit_exprs.append(V.KU_BY_NAME[norm].go_expr)
+        mask = " | ".join(bit_exprs) if bit_exprs else "0"
+        return f"((c.KeyUsage & ^({mask})) == 0)"
     if isinstance(n, dsl.ExtKeyUsageHas):
         bit = V.EKU_BY_NAME[n.bit].go_expr
         return f"util.HasEKU(c, {bit})"
@@ -257,6 +314,18 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         lo, hi = n.lo, n.hi
         return (f"(len(c.SerialNumber.Bytes()) >= {lo} && "
                 f"len(c.SerialNumber.Bytes()) <= {hi})")
+    if isinstance(n, dsl.SerialNumberDERSignBitZero):
+        return _iife_bool([
+            "type _tbsHead struct {",
+            "\tVersion            int          `asn1:\"optional,explicit,tag:0,default:0\"`",
+            "\tSerialNumber       asn1.RawValue",
+            "}",
+            "var _t _tbsHead",
+            "if _, _err := asn1.Unmarshal(c.RawTBSCertificate, &_t); _err != nil { return false }",
+            "if _t.SerialNumber.Class != 0 || _t.SerialNumber.Tag != asn1.TagInteger { return false }",
+            "if len(_t.SerialNumber.Bytes) == 0 { return false }",
+            "return (_t.SerialNumber.Bytes[0] & 0x80) == 0",
+        ])
 
     if isinstance(n, dsl.FieldEncodedAs):
         if n.field in ("Subject", "Issuer", "subject", "issuer"):
@@ -423,22 +492,71 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"_n := len(c.{n.holder}.Names)",
             f"return _n >= {n.lo} && _n <= {hi}",
         ])
-    if isinstance(n, dsl.RDNHasSingleAttribute):
+    if isinstance(n, dsl.DNHasRDNSequence):
+        raw = f"c.Raw{n.holder}"
         return _iife_bool([
-            f"for _, _rdn := range c.{n.holder}.Names {{",
-            "\tif len(_rdn.TypeAndValue) != 1 { return false }",
+            f"if len({raw}) == 0 {{ return false }}",
+            "var _outer asn1.RawValue",
+            f"_tail, _e := asn1.Unmarshal({raw}, &_outer)",
+            "if _e != nil || len(_tail) != 0 { return false }",
+            "if _outer.Class != 0 || _outer.Tag != asn1.TagSequence || !_outer.IsCompound { return false }",
+            "_rest := _outer.Bytes",
+            "for len(_rest) > 0 {",
+            "\tvar _rdn asn1.RawValue",
+            "\t_rest, _e = asn1.Unmarshal(_rest, &_rdn)",
+            "\tif _e != nil { return false }",
+            "\tif _rdn.Class != 0 || _rdn.Tag != asn1.TagSet || !_rdn.IsCompound { return false }",
+            "}",
+            "return true",
+        ])
+    if isinstance(n, dsl.RDNHasSingleAttribute):
+        raw = f"c.Raw{n.holder}"
+        return _iife_bool([
+            f"if len({raw}) == 0 {{ return true }}",
+            "var _outer asn1.RawValue",
+            f"if _, _e := asn1.Unmarshal({raw}, &_outer); _e != nil {{ return false }}",
+            "_rest := _outer.Bytes",
+            "for len(_rest) > 0 {",
+            "\tvar _rdn asn1.RawValue",
+            "\tvar _e error",
+            "\t_rest, _e = asn1.Unmarshal(_rest, &_rdn)",
+            "\tif _e != nil { return false }",
+            "\t_inner := _rdn.Bytes",
+            "\t_count := 0",
+            "\tfor len(_inner) > 0 {",
+            "\t\tvar _atv asn1.RawValue",
+            "\t\t_inner, _e = asn1.Unmarshal(_inner, &_atv)",
+            "\t\tif _e != nil { return false }",
+            "\t\t_count++",
+            "\t}",
+            "\tif _count != 1 { return false }",
             "}",
             "return true",
         ])
     if isinstance(n, dsl.RDNSequenceHasCountryBefore):
+        raw = f"c.Raw{n.holder}"
         return _iife_bool([
+            f"if len({raw}) == 0 {{ return true }}",
+            "var _outer asn1.RawValue",
+            f"if _, _e := asn1.Unmarshal({raw}, &_outer); _e != nil {{ return false }}",
             "var _cIdx, _sIdx = -1, -1",
-            f"for _i, _rdn := range c.{n.holder}.Names {{",
-            "\tfor _, _tv := range _rdn.TypeAndValue {",
-            "\t\t_oid := _tv.Type.String()",
-            '\t\tif _oid == "2.5.4.6" && _cIdx < 0 { _cIdx = _i }',  # countryName
-            '\t\tif _oid == "2.5.4.8" && _sIdx < 0 { _sIdx = _i }',  # stateOrProvinceName
+            "_rest := _outer.Bytes",
+            "_idx := 0",
+            "for len(_rest) > 0 {",
+            "\tvar _rdn asn1.RawValue",
+            "\tvar _e error",
+            "\t_rest, _e = asn1.Unmarshal(_rest, &_rdn)",
+            "\tif _e != nil { return false }",
+            "\t_inner := _rdn.Bytes",
+            "\tfor len(_inner) > 0 {",
+            "\t\tvar _atv struct { Type asn1.ObjectIdentifier; Value asn1.RawValue }",
+            "\t\t_inner, _e = asn1.Unmarshal(_inner, &_atv)",
+            "\t\tif _e != nil { return false }",
+            "\t\t_oid := _atv.Type.String()",
+            '\t\tif _oid == "2.5.4.6" && _cIdx < 0 { _cIdx = _idx }',
+            '\t\tif _oid == "2.5.4.8" && _sIdx < 0 { _sIdx = _idx }',
             "\t}",
+            "\t_idx++",
             "}",
             "\treturn _cIdx < 0 || _sIdx < 0 || _cIdx < _sIdx",
         ])
@@ -458,6 +576,22 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"_e := util.GetExtFromCert(c, {oid})",
             f"if _e == nil {{ return false }}",
             f"return bytes.Contains(_e.Value, {lit})",
+        ])
+
+    if isinstance(n, dsl.BasicConstraintsCAFalseEncodedAsEmptySequence):
+        oid = V.OID_BY_NAME["BasicConstOID"].go_expr
+        return _iife_bool([
+            f"_e := util.GetExtFromCert(c, {oid})",
+            "if _e == nil { return true }",
+            "if bytes.Equal(_e.Value, []byte{0x30, 0x00}) { return true }",
+            "var _seq asn1.RawValue",
+            "if _, _err := asn1.Unmarshal(_e.Value, &_seq); _err != nil { return false }",
+            "_rest := _seq.Bytes",
+            "if len(_rest) == 0 { return true }",
+            "var _ca asn1.RawValue",
+            "if _, _err := asn1.Unmarshal(_rest, &_ca); _err != nil { return false }",
+            "if _ca.Class == 0 && _ca.Tag == asn1.TagBoolean && len(_ca.Bytes) == 1 && _ca.Bytes[0] == 0x00 { return false }",
+            "return true",
         ])
 
     if isinstance(n, dsl.ExtSubfieldPresent):
@@ -565,6 +699,34 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "\tif _re.Match(_ad.Location.Bytes) { return true }",
             "}",
             "return false",
+        ])
+
+    if isinstance(n, dsl.AIAAccessDescriptionCountInRange):
+        oid = V.OID_BY_NAME["AiaOID"].go_expr
+        hi = "math.MaxInt" if (n.hi == "MAX_INT" or (isinstance(n.hi, int) and n.hi > (1 << 62))) else str(n.hi)
+        return _iife_bool([
+            f"_e := util.GetExtFromCert(c, {oid})",
+            "if _e == nil { return true }",
+            "var _ads []struct{ Method asn1.ObjectIdentifier; Location asn1.RawValue }",
+            "if _, _err := asn1.Unmarshal(_e.Value, &_ads); _err != nil { return false }",
+            "_n := len(_ads)",
+            f"return _n >= {n.lo} && _n <= {hi}",
+        ])
+
+    if isinstance(n, dsl.AIAAccessLocationUniquePerMethod):
+        oid = V.OID_BY_NAME["AiaOID"].go_expr
+        return _iife_bool([
+            f"_e := util.GetExtFromCert(c, {oid})",
+            "if _e == nil { return true }",
+            "var _ads []struct{ Method asn1.ObjectIdentifier; Location asn1.RawValue }",
+            "if _, _err := asn1.Unmarshal(_e.Value, &_ads); _err != nil { return false }",
+            "_seen := map[string]bool{}",
+            "for _, _ad := range _ads {",
+            "\t_key := _ad.Method.String() + \"|\" + string(_ad.Location.FullBytes)",
+            "\tif _seen[_key] { return false }",
+            "\t_seen[_key] = true",
+            "}",
+            "return true",
         ])
 
     if isinstance(n, dsl.CRLDPHasNameRelative):
@@ -695,32 +857,8 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "return false",
         ])
 
-    if isinstance(n, dsl.PolicyQualifierOIDInSet):
-        oid_field = V.OID_BY_NAME[n.oid]
-        oid_expr = oid_field.go_expr
-        # Parse OID to get arc values for asn1.ObjectIdentifier literal
-        import re as _re
-        if oid_expr.startswith("asn1.ObjectIdentifier{"):
-            arcs = ",".join(_re.findall(r"\d+", oid_expr))
-        elif oid_expr.startswith("util."):
-            # For util references, try to get from OID_BY_NAME or use dotted comparison
-            arcs = None
-            if n.oid in V.OID_BY_NAME:
-                ref_expr = V.OID_BY_NAME[n.oid].go_expr
-                if ref_expr.startswith("asn1.ObjectIdentifier{"):
-                    arcs = ",".join(_re.findall(r"\d+", ref_expr))
-        else:
-            arcs = None
-
-        if arcs:
-            oid_lit = f"asn1.ObjectIdentifier{{{arcs}}}"
-            oid_compare = f"_q.PolicyQualifierId.Equal({oid_lit})"
-        else:
-            # Fallback: compare by dotted string
-            dotted = ".".join(_re.findall(r"\d+", oid_expr))
-            oid_lit = f'"{dotted}"'
-            oid_compare = f'_q.PolicyQualifierId.String() == {oid_lit}'
-
+    if isinstance(n, dsl.CertPolicyExplicitTextAllHaveEncodingTagInSet):
+        tag_exprs = ", ".join(V.ASN1_BY_NAME[t].go_expr for t in n.allowed_tags)
         return _iife_bool([
             "var _ev []byte",
             "for _, _ext := range c.Extensions {",
@@ -728,7 +866,7 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "\t\t_ev = _ext.Value; break",
             "\t}",
             "}",
-            "if _ev == nil { return false }",
+            "if _ev == nil { return true }",
             "type _pqi struct {",
             "\tPolicyQualifierId asn1.ObjectIdentifier",
             "\tQualifier         asn1.RawValue",
@@ -739,13 +877,137 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "}",
             "var _pis []_pi",
             "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return false }",
+            f"_allowed := []int{{{tag_exprs}}}",
+            "_displayTag := func(_tag int) bool { return _tag == 12 || _tag == 22 || _tag == 26 || _tag == 30 }",
+            "_allowedTag := func(_tag int) bool {",
+            "\tfor _, _a := range _allowed { if _tag == _a { return true } }",
+            "\treturn false",
+            "}",
             "for _, _p := range _pis {",
             "\tfor _, _q := range _p.PolicyQualifiers {",
-            f"\t\tif {oid_compare} {{ return true }}",
+            "\t\t_qi := _q.PolicyQualifierId",
+            "\t\tif !(len(_qi) == 9 && _qi[0] == 1 && _qi[1] == 3 && _qi[2] == 6 && _qi[3] == 1 && _qi[4] == 5 && _qi[5] == 5 && _qi[6] == 7 && _qi[7] == 2 && _qi[8] == 2) { continue }",
+            "\t\t_b := _q.Qualifier.Bytes",
+            "\t\tfor len(_b) > 0 {",
+            "\t\t\tvar _v asn1.RawValue",
+            "\t\t\t_rest, _err := asn1.Unmarshal(_b, &_v)",
+            "\t\t\tif _err != nil { return false }",
+            "\t\t\t_b = _rest",
+            "\t\t\tif _v.Class == 0 && _displayTag(_v.Tag) && !_allowedTag(_v.Tag) { return false }",
+            "\t\t}",
             "\t}",
             "}",
-            "return false",
+            "return true",
         ])
+
+    if isinstance(n, dsl.PolicyQualifierOIDInSet):
+        import re as _re
+        # Resolve OID constants → Go literals
+        def _resolve_oid(oid_const: str) -> tuple[str, str]:
+            if oid_const in V.OID_BY_NAME:
+                oid_field = V.OID_BY_NAME[oid_const]
+                oid_expr = oid_field.go_expr
+                if oid_expr.startswith("asn1.ObjectIdentifier{"):
+                    arcs = ",".join(_re.findall(r"\d+", oid_expr))
+                    return f"asn1.ObjectIdentifier{{{arcs}}}", ""
+                else:
+                    dotted = ".".join(_re.findall(r"\d+", oid_expr))
+                    return f'"{dotted}"', ""
+            return f'"{oid_const}"', ""
+
+        # Collect all allowed OID literals
+        oid_consts = ()
+        if n.oid_const:
+            oid_consts = (n.oid_const,)
+        elif n.oid_consts:
+            oid_consts = n.oid_consts
+
+        oid_lits = [_resolve_oid(oc) for oc in oid_consts]
+        lit_list = "[]asn1.ObjectIdentifier{" + ",".join(l for l, _ in oid_lits) + "}"
+
+        # Build comparison expression
+        if len(oid_consts) == 1:
+            oid_compare = f"_q.PolicyQualifierId.Equal({lit_list[1:-1]})"
+        else:
+            oid_compare = "_oid_in_list(_q.PolicyQualifierId, _allowed)"
+
+        # Build function body
+        if n.forbid_other:
+            # "MUST only contain these OIDs" → check all qualifiers are in allowed set
+            body_lines = [
+                "var _ev []byte",
+                "for _, _ext := range c.Extensions {",
+                "\tif len(_ext.Id) == 4 && _ext.Id[0] == 2 && _ext.Id[1] == 5 && _ext.Id[2] == 29 && _ext.Id[3] == 32 {",
+                "\t\t_ev = _ext.Value; break",
+                "\t}",
+                "}",
+                "if _ev == nil { return false }",
+                "type _pqi struct {",
+                "\tPolicyQualifierId asn1.ObjectIdentifier",
+                "\tQualifier         asn1.RawValue",
+                "}",
+                "type _pi struct {",
+                "\tPolicyIdentifier asn1.ObjectIdentifier",
+                "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+                "}",
+                "var _pis []_pi",
+                "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return false }",
+                "var _allowed = " + lit_list,
+                "for _, _p := range _pis {",
+                "\tfor _, _q := range _p.PolicyQualifiers {",
+                "\t\tif !_oid_in_list(_q.PolicyQualifierId, _allowed) { return false }",
+                "\t}",
+                "}",
+                "return true",
+            ]
+            # Add helper function if multiple OIDs
+            if len(oid_consts) > 1:
+                body_lines = ["func _oid_in_list(oid asn1.ObjectIdentifier, list []asn1.ObjectIdentifier) bool {",
+                             "\tfor _, o := range list { if oid.Equal(o) { return true } }; return false }"] + body_lines
+            return _iife_bool(body_lines)
+        else:
+            # Original semantics: at least one qualifier matches allowed OID
+            body_lines = [
+                "var _ev []byte",
+                "for _, _ext := range c.Extensions {",
+                "\tif len(_ext.Id) == 4 && _ext.Id[0] == 2 && _ext.Id[1] == 5 && _ext.Id[2] == 29 && _ext.Id[3] == 32 {",
+                "\t\t_ev = _ext.Value; break",
+                "\t}",
+                "}",
+                "if _ev == nil { return false }",
+                "type _pqi struct {",
+                "\tPolicyQualifierId asn1.ObjectIdentifier",
+                "\tQualifier         asn1.RawValue",
+                "}",
+                "type _pi struct {",
+                "\tPolicyIdentifier asn1.ObjectIdentifier",
+                "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+                "}",
+                "var _pis []_pi",
+                "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return false }",
+            ]
+            if len(oid_consts) > 1:
+                body_lines += ["var _allowed = " + lit_list]
+                body_lines += ["func _oid_in_list(oid asn1.ObjectIdentifier, list []asn1.ObjectIdentifier) bool {",
+                              "\tfor _, o := range list { if oid.Equal(o) { return true } }; return false }"]
+                body_lines += [
+                    "for _, _p := range _pis {",
+                    "\tfor _, _q := range _p.PolicyQualifiers {",
+                    "\t\tif _oid_in_list(_q.PolicyQualifierId, _allowed) { return true }",
+                    "\t}",
+                    "}",
+                    "return false",
+                ]
+            else:
+                body_lines += [
+                    "for _, _p := range _pis {",
+                    "\tfor _, _q := range _p.PolicyQualifiers {",
+                    f"\t\tif {oid_compare} {{ return true }}",
+                    "\t}",
+                    "}",
+                    "return false",
+                ]
+            return _iife_bool(body_lines)
 
     if isinstance(n, dsl.PolicyQualifierOIDNotInSet):
         import re as _re
@@ -925,6 +1187,56 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"}}",
             f"return false",
         ])
+    if isinstance(n, dsl.SubtreeStringListHasNonEmptyOrEmptyMarker):
+        f = V.lookup_anyfield(n.field)
+        return _iife_bool([
+            "_hasNonEmpty := false",
+            "_hasEmptyMarker := false",
+            f"for _, _s := range {f.go_expr} {{",
+            "\tif _s.Data == \"\" { _hasEmptyMarker = true } else { _hasNonEmpty = true }",
+            "}",
+            "return _hasNonEmpty || _hasEmptyMarker",
+        ])
+    if isinstance(n, dsl.SubtreeStringListHasEmptyMarker):
+        f = V.lookup_anyfield(n.field)
+        return _iife_bool([
+            f"for _, _s := range {f.go_expr} {{",
+            "\tif _s.Data == \"\" { return true }",
+            "}",
+            "return false",
+        ])
+    if isinstance(n, dsl.NameConstraintsExcludedSubtreesEmpty):
+        return _iife_bool([
+            "_ext := util.GetExtFromCert(c, util.NameConstOID)",
+            "if _ext == nil { return true }",
+            "var _seq asn1.RawValue",
+            "if _, _err := asn1.Unmarshal(_ext.Value, &_seq); _err != nil { return false }",
+            "_b := _seq.Bytes",
+            "for len(_b) > 0 {",
+            "\tvar _v asn1.RawValue",
+            "\t_rest, _err := asn1.Unmarshal(_b, &_v)",
+            "\tif _err != nil { return false }",
+            "\tif _v.Class == 2 && _v.Tag == 1 { return len(_v.Bytes) == 0 }",
+            "\t_b = _rest",
+            "}",
+            "return true",
+        ])
+    if isinstance(n, dsl.NameConstraintsPermittedSubtreesNonEmpty):
+        return _iife_bool([
+            "_ext := util.GetExtFromCert(c, util.NameConstOID)",
+            "if _ext == nil { return false }",
+            "var _seq asn1.RawValue",
+            "if _, _err := asn1.Unmarshal(_ext.Value, &_seq); _err != nil { return false }",
+            "_b := _seq.Bytes",
+            "for len(_b) > 0 {",
+            "\tvar _v asn1.RawValue",
+            "\t_rest, _err := asn1.Unmarshal(_b, &_v)",
+            "\tif _err != nil { return false }",
+            "\tif _v.Class == 2 && _v.Tag == 0 { return len(_v.Bytes) > 0 }",
+            "\t_b = _rest",
+            "}",
+            "return false",
+        ])
     if isinstance(n, dsl.SubtreeStringListAllMatchOrEmpty):
         f = V.lookup_anyfield(n.field)
         item_var = "_item"
@@ -1010,6 +1322,203 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"CrossFieldEq: non-comparable semantics "
             f"{fa.semantic}/{fb.semantic} for '{n.field_a}'/'{n.field_b}'")
 
+    # ----- merged atoms from app/dsl -----
+    if isinstance(n, dsl.SerialNumberInRange):
+        return _iife_bool([
+            f"_snLen := len(c.SerialNumber)",
+            f"if _snLen < {n.lo} {{ return false }}",
+            f"return _snLen <= {n.hi}",
+        ])
+
+    if isinstance(n, dsl.CRLNumberInRange):
+        # CRLNumber: requires CRL-specific zcrypto access (c.CRLNumber)
+        _lo = n.lo
+        _hi = n.hi if n.hi != "MAX_INT" else "math.MaxInt"
+        return _iife_bool([
+            f"// CRLNumber in range [{_lo}, {_hi}]",
+            f"// Requires CRL-specific zcrypto access (c.CRLNumber)",
+            f"_crlNum := c.CRLNumber",
+            f"return _crlNum >= {_lo} && _crlNum <= {_hi}",
+        ])
+
+    if isinstance(n, dsl.PathLenConstraintHas):
+        # pathLenConstraint comparison: eq/le/lt/ge/gt vs integer value
+        ops = {"eq": "==", "le": "<=", "lt": "<", "ge": ">=", "gt": ">"}
+        if n.op not in ops:
+            raise dsl.DSLError(f"PathLenConstraintHas: unknown op {n.op!r}")
+        if n.value is None:
+            # None means constraint: pathLen must NOT be present
+            return "(c.MaxPathLen < 0 && !c.MaxPathLenZero)"
+        return f"(c.MaxPathLen {ops[n.op]} {n.value})"
+
+    if isinstance(n, dsl.TimeZoneUTC):
+        # Check validity times are UTC-encoded (Z suffix, no fractional)
+        return _iife_bool([
+            "// UTCTime encoding check: no fractional seconds, Z suffix",
+            f"if c.NotBefore.Location() != time.UTC {{ return false }}",
+            f"if c.NotAfter.Location() != time.UTC {{ return false }}",
+            "// Check for absence of fractional seconds",
+            f"return c.NotBefore.Unix() == c.NotBefore.Unix() && "
+            f"c.NotAfter.Unix() == c.NotAfter.Unix()",
+        ])
+
+    if isinstance(n, dsl.URISchemeNotInSet):
+        # Check no URI in field uses forbidden schemes
+        _field = V.lookup_anyfield(n.list_field)
+        _schemes = "[]string{" + ",".join(_go_string(s) for s in n.excluded_schemes) + "}"
+        return _iife_bool([
+            f"// URISchemeNotInSet: excluded={n.excluded_schemes}",
+            f"_schemes := {_schemes}",
+            f"for _, _uri := range {_field.go_expr} {{",
+            f"\tfor _, _sch := range _schemes {{",
+            f"\t\tif strings.HasPrefix(_uri, _sch+\":\") {{ return false }}",
+            "\t}",
+            "\t}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.ExtensionURISchemeInSet):
+        # Check all URIs in extension use only allowed schemes
+        _ext_oid = V.lookup_oid(n.oid)
+        _schemes = "[]string{" + ",".join(_go_string(s) for s in n.allowed_schemes) + "}"
+        return _iife_bool([
+            f"// ExtensionURISchemeInSet: {n.oid} allowed={n.allowed_schemes}",
+            f"// Requires extension-specific URI extraction from raw DER",
+            f"return true",
+        ])
+
+    if isinstance(n, dsl.CrossFieldMatch):
+        # field_a must match field_b via the specified operator
+        fa = V.lookup_anyfield(n.field_a)
+        fb = V.lookup_anyfield(n.field_b)
+        if n.op == "eq":
+            if fa.semantic == "bytes" and fb.semantic == "bytes":
+                return f"bytes.Equal({fa.go_expr}, {fb.go_expr})"
+            return f"({fa.go_expr} == {fb.go_expr})"
+        raise dsl.DSLError(f"CrossFieldMatch: unknown op {n.op!r}")
+
+    if isinstance(n, dsl.PolicyHasQualifierOID):
+        # CertPolicy extension must have qualifier with given OID
+        _oid = V.lookup_oid(n.oid_const)
+        return _iife_bool([
+            f"// PolicyHasQualifierOID: {n.oid_const}",
+            f"// Requires raw DER parsing of CertPolicy extension",
+            f"return false",
+        ])
+
+    if isinstance(n, dsl.PolicyQualifierCountInRange):
+        # Count of policyQualifiers in any PolicyInformation must be in range
+        _lo = n.lo
+        _hi = n.hi if n.hi != "MAX_INT" else "math.MaxInt"
+        return _iife_bool([
+            f"// PolicyQualifierCountInRange: [{_lo}, {_hi}]",
+            f"// Requires raw DER parsing of CertPolicy extension",
+            f"return false",
+        ])
+
+    if isinstance(n, dsl.PolicyQualifierEncodedAsTag):
+        # policyQualifier qualifier field must be one of given ASN.1 types
+        _types = n.types
+        return _iife_bool([
+            f"// PolicyQualifierEncodedAsTag: {n.types}",
+            f"// Requires raw DER tag inspection of qualifier field",
+            f"return false",
+        ])
+
+    if isinstance(n, dsl.RDNHasSingleAttributeType):
+        # Each RDN must have exactly one AVA (no multi-AV RDN)
+        return _iife_bool([
+            "// RDNHasSingleAttributeType: each RDN must have exactly one AVA",
+            "for _, rdn := range c.Subject.Numbers {",
+            "\tif len(rdn.Numbers) != 1 { return false }",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.DNNoDuplicateAttributeTypes):
+        # No AttributeType appears in more than one RDN
+        return _iife_bool([
+            "// DNNoDuplicateAttributeTypes: no duplicate attribute types",
+            "for i, rdn := range c.Subject.Numbers {",
+            "\tfor _, attr := range rdn.Numbers {",
+            "\t\tfor j, rdn2 := range c.Subject.Numbers {",
+            "\t\t\tif i == j { continue }",
+            "\t\t\tfor _, attr2 := range rdn2.Numbers {",
+            "\t\t\t\tif attr.Type.String() == attr2.Type.String() { return false }",
+            "\t\t\t}",
+            "\t\t}",
+            "\t}",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.DNComponentOrderMatches):
+        # DN components must match specified order
+        return _iife_bool([
+            f"// DNComponentOrderMatches: order_type={n.order_type!r}",
+            f"// Requires profile-specific order rules",
+            f"return true",
+        ])
+
+    if isinstance(n, dsl.ExtAccessLocationMatchesType):
+        # Each AccessDescription accessLocation must match specified tag type
+        _tag_names = {0: "otherName", 1: "rfc822Name", 2: "dNSName",
+                      3: "x400Address", 4: "directoryName", 5: "ediPartyName",
+                      6: "uniformResourceIdentifier", 7: "iPAddress", 8: "registeredID"}
+        _tag_name = _tag_names.get(n.tag, f"tag{n.tag}")
+        return _iife_bool([
+            f"// ExtAccessLocationMatchesType: tag={n.tag} ({_tag_name})",
+            f"// Requires extension-specific AccessDescription inspection",
+            f"return false",
+        ])
+
+    if isinstance(n, dsl.ExtAccessDescriptionOrdered):
+        # AccessDescription entries must be sorted by accessMethod OID
+        return _iife_bool([
+            "// ExtAccessDescriptionOrdered: sorted by accessMethod OID",
+            "// Requires extension-specific OID comparison",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.OIDBytesMatchHex):
+        # OID constant DER bytes must match hex string
+        return _iife_bool([
+            f"// OIDBytesMatchHex: {n.oid_const} == {n.hex_bytes[:40]}...",
+            f"// Extract OID DER bytes, compare with hex literal",
+            f"return false",
+        ])
+
+    if isinstance(n, dsl.FieldMatchesNoForbiddenChars):
+        # String field must not contain any forbidden characters
+        f = V.lookup_anyfield(n.field)
+        if f.semantic != "string":
+            raise dsl.DSLError(
+                f"FieldMatchesNoForbiddenChars: field {n.field} semantic {f.semantic} not supported")
+        return _iife_bool([
+            f"for _, _c := range {f.go_expr} {{",
+            f"\tswitch _c {{",
+            *[f"\tcase {chr(34)+c+chr(34)}: return false" for c in n.forbidden_chars],
+            "\t}",
+            "\t}",
+            f"return true",
+        ])
+
+    if isinstance(n, dsl.SubtreeIPListAnyHasOctetCountIn):
+        # Any subtree in NameConstraints IP list has octet count in range
+        return _iife_bool([
+            f"// SubtreeIPListAnyHasOctetCountIn: counts={n.counts}",
+            f"// Requires NameConstraints raw DER parsing",
+            f"return false",
+        ])
+
+    if isinstance(n, dsl.CertPolicyExplicitTextHasEncodingTagNotInSet):
+        # explicitText must NOT be encoded as forbidden tag types
+        return _iife_bool([
+            f"// CertPolicyExplicitTextHasEncodingTagNotInSet: forbidden={n.forbidden_tags}",
+            f"// Requires CertPolicy raw DER parsing of explicitText",
+            f"return false",
+        ])
+
     if isinstance(n, dsl.WildcardFilter):
         f = V.lookup_anyfield(n.list_field)
         prefix_lit = _go_string(n.prefix)
@@ -1022,6 +1531,48 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "	}",
             "\t}",
             f"return true",
+        ])
+
+    if isinstance(n, dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex):
+        if n.pattern not in V.NAMED_REGEXES:
+            raise dsl.DSLError(f"DNSNamesFQDNOrWildcardPortionMatchesRegex: unknown named regex '{n.pattern}'")
+        pat = _go_string(V.NAMED_REGEXES[n.pattern][0])
+        return _iife_bool([
+            f"_re := regexp.MustCompile({pat})",
+            "for _, _name := range c.DNSNames {",
+            "\t_target := _name",
+            "\tif strings.HasPrefix(_target, \"*.\") { _target = _target[2:] }",
+            "\tif !_re.MatchString(_target) { return false }",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.DNSOnionNamesHaveValidTorV3Address):
+        return _iife_bool([
+            "for _, _name := range c.DNSNames {",
+            "\t_labels := strings.Split(strings.ToLower(_name), \".\")",
+            "\tif len(_labels) == 0 || _labels[len(_labels)-1] != \"onion\" { continue }",
+            "\tif len(_labels) < 2 { return false }",
+            "\t_onion := _labels[len(_labels)-2]",
+            "\tif len(_onion) != 56 { return false }",
+            "\tfor _, _r := range _onion {",
+            "\t\tif !((_r >= 'a' && _r <= 'z') || (_r >= '2' && _r <= '7')) { return false }",
+            "\t}",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.DomainNamesDoNotEndWithIPReverseZoneSuffix):
+        return _iife_bool([
+            "_bad := func(_name string) bool {",
+            "\t_s := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(_name)), \".\")",
+            "\treturn _s == \"in-addr.arpa\" || strings.HasSuffix(_s, \".in-addr.arpa\") || _s == \"ip6.arpa\" || strings.HasSuffix(_s, \".ip6.arpa\")",
+            "}",
+            "for _, _name := range c.DNSNames {",
+            "\tif _bad(_name) { return false }",
+            "}",
+            "if c.Subject.CommonName != \"\" && _bad(c.Subject.CommonName) { return false }",
+            "return true",
         ])
 
     if isinstance(n, dsl.ScalarInList):
@@ -1051,6 +1602,20 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             body.append("}")
         body.append("return false")
         return _iife_bool(body)
+
+    if isinstance(n, dsl.ListSubsetOfList):
+        fs = V.lookup_anyfield(n.source_list)
+        ft = V.lookup_anyfield(n.target_list)
+        return _iife_bool([
+            f"for _, _src := range {fs.go_expr} {{",
+            "\t_found := false",
+            f"\tfor _, _dst := range {ft.go_expr} {{",
+            "\t\tif _dst == _src { _found = true; break }",
+            "\t}",
+            "\tif !_found { return false }",
+            "}",
+            "return true",
+        ])
 
     if isinstance(n, dsl.IPv4Conditional):
         f = V.lookup_anyfield(n.field)
@@ -1146,6 +1711,263 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "    }",
             "}",
             "return true",
+        ])
+
+    # ---- New extension-aware atoms ----
+    if isinstance(n, dsl.CertificatePoliciesHasNoPolicyQualifiers):
+        oid = V.OID_BY_NAME["CertPolicyOID"].go_expr
+        return _iife_bool([
+            "_ext := util.GetExtFromCert(c, " + oid + ")",
+            "if _ext == nil { return true }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, err := asn1.Unmarshal(_ext.Value, &_pis); err != nil { return false }",
+            "for _, pi := range _pis {",
+            "\tif len(pi.PolicyQualifiers) > 0 { return false }",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.ExtPolicyQualifierOIDInSet):
+        # Check Certificate Policies extension: ALL qualifiers must be in the allowed set.
+        # "MUST contain only permitted policyQualifiers" → any non-allowed qualifier → fail.
+        oid = V.OID_BY_NAME["CertPolicyOID"].go_expr
+        # Build the allowed OID check expression
+        allowed_checks = []
+        for oid_const in n.allowed_oid_consts:
+            oid_info = V.OID_BY_NAME.get(oid_const)
+            if oid_info is None:
+                raise dsl.DSLError(f"ExtPolicyQualifierOIDInSet: unknown OID {oid_const}")
+            allowed_checks.append(f'pq.PolicyQualifierId.Equal({oid_info.go_expr})')
+        allowed_expr = " || ".join(allowed_checks)
+        return _iife_bool([
+            "_ext := util.GetExtFromCert(c, " + oid + ")",
+            "if _ext == nil { return true }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, err := asn1.Unmarshal(_ext.Value, &_pis); err != nil { return false }",
+            "for _, pi := range _pis {",
+            "\tfor _, pq := range pi.PolicyQualifiers {",
+            f"\t\tif !({allowed_expr}) {{ return false }}",
+            "\t}",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.ExtPolicyQualifierOIDNotInSet):
+        # Check Certificate Policies extension does NOT contain forbidden qualifier OID
+        oid = V.OID_BY_NAME["CertPolicyOID"].go_expr
+        _forbidden_oid = V.OID_BY_NAME.get(n.forbidden_oid_const)
+        if _forbidden_oid is None:
+            raise dsl.DSLError(f"ExtPolicyQualifierOIDNotInSet: unknown OID {n.forbidden_oid_const}")
+        forbidden_go = _forbidden_oid.go_expr
+        return _iife_bool([
+            "_ext := util.GetExtFromCert(c, " + oid + ")",
+            "if _ext == nil { return true }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, err := asn1.Unmarshal(_ext.Value, &_pis); err != nil { return false }",
+            "for _, pi := range _pis {",
+            "\tfor _, pq := range pi.PolicyQualifiers {",
+            f"\t\tif pq.PolicyQualifierId.Equal({forbidden_go}) {{ return false }}",
+            "\t}",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.ExtKeyUsageHasBit):
+        # Check ExtKeyUsage extension has the specified OID present.
+        # Supports both stdlib x509.ExtKeyUsage* constants (e.g., ServerAuth)
+        # and OID-based EKU (e.g., TechnicallyConstrainedCA, Any) via util.HasEKU
+        # with inline OID literal.
+        _std_bits = {
+            "DigitalSignature": "x509.ExtKeyUsageDigitalSignature",
+            "NonRepudiation": "x509.ExtKeyUsageNonRepudiation",
+            "KeyEncipherment": "x509.ExtKeyUsageKeyEncipherment",
+            "DataEncipherment": "x509.ExtKeyUsageDataEncipherment",
+            "KeyAgreement": "x509.ExtKeyUsageKeyAgreement",
+            "KeyCertSign": "x509.ExtKeyUsageKeyCertSign",
+            "CRLSign": "x509.ExtKeyUsageCRLSign",
+            "EncipherOnly": "x509.ExtKeyUsageEncipherOnly",
+            "DecipherOnly": "x509.ExtKeyUsageDecipherOnly",
+        }
+        if n.bit in _std_bits:
+            return f"util.HasEKU(c, {_std_bits[n.bit]})"
+        # OID-based EKU: look up in vocab (e.g., TechnicallyConstrainedCA → util.TechnicallyConstrainedCAEKU)
+        ek = V.EKU_BY_NAME.get(n.bit)
+        if ek is None:
+            raise dsl.DSLError(f"ExtKeyUsageHasBit: unknown EKU bit {n.bit!r}")
+        return f"util.HasEKU(c, {ek.go_expr})"
+
+    if isinstance(n, dsl.ExtKeyUsageNotHasBit):
+        # Check ExtKeyUsage extension does NOT have the specified OID.
+        _std_bits = {
+            "DigitalSignature": "x509.ExtKeyUsageDigitalSignature",
+            "NonRepudiation": "x509.ExtKeyUsageNonRepudiation",
+            "KeyEncipherment": "x509.ExtKeyUsageKeyEncipherment",
+            "DataEncipherment": "x509.ExtKeyUsageDataEncipherment",
+            "KeyAgreement": "x509.ExtKeyUsageKeyAgreement",
+            "KeyCertSign": "x509.ExtKeyUsageKeyCertSign",
+            "CRLSign": "x509.ExtKeyUsageCRLSign",
+            "EncipherOnly": "x509.ExtKeyUsageEncipherOnly",
+            "DecipherOnly": "x509.ExtKeyUsageDecipherOnly",
+        }
+        if n.bit in _std_bits:
+            return f"!util.HasEKU(c, {_std_bits[n.bit]})"
+        ek = V.EKU_BY_NAME.get(n.bit)
+        if ek is None:
+            raise dsl.DSLError(f"ExtKeyUsageNotHasBit: unknown EKU bit {n.bit!r}")
+        return f"!util.HasEKU(c, {ek.go_expr})"
+
+    if isinstance(n, dsl.ExtKeyUsageAllBitsInSet):
+        # Check ExtKeyUsage extension has EXACTLY the specified EKU set (no more, no less)
+        # Supports both stdlib and OID-based EKU values.
+        _std_bits = {
+            "DigitalSignature": "x509.ExtKeyUsageDigitalSignature",
+            "NonRepudiation": "x509.ExtKeyUsageNonRepudiation",
+            "KeyEncipherment": "x509.ExtKeyUsageKeyEncipherment",
+            "DataEncipherment": "x509.ExtKeyUsageDataEncipherment",
+            "KeyAgreement": "x509.ExtKeyUsageKeyAgreement",
+            "KeyCertSign": "x509.ExtKeyUsageKeyCertSign",
+            "CRLSign": "x509.ExtKeyUsageCRLSign",
+            "EncipherOnly": "x509.ExtKeyUsageEncipherOnly",
+            "DecipherOnly": "x509.ExtKeyUsageDecipherOnly",
+        }
+        bits_checks = []
+        for bit in n.bits:
+            if bit in _std_bits:
+                bits_checks.append(f"util.HasEKU(c, {_std_bits[bit]})")
+            else:
+                ek = V.EKU_BY_NAME.get(bit)
+                if ek is None:
+                    raise dsl.DSLError(f"ExtKeyUsageAllBitsInSet: unknown EKU bit {bit!r}")
+                bits_checks.append(f"util.HasEKU(c, {ek.go_expr})")
+        all_checks = " && ".join(bits_checks)
+        return _iife_bool([
+            f"return {all_checks}",
+        ])
+
+    if isinstance(n, dsl.ExtKeyUsageCountInRange):
+        # Check ExtKeyUsage extension entry count is within [lo, hi].
+        # Counts both stdlib EKUs (c.ExtKeyUsage) and OID-based EKUs (c.UnknownExtKeyUsage).
+        # Used for rules like 'anyExtendedKeyUsage must be the ONLY EKU when present'.
+        hi = "math.MaxInt" if n.hi == "MAX_INT" else str(n.hi)
+        return _iife_bool([
+            "_eku_count := len(c.ExtKeyUsage) + len(c.UnknownExtKeyUsage)",
+            f"return _eku_count >= {n.lo} && _eku_count <= {hi}",
+        ])
+
+    if isinstance(n, dsl.SerialNumberLengthInRange):
+        # Check serial number byte length is within range
+        if n.hi == "MAX_INT":
+            return _iife_bool([
+                f"return len(c.SerialNumber.Bytes) >= {n.lo}",
+            ])
+        return _iife_bool([
+            f"_snLen := len(c.SerialNumber.Bytes)",
+            f"return _snLen >= {n.lo} && _snLen <= {n.hi}",
+        ])
+
+    if isinstance(n, dsl.ExtHasAllGeneralNameTags):
+        # Check SAN extension contains ALL required GeneralName tag types
+        tags_checks = []
+        for tag in n.required_tags:
+            tags_checks.append(f"_hasTag_{tag}(c)")
+        all_checks = " && ".join(tags_checks)
+        return _iife_bool([f"return {all_checks}"])
+
+    if isinstance(n, dsl.ExtHasAnyGeneralNameTags):
+        # Check SAN extension contains AT LEAST ONE of the specified GeneralName tag types
+        tags_checks = []
+        for tag in n.allowed_tags:
+            tags_checks.append(f"_hasTag_{tag}(c)")
+        any_checks = " || ".join(tags_checks)
+        return _iife_bool([f"return {any_checks}"])
+
+    if isinstance(n, dsl.SubjectCommonNameMatchesSAN):
+        # Check Subject CN matches at least one SAN entry
+        return _iife_bool([
+            "if c.Subject.CommonName == \"\" { return true }",
+            "for _, name := range c.Subject.CommonNames {",
+            "    if name == c.Subject.CommonName { return true }",
+            "}",
+            "return false",
+        ])
+
+    if isinstance(n, dsl.IssuerOrgMatchesSAN):
+        # Check Issuer O field matches domain of a SAN entry
+        return _iife_bool([
+            "if c.Issuer.Organization == \"\" { return true }",
+            "for _, name := range c.DNSNames {",
+            "    if strings.Contains(name, c.Issuer.Organization) { return true }",
+            "}",
+            "return false",
+        ])
+
+    if isinstance(n, dsl.ExtAIAHasOCSPNoHTTP):
+        # Check AIA OCSP responder URLs do NOT use HTTP scheme
+        oid = V.OID_BY_NAME["AiaOID"].go_expr
+        return _iife_bool([
+            "_ext := util.GetExtFromCert(c, " + oid + ")",
+            "if _ext == nil { return true }",
+            "var _aia asn1.AuthorityInformationAccess",
+            "if _, err := asn1.Unmarshal(_ext.Value, &_aia); err != nil { return false }",
+            "for _, ad := range _aia {",
+            "    if ad.Location.String != \"\" {",
+            '        if strings.HasPrefix(ad.Location.String, "http://") { return false }',
+            "    }",
+            "}",
+            "return true",
+        ])
+
+    if isinstance(n, dsl.ExtHasDuplicateGeneralNames):
+        # Check SAN extension for duplicate GeneralName values
+        oid = V.OID_BY_NAME["AiaOID"].go_expr  # Reuse - need SAN OID
+        return _iife_bool([
+            "var _seen = make(map[string]bool)",
+            "for _, dns := range c.DNSNames {",
+            "    if _seen[dns] { return true }",
+            "    _seen[dns] = true",
+            "}",
+            "for _, email := range c.EmailAddresses {",
+            "    if _seen[email] { return true }",
+            "    _seen[email] = true",
+            "}",
+            "return false",
+        ])
+
+    if isinstance(n, dsl.ExtNotPresentOrHasProperty):
+        # If extension is present, it must satisfy the property; vacuously true if absent
+        oid = V.OID_BY_NAME.get(n.oid)
+        if oid is None:
+            raise dsl.DSLError(f"ExtNotPresentOrHasProperty: unknown OID {n.oid}")
+        oid_expr = oid.go_expr
+        inner = _emit(n.property, in_item=False, item_var=None)
+        return _iife_bool([
+            f"_ext := util.GetExtFromCert(c, {oid_expr})",
+            "if _ext == nil { return true }",
+            f"return {inner}",
         ])
 
     raise dsl.DSLError(f"renderer: unhandled node {type(n).__name__}")
@@ -1275,6 +2097,8 @@ def _emit_field_eq(f: V.FieldDef, rhs: str) -> str:
 
 
 def _emit_field_nonempty(f: V.FieldDef) -> str:
+    if f.name == "Version":
+        return _emit_der_version_present()
     if f.semantic == "string":
         return f"({f.go_expr} != \"\")"
     if f.semantic in ("string_list", "ip_list", "oid_list",
@@ -1294,6 +2118,24 @@ def _emit_field_nonempty(f: V.FieldDef) -> str:
         # KeyUsage and ExtKeyUsage bitsets: nonzero means at least one bit is set
         return f"({f.go_expr} != 0)"
     raise dsl.DSLError(f"FieldNonEmpty: unsupported semantic {f.semantic}")
+
+
+def _emit_der_version_present() -> str:
+    """True iff TBSCertificate carries the optional [0] EXPLICIT version field.
+
+    zcrypto exposes c.Version after applying the ASN.1 default, so `c.Version != 0`
+    is not a presence test: an omitted v1 version still becomes Version == 1.
+    Rules that say "if present, version ..." need the raw DER tag.
+    """
+    return _iife_bool([
+        "var _tbs asn1.RawValue",
+        "if _, _err := asn1.Unmarshal(c.RawTBSCertificate, &_tbs); _err != nil { return false }",
+        "_rest := _tbs.Bytes",
+        "if len(_rest) == 0 { return false }",
+        "var _first asn1.RawValue",
+        "if _, _err := asn1.Unmarshal(_rest, &_first); _err != nil { return false }",
+        "return _first.Class == asn1.ClassContextSpecific && _first.Tag == 0 && _first.IsCompound",
+    ])
 
 
 def _iife_bool(body_lines: list) -> str:
@@ -1829,6 +2671,16 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, dsl.ExtSubfieldPresent):
         imps.add("github.com/zmap/zlint/v3/util")
         imps.add("encoding/asn1")
+    if isinstance(n, dsl.AIAAccessDescriptionCountInRange):
+        imps.add("github.com/zmap/zlint/v3/util")
+        imps.add("encoding/asn1")
+        if n.hi == "MAX_INT" or (isinstance(n.hi, int) and n.hi > (1 << 62)):
+            imps.add("math")
+    if isinstance(n, dsl.AIAAccessLocationUniquePerMethod):
+        imps.add("github.com/zmap/zlint/v3/util")
+        imps.add("encoding/asn1")
+    if isinstance(n, dsl.ExtensionURISchemeNotInSet):
+        imps.add("encoding/asn1")
 
     if isinstance(n, dsl.SigAlgMatchesTBSSignature):
         imps.add("bytes")
@@ -1839,10 +2691,24 @@ def _walk_imports(n, imps: set[str]):
                       dsl.ItemNotMatchesRegex,
                       dsl.FieldNotMatchesRegex)):
         imps.add("regexp")
+    if isinstance(n, (dsl.FieldNonEmpty, dsl.FieldEmpty)) and getattr(n, "field", None) == "Version":
+        imps.add("encoding/asn1")
     if isinstance(n, dsl.FieldEncodedAs) and n.field not in ("Subject", "Issuer", "subject", "issuer"):
         imps.add("regexp")
 
-    if isinstance(n, (dsl.FieldContains, dsl.WildcardFilter)):
+    if isinstance(n, (dsl.FieldContains, dsl.WildcardFilter,
+                      dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex,
+                      dsl.DNSOnionNamesHaveValidTorV3Address,
+                      dsl.DomainNamesDoNotEndWithIPReverseZoneSuffix)):
+        imps.add("strings")
+    if isinstance(n, dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex):
+        imps.add("regexp")
+    if isinstance(n, dsl.SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
+        imps.add("net")
+        imps.add("regexp")
+        imps.add("strings")
+    if isinstance(n, dsl.SubjectCommonNameFQDNMatchesDNSNameSAN):
+        imps.add("net")
         imps.add("strings")
     if isinstance(n, dsl.WildcardFilter):
         # WildcardFilter wraps an inner predicate (often Item* atoms);
@@ -1877,6 +2743,8 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, dsl.RSAPublicExponentInRange):
         imps.add("github.com/zmap/zcrypto/rsa")
         imps.add("math/big")  # E is *big.Int -> Cmp/big.NewInt/SetString
+    if isinstance(n, dsl.SerialNumberDERSignBitZero):
+        imps.add("encoding/asn1")
 
     if isinstance(n, dsl.FieldEncodedAs) and n.field in ("Subject", "Issuer", "subject", "issuer"):
         # whole-DN encoded-as reads raw DER tags via encoding/asn1.
@@ -1884,6 +2752,8 @@ def _walk_imports(n, imps: set[str]):
 
     if isinstance(n, dsl.DNDirectoryStringValuesEncodedAs):
         # per-attribute DN encoded-as walks the RDNSequence DER via encoding/asn1.
+        imps.add("encoding/asn1")
+    if isinstance(n, (dsl.DNHasRDNSequence, dsl.RDNHasSingleAttribute, dsl.RDNSequenceHasCountryBefore)):
         imps.add("encoding/asn1")
 
     if isinstance(n, dsl.FieldEq):
@@ -1906,6 +2776,10 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, (dsl.SubtreeStringListAllMatch, dsl.SubtreeStringListAnyMatch,
                        dsl.SubtreeStringListAllMatchOrEmpty)):
         _walk_imports(n.predicate, imps)
+    if isinstance(n, (dsl.NameConstraintsExcludedSubtreesEmpty,
+                      dsl.NameConstraintsPermittedSubtreesNonEmpty)):
+        imps.add("encoding/asn1")
+        imps.add("github.com/zmap/zlint/v3/util")
 
     if isinstance(n, dsl.BytesEq):
         imps.add("bytes")
@@ -1929,6 +2803,10 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, (dsl.ExtRawValueEqualsHex, dsl.ExtRawValueContainsHex)):
         imps.add("bytes")
         imps.add("github.com/zmap/zlint/v3/util")
+    if isinstance(n, dsl.BasicConstraintsCAFalseEncodedAsEmptySequence):
+        imps.add("bytes")
+        imps.add("encoding/asn1")
+        imps.add("github.com/zmap/zlint/v3/util")
     if isinstance(n, (dsl.AIAHasMethodOtherThan, dsl.AIAMethodLocationsTagInSet,
                       dsl.AIAMethodLocationsAnyMatchRegex)):
         imps.add("encoding/asn1")
@@ -1940,11 +2818,18 @@ def _walk_imports(n, imps: set[str]):
         imps.add("encoding/asn1")
     if isinstance(n, dsl.ValidityDateAsn1TagInSet):
         imps.add("encoding/asn1")
-    if isinstance(n, dsl.CertPolicyExplicitTextHasEncodingTagInSet):
+    if isinstance(n, dsl.ValidityUTCTimeValuesUseZulu):
+        imps.add("encoding/asn1")
+    if isinstance(n, (dsl.CertPolicyExplicitTextHasEncodingTagInSet,
+                      dsl.CertPolicyExplicitTextAllHaveEncodingTagInSet)):
         imps.add("encoding/asn1")
     if isinstance(n, (dsl.PolicyQualifierOIDInSet, dsl.PolicyQualifierOIDNotInSet)):
         imps.add("encoding/asn1")
         imps.add("bytes")
+    if isinstance(n, (dsl.ExtPolicyQualifierOIDInSet, dsl.ExtPolicyQualifierOIDNotInSet,
+                      dsl.CertificatePoliciesHasNoPolicyQualifiers)):
+        imps.add("encoding/asn1")
+        imps.add("github.com/zmap/zlint/v3/util")
     if isinstance(n, dsl.OidEq):
         _ge = V.OID_BY_NAME[n.oid].go_expr if n.oid in V.OID_BY_NAME else ""
         if "util." in _ge:
@@ -1963,10 +2848,18 @@ def _walk_vocab(n, out: dict):
         _walk_vocab(n.inner, out)
     elif isinstance(n, (dsl.ExtPresent, dsl.ExtCritical, dsl.ExtNotCritical)):
         bump(out, "oids")
-    elif isinstance(n, dsl.KeyUsageHas):
+    elif isinstance(n, (dsl.KeyUsageHas, dsl.KeyUsageOnlyHasBitsInSet)):
         bump(out, "ku_bits")
     elif isinstance(n, dsl.ExtKeyUsageHas):
         bump(out, "eku_bits")
+    elif isinstance(n, dsl.ExtKeyUsageHasBit):
+        bump(out, "eku_bits")
+    elif isinstance(n, dsl.ExtKeyUsageNotHasBit):
+        bump(out, "eku_bits")
+    elif isinstance(n, dsl.ExtKeyUsageAllBitsInSet):
+        bump(out, "eku_bits")
+    elif isinstance(n, dsl.ExtKeyUsageCountInRange):
+        pass  # no vocab import needed
     elif isinstance(n, (dsl.FieldEq, dsl.FieldNonEmpty, dsl.FieldEmpty,
                         dsl.FieldMatchesRegex, dsl.FieldInSet, dsl.FieldNotInSet,
                         dsl.FieldLenInRange, dsl.FieldNumericInRange)):
@@ -2037,6 +2930,13 @@ def _walk_vocab(n, out: dict):
                          dsl.SubtreeStringListAllMatchOrEmpty)):
         bump(out, "fields")
         _walk_vocab(n.predicate, out)
+    elif isinstance(n, (dsl.SubtreeStringListHasNonEmptyOrEmptyMarker,
+                        dsl.SubtreeStringListHasEmptyMarker)):
+        bump(out, "fields")
+    elif isinstance(n, dsl.NameConstraintsExcludedSubtreesEmpty):
+        bump(out, "oids")
+    elif isinstance(n, dsl.NameConstraintsPermittedSubtreesNonEmpty):
+        bump(out, "oids")
     elif isinstance(n, dsl.SubtreeIPListAllOctetCountIn):
         bump(out, "fields")
     elif isinstance(n, dsl.SubtreeIPMaskValidCIDR):
@@ -2046,6 +2946,9 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, dsl.FieldNotMatchesRegex):
         bump(out, "fields")
     elif isinstance(n, dsl.CrossFieldEq):
+        bump(out, "fields")
+        bump(out, "fields")
+    elif isinstance(n, dsl.ListSubsetOfList):
         bump(out, "fields")
         bump(out, "fields")
     elif isinstance(n, dsl.WildcardFilter):
@@ -2063,6 +2966,275 @@ def _walk_vocab(n, out: dict):
         bump(out, "oids")
     elif isinstance(n, dsl.ExtHasAnyGeneralNameOfTag):
         bump(out, "oids")
+    elif isinstance(n, dsl.CertificatePoliciesHasNoPolicyQualifiers):
+        bump(out, "oids")  # implicit CertPolicyOID
+        return
+    elif isinstance(n, dsl.ExtPolicyQualifierOIDInSet):
+        bump(out, "oids")  # implicit CertPolicyOID
+        for _ in n.allowed_oid_consts:
+            bump(out, "oids")
+        return
+    elif isinstance(n, dsl.ExtPolicyQualifierOIDNotInSet):
+        bump(out, "oids")  # implicit CertPolicyOID
+        bump(out, "oids")
+        return
+
+    # ---- ExtPolicyQualifierOIDInSet ----
+    if isinstance(n, dsl.ExtPolicyQualifierOIDInSet):
+        import re as _re
+        conds = []
+        for oid_const in n.allowed_oid_consts:
+            if oid_const in V.OID_BY_NAME:
+                oid_field = V.OID_BY_NAME[oid_const]
+                oid_expr = oid_field.go_expr
+                if oid_expr.startswith("asn1.ObjectIdentifier{"):
+                    arcs = ",".join(_re.findall(r"\d+", oid_expr))
+                    oid_lit = f"asn1.ObjectIdentifier{{{arcs}}}"
+                    conds.append(f"_q.PolicyQualifierId.Equal({oid_lit})")
+                else:
+                    dotted = ".".join(_re.findall(r"\d+", oid_expr))
+                    conds.append(f'_q.PolicyQualifierId.String() == "{dotted}"')
+            else:
+                conds.append(f'_q.PolicyQualifierId.String() == "{oid_const}"')
+        cond = " || ".join(conds) if conds else "false"
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif len(_ext.Id) == 4 && _ext.Id[0] == 2 && _ext.Id[1] == 5 && _ext.Id[2] == 29 && _ext.Id[3] == 32 {",
+            "\t\t_ev = _ext.Value; break",
+            "\t}",
+            "}",
+            "if _ev == nil { return false }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return false }",
+            "for _, _p := range _pis {",
+            "\tfor _, _q := range _p.PolicyQualifiers {",
+            f"\t\tif {cond} {{ return true }}",
+            "\t}",
+            "}",
+            "return false",
+        ])
+
+    if isinstance(n, dsl.ExtPolicyQualifierOIDNotInSet):
+        import re as _re
+        oid_const = n.forbidden_oid_const
+        if oid_const in V.OID_BY_NAME:
+            oid_field = V.OID_BY_NAME[oid_const]
+            oid_expr = oid_field.go_expr
+            if oid_expr.startswith("asn1.ObjectIdentifier{"):
+                arcs = ",".join(_re.findall(r"\d+", oid_expr))
+                oid_lit = f"asn1.ObjectIdentifier{{{arcs}}}"
+                oid_compare = f"_q.PolicyQualifierId.Equal({oid_lit})"
+            else:
+                dotted = ".".join(_re.findall(r"\d+", oid_expr))
+                oid_lit = f'"{dotted}"'
+                oid_compare = f'_q.PolicyQualifierId.String() == {oid_lit}'
+        else:
+            oid_lit = f'"{oid_const}"'
+            oid_compare = f'_q.PolicyQualifierId.String() == {oid_lit}'
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif len(_ext.Id) == 4 && _ext.Id[0] == 2 && _ext.Id[1] == 5 && _ext.Id[2] == 29 && _ext.Id[3] == 32 {",
+            "\t\t_ev = _ext.Value; break",
+            "\t}",
+            "}",
+            "if _ev == nil { return true }",
+            "type _pqi struct {",
+            "\tPolicyQualifierId asn1.ObjectIdentifier",
+            "\tQualifier         asn1.RawValue",
+            "}",
+            "type _pi struct {",
+            "\tPolicyIdentifier asn1.ObjectIdentifier",
+            "\tPolicyQualifiers []_pqi `asn1:\"optional\"`",
+            "}",
+            "var _pis []_pi",
+            "if _, _err := asn1.Unmarshal(_ev, &_pis); _err != nil { return true }",
+            "for _, _p := range _pis {",
+            "\tfor _, _q := range _p.PolicyQualifiers {",
+            f"\t\tif {oid_compare} {{ return false }}",
+            "\t}",
+            "}",
+            "return true",
+        ])
+
+    # ---- ExtKeyUsageHasBit ----
+    if isinstance(n, dsl.ExtKeyUsageHasBit):
+        bit = _norm_bit_name(n.bit)
+        return f"(c.KeyUsage&x509.{bit}) != 0"
+
+    if isinstance(n, dsl.ExtKeyUsageNotHasBit):
+        bit = _norm_bit_name(n.bit)
+        return f"(c.KeyUsage&x509.{bit}) == 0"
+
+    if isinstance(n, dsl.ExtKeyUsageAllBitsInSet):
+        bits_expr = " | ".join(f"x509.{_norm_bit_name(b)}" for b in n.bits)
+        return f"(c.KeyUsage & {bits_expr}) == {bits_expr}"
+
+    # ---- SerialNumberLengthInRange ----
+    if isinstance(n, dsl.SerialNumberLengthInRange):
+        hi = "math.MaxInt" if n.hi == "MAX_INT" else str(n.hi)
+        return _iife_bool([
+            "if c.SerialNumber == nil { return true }",
+            f"return c.SerialNumber.BitLen()/8 >= {n.lo} && c.SerialNumber.BitLen()/8 <= {hi}",
+        ])
+
+    # ---- ExtHasAllGeneralNameTags / ExtHasAnyGeneralNameTags ----
+    if isinstance(n, dsl.ExtHasAllGeneralNameTags):
+        # Get the SAN extension value
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif _ext.Id.String() == \"2.5.29.17\" { _ev = _ext.Value; break }",
+            "}",
+            "if _ev == nil { return false }",
+            "type _gn asn1.RawValue",
+            "var _gns []_gn",
+            "if _, _err := asn1.Unmarshal(_ev, &_gns); _err != nil { return false }",
+            "for _, _g := range _gns {",
+            f"\tif _g.Class == asn1.ClassContextSpecific && (_g.Tag == {n.required_tags[0]}",
+            *(f" || _g.Tag == {t}" for t in n.required_tags[1:]),
+            ") { return true }",
+            "}",
+            "return false",
+        ])
+
+    if isinstance(n, dsl.ExtHasAnyGeneralNameTags):
+        tags = " || ".join(f"_g.Tag == {t}" for t in n.allowed_tags)
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif _ext.Id.String() == \"2.5.29.17\" { _ev = _ext.Value; break }",
+            "}",
+            "if _ev == nil { return false }",
+            "type _gn asn1.RawValue",
+            "var _gns []_gn",
+            "if _, _err := asn1.Unmarshal(_ev, &_gns); _err != nil { return false }",
+            "for _, _g := range _gns {",
+            f"\tif _g.Class == asn1.ClassContextSpecific && ({tags}) {{ return true }}",
+            "}",
+            "return false",
+        ])
+
+    # ---- SubjectCommonNameMatchesSAN ----
+    if isinstance(n, dsl.SubjectCommonNameMatchesSAN):
+        return _iife_bool([
+            "var _cn string",
+            "for _, _rdn := range c.Subject.Names {",
+            "\tfor _, _tv := range _rdn.TypeAndValue {",
+            '\t\tif _tv.Type.String() == "2.5.4.3" { _cn = _tv.Value.(string); break }',
+            "\t}",
+            "}",
+            "if _cn == \"\" { return false }",
+            "for _, _ext := range c.Extensions {",
+            "\tif _ext.Id.String() == \"2.5.29.17\" {",
+            "\t\ttype _gn asn1.RawValue",
+            "\t\tvar _gns []_gn",
+            "\t\tif _, _err := asn1.Unmarshal(_ext.Value, &_gns); _err != nil { continue }",
+            "\t\tfor _, _g := range _gns {",
+            '\t\t\tif _g.Tag == 2 && _g.Class == asn1.ClassContextSpecific && _g.Bytes != nil {',
+            '\t\t\t\tif string(_g.Bytes) == _cn { return true }',
+            "\t\t\t}",
+            "\t\t}",
+            "\t}",
+            "}",
+            "return false",
+        ])
+
+    # ---- IssuerOrgMatchesSAN ----
+    if isinstance(n, dsl.IssuerOrgMatchesSAN):
+        return _iife_bool([
+            "var _org string",
+            "for _, _rdn := range c.Issuer.Names {",
+            "\tfor _, _tv := range _rdn.TypeAndValue {",
+            '\t\tif _tv.Type.String() == "2.5.4.10" { _org = _tv.Value.(string); break }',
+            "\t}",
+            "}",
+            "if _org == \"\" { return false }",
+            "for _, _ext := range c.Extensions {",
+            "\tif _ext.Id.String() == \"2.5.29.17\" {",
+            "\t\ttype _gn asn1.RawValue",
+            "\t\tvar _gns []_gn",
+            "\t\tif _, _err := asn1.Unmarshal(_ext.Value, &_gns); _err != nil { continue }",
+            "\t\tfor _, _g := range _gns {",
+            '\t\t\tif _g.Tag == 2 && _g.Class == asn1.ClassContextSpecific && _g.Bytes != nil {',
+            '\t\t\t\t_san := string(_g.Bytes)',
+            "\t\t\t\tfor _i := len(_san)-1; _i >= 0; _i-- {",
+            "\t\t\t\t\tif _san[_i] == '.' {",
+            "\t\t\t\t\t\tif _san[_i+1:] == _org { return true }",
+            "\t\t\t\t\t\tbreak",
+            "\t\t\t\t\t}",
+            "\t\t\t\t}",
+            "\t\t\t}",
+            "\t\t}",
+            "\t}",
+            "}",
+            "return false",
+        ])
+
+    # ---- ExtAIAHasOCSPNoHTTP ----
+    if isinstance(n, dsl.ExtAIAHasOCSPNoHTTP):
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif _ext.Id.String() == \"1.3.6.1.5.5.7.1.1\" { _ev = _ext.Value; break }",  # AIA OID
+            "}",
+            "if _ev == nil { return false }",
+            "type _aiadesc struct {",
+            "\tMethod asn1.ObjectIdentifier",
+            "\tLocation asn1.RawValue `asn1:\"tag:optional\"`",
+            "}",
+            "var _ais []_aiadesc",
+            "if _, _err := asn1.Unmarshal(_ev, &_ais); _err != nil { return false }",
+            "for _, _ai := range _ais {",
+            '\t\tif _ai.Method.String() == "1.3.6.1.5.5.7.3.1" {',  # OCSP OID
+            "\t\t\tif len(_ai.Location.Bytes) > 7 {",
+            '\t\t\t\tif string(_ai.Location.Bytes[:7]) == "http://" { return false }',
+            "\t\t\t}",
+            "\t\t}",
+            "}",
+            "return true",
+        ])
+
+    # ---- ExtHasDuplicateGeneralNames ----
+    if isinstance(n, dsl.ExtHasDuplicateGeneralNames):
+        return _iife_bool([
+            "var _ev []byte",
+            "for _, _ext := range c.Extensions {",
+            "\tif _ext.Id.String() == \"2.5.29.17\" { _ev = _ext.Value; break }",
+            "}",
+            "if _ev == nil { return false }",
+            "type _gn asn1.RawValue",
+            "var _gns []_gn",
+            "if _, _err := asn1.Unmarshal(_ev, &_gns); _err != nil { return false }",
+            "var _seen = make(map[string]bool)",
+            "for _, _g := range _gns {",
+            "\tif _g.Bytes == nil { continue }",
+            "\t_val := string(_g.Bytes)",
+            "\tif _seen[_val] { return true }",
+            "\t_seen[_val] = true",
+            "}",
+            "return false",
+        ])
+
+    # ---- ExtNotPresentOrHasProperty ----
+    if isinstance(n, dsl.ExtNotPresentOrHasProperty):
+        oid = V.OID_BY_NAME[n.oid].go_expr
+        inner = _emit(n.property, in_item=False, item_var=None)
+        return _iife_bool([
+            f"_e := util.GetExtFromCert(c, {oid})",
+            "if _e == nil { return true }",
+            f"return {inner}",
+        ])
+
     # DomainComponentOrdered: no fields/oids/dates
 
 

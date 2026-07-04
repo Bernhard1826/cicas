@@ -156,8 +156,11 @@ class ZLintInterface:
     _COVERAGE_JUDGE = """You decide whether an EXISTING zlint check implements a normative
 requirement, by comparing their intermediate representations (IR) FIELD BY FIELD.
 
-This is NOT a "related topic" test. The lint covers the requirement only if their
-IR fields correspond — same field, same obligation direction, same constraint.
+This is NOT a "related topic" test. Coverage means logical implication over
+certificate findings: every certificate that violates the normative requirement
+would also be flagged by the existing lint. The existing lint may be stronger or
+broader than the requirement and still fully cover it, provided it includes the
+same required/prohibited field and constraint.
 
 Align and compare these fields for each candidate:
     requirement.text         <->  lint.summary
@@ -167,14 +170,25 @@ Align and compare these fields for each candidate:
     requirement.constraint   <->  lint.constraint     (value / threshold / type)
     requirement.precondition <->  lint.applies_to     (applicability / scope)
 
-Judge obligation + predicate + constraint TOGETHER as one requirement. Two cases:
+Judge obligation + predicate + constraint TOGETHER as one requirement. Three cases:
 
 (1) SAME requirement re-encoded differently -> fields ALIGN (full):
   - "MUST be >= 0"  ==  "MUST NOT be < 0"            (same boundary)
   - "MUST be present"  ==  "MUST NOT be absent"      (same presence)
   - "if cA NOT asserted, keyCertSign MUST NOT be set" == "if keyCertSign set, cA MUST be asserted" (contrapositive)
 
-(2) DIFFERENT requirement on the same field -> fields DIFFER (none), even though the
+(2) EXISTING LINT IS STRICTER OR BROADER BUT INCLUDES THIS REQUIREMENT -> fields ALIGN (full):
+  - requirement applies to OV subscriber certs, existing lint applies to all subscriber
+    certs, and both prohibit the same subject attribute with the same constraint.
+  - requirement says surname MUST be present; existing lint requires both givenName
+    and surname. The existing lint is stricter but catches every missing-surname case.
+  - requirement says issuerUniqueID MUST NOT be present; existing lint prohibits any
+    issuer/subject unique identifier. The existing lint is broader but covers the rule.
+  Broader/stronger native checks are full coverage, not partial, because no violation
+  of the requirement can escape the existing lint. Mark partial only when the existing
+  lint is NARROWER and misses some in-scope violations of the requirement.
+
+(3) DIFFERENT requirement on the same field -> fields DIFFER (none), even though the
     topic/extension is the same. A shared field is NOT enough; the actual VALUE /
     TARGET / aspect must be the same:
   - prohibit explicitText = VisibleString/BMPString  is NOT  prohibit = IA5String
@@ -185,9 +199,11 @@ Length vs value, presence vs criticality, "same extension different sub-field" =
 
 Verdict (best level across all candidates):
   "full"    -> SAME subject/sub-field, SAME direction, SAME constraint value/target
-               (or a provably identical re-encoding per case (1)).
-  "partial" -> SAME subject and direction, lint is a STRICT SUBSET: narrower scope,
-               one of several named conditions, or a stricter/weaker bound of the SAME constraint.
+               (or a provably identical re-encoding per case (1), or a broader/stronger
+               existing lint that includes the requirement per case (2)).
+  "partial" -> SAME subject and direction, but the existing lint is a STRICT SUBSET:
+               narrower scope, only one of several required alternatives, or a weaker
+               bound that lets some requirement violations escape.
   "none"    -> different subject/sub-field/bit, different direction, a DIFFERENT
                constraint value/target/type (case (2)), different artifact, or incompatible applies_to.
 
@@ -325,7 +341,8 @@ For "none" you MUST still name the closest candidate and give the field-by-field
         "organizationname": "orgname", "commonname": "cn", "countryname": "country",
         "stateorprovince": "state", "localityname": "locality", "validity": "validity",
         "version": "version", "nextupdate": "nextupdate", "thisupdate": "thisupdate",
-        "crlnumber": "crlnumber", "issueruniqueid": "issueruid",
+        "crlnumber": "crlnumber", "issueruniqueid": "uniqueid",
+        "subjectuniqueid": "uniqueid",
     }
 
     @classmethod
@@ -337,6 +354,56 @@ For "none" you MUST still name the closest candidate and give the field-by-field
             if tok in s:
                 return fam
         return ""
+
+    @staticmethod
+    def _coverage_tokens(*values) -> Set[str]:
+        text = " ".join(str(v or "") for v in values).lower()
+        return {
+            t for t in re.findall(r"[a-z0-9][a-z0-9_.-]{2,}", text)
+            if t not in {"must", "shall", "should", "certificate", "certificates",
+                         "extension", "extensions", "present", "absent", "field"}
+        }
+
+    @classmethod
+    def _rank_coverage_candidates(cls, rule_fields: Dict, candidates: List[Dict],
+                                  limit: int = 40) -> List[Dict]:
+        """Generic lexical prefilter for large candidate pools.
+
+        CABF rules can see 300+ same-source/cross-source candidates. Sending all
+        of them to the LLM is slow and noisy. This ranking is deliberately
+        rule-id agnostic: it uses only IR text/subject/constraint overlap and the
+        existing subject-family normalizer.
+        """
+        if len(candidates) <= limit:
+            return candidates
+        rule_tokens = cls._coverage_tokens(
+            rule_fields.get("text"),
+            rule_fields.get("subject"),
+            rule_fields.get("constraint"),
+            rule_fields.get("precondition"),
+        )
+        rule_family = cls._subject_family(rule_fields.get("subject"))
+        scored = []
+        for idx, z in enumerate(candidates):
+            cand_tokens = cls._coverage_tokens(
+                z.get("rule_id"),
+                z.get("summary"),
+                z.get("description"),
+                z.get("subject"),
+                z.get("constraint"),
+                z.get("applies_to"),
+            )
+            overlap = len(rule_tokens & cand_tokens)
+            union = len(rule_tokens | cand_tokens) or 1
+            score = overlap * 4 + (overlap / union)
+            cand_family = cls._subject_family(" ".join(str(v or "") for v in (
+                z.get("subject"), z.get("constraint"), z.get("summary"), z.get("description")
+            )))
+            if rule_family and cand_family == rule_family:
+                score += 12
+            scored.append((score, -idx, z))
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return [z for _, _, z in scored[:limit]]
 
     _RULE_THRESHOLDS = {
         "required":    ("must-not", "shall-not"),
@@ -618,6 +685,8 @@ For "none" you MUST still name the closest candidate and give the field-by-field
         candidates = (candidate_lints if candidate_lints is not None
                       else self._coverage_candidates(rule_source, rule_section))
         rule_fields = self._rule_ir_fields(rule)
+        candidates = self._rank_coverage_candidates(rule_fields, candidates)
+
         verdict_obj = await self._judge_coverage(rule_fields, candidates)
 
         verdict = verdict_obj['verdict']

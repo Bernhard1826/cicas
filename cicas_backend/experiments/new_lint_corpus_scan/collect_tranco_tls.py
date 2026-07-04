@@ -346,7 +346,7 @@ def main():
         "manifest_rows": manifest_rows,
         "unique_pems": len(list(certs_dir.glob("*.pem"))),
         "include_tls_chain": not args.leaf_only,
-        "scan_command": f"python3 experiments/cert_detection/run.py --certs {certs_dir}",
+        "scan_command": f"python3 cicas_backend/experiments/cert_detection/run.py --certs {certs_dir}",
     }, indent=2))
 
 

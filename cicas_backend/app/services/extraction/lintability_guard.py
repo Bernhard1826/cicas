@@ -138,6 +138,19 @@ _NOT_OBSERVABLE_PATTERNS = [
     # which is not decidable from a single certificate's bytes.
     # (matches exactly R30979 corpus-wide)
     r"issued to other organizations",
+    # CROSS-ARTIFACT: the requirement compares the certificate to the external
+    # certificate REQUEST (CSR) — e.g. "Token SHALL incorporate the key used in
+    # the certificate request". The request is not part of the issued
+    # certificate's bytes, so this is not single-certificate observable.
+    # (matches exactly R28783 corpus-wide)
+    r"key used in the certificate request",
+    # ENCODING BYTE-ORDER not observable post-parse: "the address MUST be stored
+    # in the octet string in network byte order" constrains the raw octet-string
+    # byte order, but zcrypto exposes a parsed net.IP (byte order already
+    # interpreted / lost); a validly-parsed IP is network-byte-order by
+    # definition, so the obligation is tautological/unobservable.
+    # (matches exactly R31391 corpus-wide)
+    r"network byte order",
 ]
 _NOT_OBSERVABLE_RE = re.compile("|".join(_NOT_OBSERVABLE_PATTERNS), re.I)
 

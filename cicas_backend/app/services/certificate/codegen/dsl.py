@@ -112,6 +112,15 @@ class KeyUsageHas:
 
 
 @dataclass(frozen=True)
+class KeyUsageOnlyHasBitsInSet:
+    """True iff every asserted KeyUsage bit is in the allowed bit set.
+
+    NON_GENERIC: scoped to KeyUsage bitstring allow-list rows such as
+    "Any other value MUST NOT"."""
+    bits: tuple
+
+
+@dataclass(frozen=True)
 class ExtKeyUsageHas:
     """True iff ExtKeyUsage list contains the named usage."""
     bit: str  # EKU_BIT name
@@ -197,6 +206,16 @@ class SerialNumberOctetLengthInRange:
     cert-oracle verified: tested against 8-octet, 16-octet, 20-octet, 21-octet certs."""
     lo: int
     hi: int
+
+
+@dataclass(frozen=True)
+class SerialNumberDERSignBitZero:
+    """True iff the DER-encoded serialNumber INTEGER content has its sign bit
+    clear, i.e. the high bit of the first content octet is zero.
+
+    NON_GENERIC: scoped to Appendix-B-style raw DER INTEGER sign-bit rules; this
+    is intentionally distinct from decoded numeric non-negativity."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -408,6 +427,17 @@ class ExtRawValueContainsHex:
 
 
 @dataclass(frozen=True)
+class BasicConstraintsCAFalseEncodedAsEmptySequence:
+    """True iff a basicConstraints extension that encodes cA as FALSE uses the
+    DER-default form: extnValue OCTET STRING contains the empty SEQUENCE 3000.
+    Explicit BOOLEAN FALSE encodings fail; cA TRUE and absent extension are
+    outside the false/default clause.
+
+    NON_GENERIC: scoped to DER DEFAULT handling in basicConstraints."""
+    pass
+
+
+@dataclass(frozen=True)
 class AlgorithmIdentifierBytesMatch:
     """True iff a specified algorithm identifier OID (e.g. PublicKeyAlgorithmOID,
     SignatureAlgorithmOID) has DER bytes equal to the given OID constant literal.
@@ -420,14 +450,22 @@ class AlgorithmIdentifierBytesMatch:
 
 @dataclass(frozen=True)
 class PolicyQualifierOIDInSet:
-    """True iff a CertificatePolicies extension's PolicyInformation entries each
-    have PolicyQualifiers containing at least one qualifier with the given OID
-    (e.g. IdQtCps, IdQtUnotice).  Used for rules like 'MUST contain only CPS
-    pointer qualifiers' or 'MUST NOT contain User Notice qualifiers'.
-    GENERAL: OID constants are standard PKI vocabulary. Re-parses the raw DER
-    to walk PolicyInformation → PolicyQualifiers → PolicyQualifierInfo →
-    policyQualifierId."""
-    oid_const: str   # e.g. "IdQtCps" or "IdQtUnotice"
+    """True iff each policyQualifier OID is in the allowed set.
+    When forbid_other=True, additionally asserts that no qualifier with an
+    OID outside the allowed set may appear — implements 'any other qualifier
+    MUST NOT be present'.
+
+    Supports two forms:
+      - oid_const (str): single OID constant (backward-compatible)
+      - oid_consts (tuple): multiple allowed OID constants
+      - forbid_other (bool): True → forbid all non-listed OIDs
+
+    Used for 'policyQualifiers MUST only be CPS or UserNotice' and
+    'any other qualifier MUST NOT be present' rules. Re-parses raw DER.
+    Generic: parameterized by allowed OID tuple + forbid_other flag."""
+    oid_const: str = ""           # single OID constant (e.g. "IdQtCps")
+    oid_consts: tuple = ()        # multiple allowed OID constants
+    forbid_other: bool = False    # True → all non-listed OIDs must be absent
 
 
 @dataclass(frozen=True)
@@ -499,6 +537,25 @@ class AIAMethodLocationsAnyMatchRegex:
 
 
 @dataclass(frozen=True)
+class AIAAccessDescriptionCountInRange:
+    """True iff the AuthorityInfoAccessSyntax sequence, when the AIA extension
+    is present, contains between lo and hi AccessDescription entries.
+
+    NON_GENERIC: scoped to AIA AccessDescription cardinality rules."""
+    lo: int
+    hi: Union[int, str]
+
+
+@dataclass(frozen=True)
+class AIAAccessLocationUniquePerMethod:
+    """True iff within the AIA extension, no two AccessDescription entries with
+    the same accessMethod have byte-identical accessLocation GeneralName values.
+
+    NON_GENERIC: scoped to AIA per-accessMethod accessLocation uniqueness."""
+    pass
+
+
+@dataclass(frozen=True)
 class CRLDPHasNameRelative:
     """True iff the CRL Distribution Points extension (OID 2.5.29.31) is
     present AND contains at least one DistributionPoint whose
@@ -546,6 +603,17 @@ class CertPolicyExplicitTextHasEncodingTagInSet:
     PolicyInformation / PolicyQualifierInfo / UserNotice. Zero-arg
     extension targeting (uses id-ce-certificatePolicies). Generic shape:
     any rule of form 'explicitText MUST NOT be encoded as {types}'."""
+    allowed_tags: tuple   # tuple[str] of ASN1_TYPE names
+
+
+@dataclass(frozen=True)
+class CertPolicyExplicitTextAllHaveEncodingTagInSet:
+    """True iff every UserNotice explicitText in CertificatePolicies uses one
+    of the allowed DisplayText ASN.1 CHOICE tags.
+
+    Vacuously true when CertificatePolicies, policyQualifiers, UserNotice, or
+    explicitText is absent. NON_GENERIC: scoped to RFC 5280 explicitText
+    DisplayText encoding rules."""
     allowed_tags: tuple   # tuple[str] of ASN1_TYPE names
 
 
@@ -628,6 +696,43 @@ class SubtreeStringListAnyMatch:
 
 
 @dataclass(frozen=True)
+class SubtreeStringListHasNonEmptyOrEmptyMarker:
+    """True iff a NameConstraints string subtree list has either a non-empty
+    entry or the zero-length marker entry.
+
+    NON_GENERIC: scoped to CABF nameConstraints rules requiring a zero-length
+    dNSName when no other permitted dNSName is present."""
+    field: str
+
+
+@dataclass(frozen=True)
+class SubtreeStringListHasEmptyMarker:
+    """True iff a NameConstraints string subtree list contains the zero-length
+    dNSName marker that excludes all DNS names.
+
+    NON_GENERIC: scoped to CABF nameConstraints "exclude all names of that
+    GeneralName type" fallback rules."""
+    field: str
+
+
+@dataclass(frozen=True)
+class NameConstraintsExcludedSubtreesEmpty:
+    """True iff nameConstraints is absent, has no excludedSubtrees field, or its
+    excludedSubtrees SEQUENCE OF GeneralSubtree is empty.
+
+    NON_GENERIC: scoped to rules discouraging any excludedSubtrees value."""
+
+
+@dataclass(frozen=True)
+class NameConstraintsPermittedSubtreesNonEmpty:
+    """True iff nameConstraints contains a non-empty permittedSubtrees SEQUENCE OF
+    GeneralSubtree.
+
+    NON_GENERIC: scoped to rules requiring at least one permittedSubtrees value,
+    including GeneralName types not exposed as zcrypto flattened fields."""
+
+
+@dataclass(frozen=True)
 class SubtreeStringListAllMatchOrEmpty:
     """Like SubtreeStringListAllMatch but vacuously TRUE when the subtree
     list is empty. Use for NameConstraints "if X is constrained in
@@ -670,6 +775,13 @@ class NotAfterIsNoExpirySentinel:
 
 
 @dataclass(frozen=True)
+class ValidityUTCTimeValuesUseZulu:
+    """True iff every validity time encoded as UTCTime uses the Zulu/GMT form.
+
+    NON_GENERIC: scoped to RFC 5280 UTCTime encoding form."""
+
+
+@dataclass(frozen=True)
 class CrossFieldEq:
     """True iff two scalar fields have equal values (string-to-string or
     int-to-int). NOT for scalar-vs-list. Use ScalarInList for "CN in DNSNames".
@@ -697,12 +809,207 @@ class CommonNameFromSAN:
 
 
 @dataclass(frozen=True)
+class SubjectCommonNameFQDNOrWildcardPortionMatchesRegex:
+    """True iff Subject commonName, when it is an FQDN or wildcard domain name,
+    satisfies a named regex on the full FQDN or on the wildcard's FQDN portion.
+
+    NON_GENERIC: scoped to CABF subject commonName domain-label encoding rules."""
+    pattern: str
+
+
+@dataclass(frozen=True)
+class SubjectCommonNameFQDNMatchesDNSNameSAN:
+    """True iff Subject commonName, when it is an FQDN or wildcard domain name,
+    is a character-for-character copy of one subjectAltName dNSName entry.
+
+    NON_GENERIC: scoped to CABF commonName-from-SAN dNSName rules."""
+
+
+@dataclass(frozen=True)
 class FieldContains:
     """True iff the string field value (or each string in the list) contains
     the given character substring. Used for rules like "CN MUST NOT contain
     '@' or '_' characters" (R4188) where a character-set check is needed."""
     field: str
     substring: str   # a single character or short string to search for
+
+
+# =====================================================================
+# MERGED ATOMS from app/services/certificate/dsl/dsl.py
+# Generic atoms moved from the app-side DSL to codegen for LLM emission
+# =====================================================================
+
+@dataclass(frozen=True)
+class SerialNumberInRange:
+    """True iff SerialNumber octet length is within [lo, hi].
+    Used for 'serialNumber MUST be at least N octets' rules.
+    Generic: parameterized by byte length range, universally applicable."""
+    lo: int
+    hi: Union[int, str]  # "MAX_INT" allowed
+
+
+@dataclass(frozen=True)
+class CRLNumberInRange:
+    """True iff CRLNumber integer field is within [lo, hi].
+    Used for 'CRLNumber MUST be within range' rules.
+    Generic: parameterized by integer range, applies to CRLs."""
+    lo: int
+    hi: Union[int, str]  # "MAX_INT" allowed
+
+
+@dataclass(frozen=True)
+class PathLenConstraintHas:
+    """True iff BasicConstraints pathLenConstraint satisfies the given operator.
+    Used for 'pathLenConstraint MUST be <= N' rules.
+    Generic: parameterized by operator and value, universally applicable."""
+    op: str   # one of "eq", "le", "lt", "ge", "gt"
+    value: Union[int, None]  # None means not present
+
+
+@dataclass(frozen=True)
+class TimeZoneUTC:
+    """True iff validity times are encoded in UTC/GMT timezone (Zulu, no fractional seconds).
+    Used for 'notBefore/notAfter MUST be UTCTime encoded' rules.
+    Generic: zero-arg, universally applicable."""
+    pass
+
+
+@dataclass(frozen=True)
+class URISchemeNotInSet:
+    """True iff no URI in the list field uses any of the forbidden schemes.
+    Used for 'OCSP responder URLs MUST NOT use HTTP' rules.
+    Generic: parameterized by forbidden scheme set."""
+    list_field: str
+    excluded_schemes: tuple  # e.g. ("http", "ldap")
+
+
+@dataclass(frozen=True)
+class ExtensionURISchemeInSet:
+    """True iff all URIs in the named extension use only allowed schemes.
+    Used for 'AIA OCSP URLs MUST use HTTPS' rules.
+    Generic: parameterized by allowed scheme set."""
+    oid: str
+    allowed_schemes: tuple  # e.g. ("https",)
+
+
+@dataclass(frozen=True)
+class CrossFieldMatch:
+    """True iff field_a value matches field_b value (string equality).
+    Used for 'CN MUST match SAN DNS Name' rules.
+    Generic: parameterized by two field names."""
+    field_a: str
+    field_b: str
+
+
+@dataclass(frozen=True)
+class PolicyHasQualifierOID:
+    """True iff the CertificatePolicies extension contains at least one
+    PolicyInformation entry whose policyQualifiers SEQUENCE contains
+    a qualifier with the given OID.
+    Used for 'MUST contain CPS qualifier OID' rules.
+    Generic: parameterized by OID constant name."""
+    oid_const: str
+
+
+@dataclass(frozen=True)
+class PolicyQualifierCountInRange:
+    """True iff the number of policyQualifiers in at least one
+    PolicyInformation entry is within [lo, hi].
+    Used for 'MUST contain exactly N qualifiers' rules.
+    Generic: parameterized by count range."""
+    lo: int
+    hi: Union[int, str]  # "MAX_INT" for unbounded
+
+
+@dataclass(frozen=True)
+class PolicyQualifierEncodedAsTag:
+    """True iff at least one policyQualifier's qualifier field is encoded
+    as one of the given ASN.1 tag types.
+    Used for 'qualifier MUST be ia5String encoded' rules.
+    Generic: parameterized by allowed ASN.1 type tags."""
+    types: tuple  # e.g. ("IA5String", "SEQUENCE")
+
+
+@dataclass(frozen=True)
+class RDNHasSingleAttributeType:
+    """True iff each RelativeDistinguishedName in the RDN Sequence contains
+    exactly one AttributeTypeAndValue (no multi-AV RDN).
+    Used for 'Each RDN MUST contain exactly one AVA' rules.
+    Generic: zero-arg, universally applicable."""
+    pass
+
+
+@dataclass(frozen=True)
+class DNNoDuplicateAttributeTypes:
+    """True iff no AttributeType appears in more than one RDN across the
+    full Distinguished Name.
+    Used for 'Name MUST NOT contain duplicate attribute types' rules.
+    Generic: zero-arg, universally applicable."""
+    pass
+
+
+@dataclass(frozen=True)
+class DNComponentOrderMatches:
+    """True iff the sequence of DN components matches the specified canonical order.
+    Used for 'Domain Labels MUST be encoded in reverse DNS order' rules.
+    Generic: parameterized by order type."""
+    order_type: str  # e.g. "dns_reverse", "rfc2253"
+
+
+@dataclass(frozen=True)
+class ExtAccessLocationMatchesType:
+    """True iff each AccessDescription in the extension has accessLocation
+    encoded as the specified GeneralName CHOICE type.
+    Used for 'accessLocation MUST be uniformResourceIdentifier' rules.
+    Generic: parameterized by expected tag number."""
+    tag: int  # 0=otherName,1=rfc822Name,2=dNSName,3=x400Address,
+              # 4=directoryName,5=ediPartyName,6=uniformResourceIdentifier,7=iPAddress,8=registeredID
+
+
+@dataclass(frozen=True)
+class ExtAccessDescriptionOrdered:
+    """True iff AccessDescription entries in the extension are sorted by
+    accessMethod OID in ascending order.
+    Used for 'AccessDescriptions MUST be ordered by OID' rules.
+    Generic: zero-arg, applies to AIA/SIA."""
+    pass
+
+
+@dataclass(frozen=True)
+class OIDBytesMatchHex:
+    """True iff the OID constant's DER bytes equal the given hex string.
+    Used for 'AlgorithmIdentifier MUST be byte-for-byte identical' rules.
+    Generic: parameterized by hex literal."""
+    oid_const: str
+    hex_bytes: str
+
+
+@dataclass(frozen=True)
+class FieldMatchesNoForbiddenChars:
+    """True iff the string field contains none of the forbidden characters.
+    Used for 'CN MUST NOT contain colons, spaces, or line feeds' rules.
+    Generic: parameterized by forbidden character set."""
+    field: str
+    forbidden_chars: tuple  # e.g. (":", " ", "\n")
+
+
+@dataclass(frozen=True)
+class SubtreeIPListAnyHasOctetCountIn:
+    """True iff ANY subtree in a NameConstraints IP list has an octet count
+    within the specified range.
+    Used for 'IP addresses MUST be IPv4 (4 octets) or IPv6 (16 octets)' rules.
+    Generic: parameterized by count range."""
+    field: str
+    counts: tuple  # e.g. (4, 4) for IPv4 only
+
+
+@dataclass(frozen=True)
+class CertPolicyExplicitTextHasEncodingTagNotInSet:
+    """True iff the explicitText field of any Notice in any PolicyInformation
+    entry is NOT encoded as any of the forbidden ASN.1 tag types.
+    Used for 'explicitText MUST be UTF8String or BMPString' rules.
+    Generic: parameterized by forbidden tag set."""
+    forbidden_tags: tuple  # e.g. ("IA5String", "VisibleString")
 
 
 @dataclass(frozen=True)
@@ -723,6 +1030,17 @@ class WildcardFilter:
     list_field: str
     prefix: str       # e.g. "*." — entries starting with this prefix are checked
     predicate: 'Compound'
+
+
+@dataclass(frozen=True)
+class DNSNamesFQDNOrWildcardPortionMatchesRegex:
+    """True iff every subjectAltName dNSName satisfies a named regex after
+    applying CABF wildcard-domain semantics: values beginning with "*." are
+    checked on the FQDN portion after the wildcard label; non-wildcard values
+    are checked as the full FQDN.
+
+    NON_GENERIC: scoped to CABF dNSName FQDN/wildcard-label encoding rules."""
+    pattern: str
 
 
 @dataclass(frozen=True)
@@ -749,6 +1067,18 @@ class ScalarInAnyOfLists:
     in DNSNames OR EmailAddresses OR URIs OR ..."""
     scalar_field: str
     list_fields: tuple   # tuple of str list-field names
+
+
+@dataclass(frozen=True)
+class ListSubsetOfList:
+    """True iff every string in source_list appears in target_list.
+
+    Vacuously true when source_list is empty. Used for cross-field list
+    membership rules, e.g. every legacy Subject.emailAddress value must also
+    appear as a subjectAltName rfc822Name entry.
+    """
+    source_list: str
+    target_list: str
 
 
 @dataclass(frozen=True)
@@ -826,6 +1156,26 @@ class DomainComponentOrdered:
 
 
 @dataclass(frozen=True)
+class DNSOnionNamesHaveValidTorV3Address:
+    """True iff every subjectAltName dNSName whose rightmost label is "onion"
+    has at least two labels and the label immediately before "onion" is a
+    Tor v3 onion address label: exactly 56 base32 chars [a-z2-7].
+
+    NON_GENERIC: scoped to CABF onion-domain issuance syntax."""
+    pass
+
+
+@dataclass(frozen=True)
+class DomainNamesDoNotEndWithIPReverseZoneSuffix:
+    """True iff certificate domain-name fields do not end in an IP reverse-zone
+    suffix (in-addr.arpa or ip6.arpa).
+
+    Checks subjectAltName dNSName values and the legacy Subject commonName.
+    NON_GENERIC: scoped to CABF "IP Reverse Zone Suffix" issuance prohibition."""
+    pass
+
+
+@dataclass(frozen=True)
 class RDNCountInRange:
     """True iff the RDNSequence (Subject or Issuer) contains a number of
     RelativeDistinguishedName entries in [lo, hi] inclusive. Used for
@@ -838,6 +1188,16 @@ class RDNCountInRange:
     holder: str        # "Subject" or "Issuer"
     lo: int
     hi: Union[int, str]
+
+
+@dataclass(frozen=True)
+class DNHasRDNSequence:
+    """True iff the holder Name is encoded as an ASN.1 SEQUENCE whose
+    elements, if any, are RelativeDistinguishedName SETs.
+
+    NON_GENERIC: pinned to X.509 Name/RDNSequence structural encoding rather
+    than a generic non-empty-DN approximation."""
+    holder: str        # "Subject" or "Issuer"
 
 
 @dataclass(frozen=True)
@@ -863,6 +1223,149 @@ class RDNSequenceHasCountryBefore:
     Vacuously true when either attribute type is absent. NON_GENERIC:
     pinned to the country-before-state ordering constraint of RFC 6818."""
     holder: str        # "Subject" or "Issuer"
+
+
+@dataclass(frozen=True)
+class ExtPolicyQualifierOIDInSet:
+    """True iff the Certificate Policies extension contains a policy qualifier
+    with one of the specified OIDs (CPS pointer or UserNotice).
+
+    Used for 'policy qualifiers MUST be either CPS or UserNotice' rules.
+    Generic: parameterized by allowed OID set, applies to CertPolicy extension."""
+    allowed_oid_consts: tuple  # e.g. ("CpsOID", "UserNoticeOID")
+
+
+@dataclass(frozen=True)
+class ExtPolicyQualifierOIDNotInSet:
+    """True iff the Certificate Policies extension does NOT contain any
+    policy qualifier with the specified OID.
+
+    Used for 'MUST NOT have CPS pointer' rules.
+    Generic: parameterized by forbidden OID, applies to CertPolicy extension."""
+    forbidden_oid_const: str  # e.g. "CpsOID"
+
+
+@dataclass(frozen=True)
+class CertificatePoliciesHasNoPolicyQualifiers:
+    """True iff CertificatePolicies is absent or no PolicyInformation contains
+    policyQualifiers.
+
+    NON_GENERIC: scoped to policyQualifiers presence/discouragement rules."""
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageHasBit:
+    """True iff the KeyUsage extension has the specified bit set.
+
+    Used for 'keyUsage MUST have digitalSignature set' rules.
+    Generic: parameterized by bit name, applies to KeyUsage extension."""
+    bit: str  # e.g. "DigitalSignature", "KeyCertSign", "CRLSign"
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageNotHasBit:
+    """True iff the KeyUsage extension does NOT have the specified bit set.
+
+    Used for 'keyUsage MUST NOT have keyCertSign for end-entity' rules.
+    Generic: parameterized by bit name, applies to KeyUsage extension."""
+    bit: str  # e.g. "KeyCertSign", "CRLSign"
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageAllBitsInSet:
+    """True iff the KeyUsage extension has EXACTLY the specified bits set.
+
+    Used for 'keyUsage MUST have only digitalSignature and keyEncipherment' rules.
+    Generic: parameterized by allowed bit set, applies to KeyUsage extension."""
+    bits: tuple  # e.g. ("DigitalSignature", "KeyEncipherment")
+
+
+@dataclass(frozen=True)
+class ExtKeyUsageCountInRange:
+    """True iff the total count of EKU entries (stdlib + OID-based) is within [lo, hi].
+
+    Used for rules like 'anyExtendedKeyUsage must be the ONLY EKU when present',
+    'ExtKeyUsage MUST contain at least one EKU', etc.
+    Generic: parameterized by count range, applies to ExtKeyUsage extension."""
+    lo: int
+    hi: Union[int, str]  # Union[int, "MAX_INT"] for unbounded
+
+
+@dataclass(frozen=True)
+class SerialNumberLengthInRange:
+    """True iff the serial number byte length is within [lo, hi].
+
+    Used for 'serialNumber MUST be at least 8 octets' rules.
+    Generic: parameterized by byte length range."""
+    lo: int
+    hi: Union[int, str]
+
+
+@dataclass(frozen=True)
+class ExtHasAllGeneralNameTags:
+    """True iff the extension (SAN / subjectAltName) contains ALL of the
+    specified GeneralName tag types.
+
+    Used for 'subjectAlternativeName MUST contain both dNSName and iPAddress' rules.
+    Generic: parameterized by required tag set, applies to subjectAltName extension."""
+    required_tags: tuple  # e.g. (7,) for IPAddress, (2,) for rfc822Name
+
+
+@dataclass(frozen=True)
+class ExtHasAnyGeneralNameTags:
+    """True iff the extension (SAN / subjectAltName) contains AT LEAST ONE
+    of the specified GeneralName tag types.
+
+    Used for 'subjectAlternativeName MUST contain either dNSName or iPAddress' rules.
+    Generic: parameterized by allowed tag set, applies to subjectAltName extension."""
+    allowed_tags: tuple  # e.g. (2, 7) for email or IP
+
+
+@dataclass(frozen=True)
+class SubjectCommonNameMatchesSAN:
+    """True iff the Subject CommonName matches at least one SAN entry.
+
+    Used for 'commonName MUST match a subjectAlternativeName entry' rules.
+    Generic: no parameters, compares CN against existing SAN entries."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class IssuerOrgMatchesSAN:
+    """True iff the Issuer Organization (O) matches the domain of a SAN entry.
+
+    Used for 'issuer organization MUST match the domain in SAN' rules.
+    Generic: no parameters, checks SAN domains against issuer O field."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class ExtAIAHasOCSPNoHTTP:
+    """True iff the Authority Information Access extension has an OCSP
+    responder URL that does NOT use HTTP scheme.
+
+    Used for 'OCSP responder MUST NOT use HTTP' rules.
+    Generic: no parameters, checks AIA OCSP URLs for scheme."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class ExtHasDuplicateGeneralNames:
+    """True iff the extension (SAN) contains duplicate GeneralName values.
+
+    Used for 'subjectAlternativeName MUST NOT contain duplicate DNS names' rules.
+    Generic: no parameters, checks for duplicates within the SAN extension."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class ExtNotPresentOrHasProperty:
+    """True iff the extension is absent, OR present AND satisfies the property.
+
+    Used for 'if the extension is present, it MUST have property X' rules.
+    Generic: parameterized by the property check."""
+    oid: str  # e.g. "AiaOID"
+    property: 'Compound'  # nested atom to check if extension is present
 
 
 # =====================================================================
@@ -911,7 +1414,7 @@ class Or:
 Atom = Union[
     ExtPresent, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
     IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
-    KeyUsageHas, ExtKeyUsageHas,
+    KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
     FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs, FieldContains,
@@ -922,33 +1425,52 @@ Atom = Union[
     BytesEq, IPListAllOctetCount, OidListContains, OidListCountInSet,
     BytesEqualsHex, BytesContainsHex, ExtensionURISchemeNotInSet,
     PublicKeyAlgorithmIs, DNEmpty,
-    ExtRawValueEqualsHex, ExtRawValueContainsHex, ExtSubfieldPresent,
+    ExtRawValueEqualsHex, ExtRawValueContainsHex,
+    BasicConstraintsCAFalseEncodedAsEmptySequence, ExtSubfieldPresent,
     AIAHasMethodOtherThan, AIAMethodLocationsTagInSet,
-    AIAMethodLocationsAnyMatchRegex,
+    AIAMethodLocationsAnyMatchRegex, AIAAccessDescriptionCountInRange,
+    AIAAccessLocationUniquePerMethod,
     CRLDPHasNameRelative, CRLDPHasNameRelativeWithMultiIssuer,
     ValidityDateAsn1TagInSet, CertPolicyExplicitTextHasEncodingTagInSet,
+    CertPolicyExplicitTextAllHaveEncodingTagInSet,
     PolicyQualifierOIDInSet, PolicyQualifierOIDNotInSet,
     OidEq, SubtreeIPListAnyHasOctetCount,
     BytesContainsOidDer,
     IPListAllOctetCountIn, SubtreeIPListAnyAllZero,
     SubtreeIPListAnyHasOctetCountAndNotAllZero,
     SubtreeStringListAllMatch, SubtreeStringListAnyMatch,
+    SubtreeStringListHasNonEmptyOrEmptyMarker, SubtreeStringListHasEmptyMarker,
+    NameConstraintsExcludedSubtreesEmpty, NameConstraintsPermittedSubtreesNonEmpty,
     SubtreeStringListAllMatchOrEmpty,
     SubtreeIPListAllOctetCountIn, SubtreeIPMaskValidCIDR,
-    ScalarInList, ScalarInAnyOfLists, IPv4Conditional,
+    ScalarInList, ScalarInAnyOfLists, ListSubsetOfList,
+    DNSNamesFQDNOrWildcardPortionMatchesRegex, IPv4Conditional,
     SubtreeIPv4Conditional,
     ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag, DomainComponentOrdered,
+    DNSOnionNamesHaveValidTorV3Address, DomainNamesDoNotEndWithIPReverseZoneSuffix,
     RSAModulusBitsInRange, RSAPublicExponentInRange,
     SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
-    CommonNameFromSAN,
-    RDNCountInRange, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
+    ValidityUTCTimeValuesUseZulu,
+    CommonNameFromSAN, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex,
+    SubjectCommonNameFQDNMatchesDNSNameSAN,
+    RDNCountInRange, DNHasRDNSequence, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
+    SerialNumberDERSignBitZero,
+    # New extension-aware atoms for policy qualifiers, key usage, serial number, SAN
+    ExtPolicyQualifierOIDInSet, ExtPolicyQualifierOIDNotInSet,
+    CertificatePoliciesHasNoPolicyQualifiers,
+    ExtKeyUsageHasBit, ExtKeyUsageNotHasBit, ExtKeyUsageAllBitsInSet,
+    SerialNumberLengthInRange,
+    ExtHasAllGeneralNameTags, ExtHasAnyGeneralNameTags,
+    SubjectCommonNameMatchesSAN, IssuerOrgMatchesSAN,
+    ExtAIAHasOCSPNoHTTP, ExtHasDuplicateGeneralNames,
+    ExtNotPresentOrHasProperty,
 ]
 Compound = Union[Atom, Not, And, Or]
 
 ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     ExtPresent, HasAnyExtension, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
     IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
-    KeyUsageHas, ExtKeyUsageHas,
+    KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
     FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs, FieldContains,
@@ -959,27 +1481,45 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     BytesEq, IPListAllOctetCount, OidListContains, OidListCountInSet,
     BytesEqualsHex, BytesContainsHex, ExtensionURISchemeNotInSet,
     PublicKeyAlgorithmIs, DNEmpty,
-    ExtRawValueEqualsHex, ExtRawValueContainsHex, ExtSubfieldPresent,
+    ExtRawValueEqualsHex, ExtRawValueContainsHex,
+    BasicConstraintsCAFalseEncodedAsEmptySequence, ExtSubfieldPresent,
     AIAHasMethodOtherThan, AIAMethodLocationsTagInSet,
-    AIAMethodLocationsAnyMatchRegex,
+    AIAMethodLocationsAnyMatchRegex, AIAAccessDescriptionCountInRange,
+    AIAAccessLocationUniquePerMethod,
     CRLDPHasNameRelative, CRLDPHasNameRelativeWithMultiIssuer,
     ValidityDateAsn1TagInSet, CertPolicyExplicitTextHasEncodingTagInSet,
+    CertPolicyExplicitTextAllHaveEncodingTagInSet,
     PolicyQualifierOIDInSet, PolicyQualifierOIDNotInSet,
     OidEq, SubtreeIPListAnyHasOctetCount,
     BytesContainsOidDer,
     IPListAllOctetCountIn, SubtreeIPListAnyAllZero,
     SubtreeIPListAnyHasOctetCountAndNotAllZero,
     SubtreeStringListAllMatch, SubtreeStringListAnyMatch,
+    SubtreeStringListHasNonEmptyOrEmptyMarker, SubtreeStringListHasEmptyMarker,
+    NameConstraintsExcludedSubtreesEmpty, NameConstraintsPermittedSubtreesNonEmpty,
     SubtreeStringListAllMatchOrEmpty,
     SubtreeIPListAllOctetCountIn, SubtreeIPMaskValidCIDR,
-    ScalarInList, ScalarInAnyOfLists, IPv4Conditional,
+    ScalarInList, ScalarInAnyOfLists, ListSubsetOfList,
+    DNSNamesFQDNOrWildcardPortionMatchesRegex, IPv4Conditional,
     SubtreeIPv4Conditional,
     ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag, DomainComponentOrdered,
+    DNSOnionNamesHaveValidTorV3Address, DomainNamesDoNotEndWithIPReverseZoneSuffix,
     RSAModulusBitsInRange, RSAPublicExponentInRange,
     SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
-    CommonNameFromSAN,
-    RDNCountInRange, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
-    SerialNumberPositive, SerialNumberOctetLengthInRange,
+    ValidityUTCTimeValuesUseZulu,
+    CommonNameFromSAN, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex,
+    SubjectCommonNameFQDNMatchesDNSNameSAN,
+    RDNCountInRange, DNHasRDNSequence, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
+    SerialNumberPositive, SerialNumberOctetLengthInRange, SerialNumberDERSignBitZero,
+    # New extension-aware atoms for policy qualifiers, key usage, serial number, SAN
+    ExtPolicyQualifierOIDInSet, ExtPolicyQualifierOIDNotInSet,
+    CertificatePoliciesHasNoPolicyQualifiers,
+    ExtKeyUsageHasBit, ExtKeyUsageNotHasBit, ExtKeyUsageAllBitsInSet, ExtKeyUsageCountInRange,
+    SerialNumberLengthInRange,
+    ExtHasAllGeneralNameTags, ExtHasAnyGeneralNameTags,
+    SubjectCommonNameMatchesSAN, IssuerOrgMatchesSAN,
+    ExtAIAHasOCSPNoHTTP, ExtHasDuplicateGeneralNames,
+    ExtNotPresentOrHasProperty,
 ]}
 
 COMPOUND_CLASSES: dict[str, type] = {"Not": Not, "And": And, "Or": Or}
@@ -1003,29 +1543,48 @@ COMPOUND_CLASSES: dict[str, type] = {"Not": Not, "And": And, "Or": Or}
 # ---------------------------------------------------------------------
 NON_GENERIC_ATOMS: frozenset[str] = frozenset({
     "CommonNameFromSAN",                 # CABF CN-must-come-from-SAN, single requirement
+    "SubjectCommonNameFQDNOrWildcardPortionMatchesRegex", # CABF CN FQDN/wildcard syntax
+    "SubjectCommonNameFQDNMatchesDNSNameSAN", # CABF CN exact dNSName copy
     "SigAlgMatchesTBSSignature",         # RFC5280 sigAlg==tbsCert.signature, single structural rule
     "NotAfterIsNoExpirySentinel",        # RFC5280 §4.1.2.5 99991231235959Z sentinel, single value
+    "ValidityUTCTimeValuesUseZulu",      # RFC5280 UTCTime Zulu/GMT encoding form
+    "KeyUsageOnlyHasBitsInSet",          # KeyUsage any-other-value rows
     "DomainComponentOrdered",            # DC contiguous-ordered, single rule
     "DNDirectoryStringValuesEncodedAs",  # DirectoryString per-attr + fixed exception-OID table
     "CertPolicyExplicitTextHasEncodingTagInSet",  # certPolicies UserNotice explicitText, one construct
+    "CertPolicyExplicitTextAllHaveEncodingTagInSet", # certPolicies explicitText universal encoding
     "PolicyQualifierOIDInSet",           # certPolicies policyQualifierId OID set, specific extension
     "PolicyQualifierOIDNotInSet",        # certPolicies policyQualifierId OID exclusion, specific
+    "CertificatePoliciesHasNoPolicyQualifiers", # certPolicies policyQualifiers absent
+    "BasicConstraintsCAFalseEncodedAsEmptySequence", # DER DEFAULT false encoding
     "CRLDPHasNameRelative",              # CRLDP nameRelativeToCRLIssuer, one construct
     "CRLDPHasNameRelativeWithMultiIssuer",
     "AIAHasMethodOtherThan",             # AIA accessMethod-specific
     "AIAMethodLocationsAnyMatchRegex",
     "AIAMethodLocationsTagInSet",
+    "AIAAccessDescriptionCountInRange",  # AIA AccessDescription cardinality
+    "AIAAccessLocationUniquePerMethod",  # AIA accessLocation uniqueness per method
     "IPv4Conditional",                   # IPv4-specific conditional shape
     "SubtreeIPv4Conditional",
     "SubtreeIPListAnyAllZero",           # NameConstraints 0/0 range marker, specific
     "SubtreeIPListAnyHasOctetCountAndNotAllZero",
+    "SubtreeStringListHasNonEmptyOrEmptyMarker", # NameConstraints zero-length DNS marker
+    "SubtreeStringListHasEmptyMarker",     # NameConstraints DNS zero-length exclude-all marker
+    "NameConstraintsExcludedSubtreesEmpty", # whole excludedSubtrees sequence absent/empty
+    "NameConstraintsPermittedSubtreesNonEmpty", # whole permittedSubtrees sequence non-empty
     "SubtreeIPMaskValidCIDR",            # NameConstraints mask CIDR validity, specific
     "WildcardFilter",                    # wildcard-specific
+    "DNSNamesFQDNOrWildcardPortionMatchesRegex", # dNSName wildcard FQDN portion semantics
+    "DNSOnionNamesHaveValidTorV3Address", # CABF Tor v3 .onion name syntax
+    "DomainNamesDoNotEndWithIPReverseZoneSuffix", # CABF IP reverse-zone suffix ban
     "RDNCountInRange",                   # RDN cardinality in DN uniqueness rules, specific
+    "DNHasRDNSequence",                  # X.509 Name is an RDNSequence, specific
     "RDNHasSingleAttribute",             # single-AV-per-RDN requirement, RFC 5280 §4.1.2.6
     "RDNSequenceHasCountryBefore",       # country-before-state ordering, RFC 6818
     "SerialNumberPositive",              # serialNumber > 0, RFC 5280 + CABF BR 7.1
     "SerialNumberOctetLengthInRange",    # serialNumber byte length, RFC 5280 §4.1.2.4
+    "SerialNumberDERSignBitZero",        # raw DER INTEGER sign bit clear, RFC 5280 App. B
+    "ExtKeyUsageCountInRange",           # ExtKeyUsage cardinality, extension-specific
 })
 GENERIC_ATOMS: frozenset[str] = frozenset(ATOM_CLASSES) - NON_GENERIC_ATOMS
 
@@ -1157,10 +1716,23 @@ def parse(obj: Any) -> Compound:
     fname = op
 
     # zero-arg predicates
-    if cls in (IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
-               SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN):
+    if cls in (HasAnyExtension, IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
+               SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
+               ValidityUTCTimeValuesUseZulu, CommonNameFromSAN,
+               SubjectCommonNameFQDNMatchesDNSNameSAN,
+               CertificatePoliciesHasNoPolicyQualifiers,
+               NameConstraintsExcludedSubtreesEmpty,
+               NameConstraintsPermittedSubtreesNonEmpty):
         _expect_args(fname, args, 0, "(no args)")
         return cls()
+    if cls is SubjectCommonNameFQDNOrWildcardPortionMatchesRegex:
+        _expect_args(fname, args, 1, "<NAMED_REGEX>")
+        regex_name = str(args[0])
+        if regex_name not in V.NAMED_REGEX_NAMES:
+            raise DSLError(
+                f"SubjectCommonNameFQDNOrWildcardPortionMatchesRegex: unknown named regex '{regex_name}'. "
+                f"Pick one of: {sorted(V.NAMED_REGEX_NAMES)}")
+        return cls(pattern=regex_name)
 
     if cls in (ExtPresent, ExtCritical, ExtNotCritical, ExtContentNonEmpty):
         _expect_args(fname, args, 1, "<OID_CONST>")
@@ -1169,6 +1741,11 @@ def parse(obj: Any) -> Compound:
     if cls is KeyUsageHas:
         _expect_args(fname, args, 1, "<KEY_USAGE_BIT>")
         return cls(bit=str(args[0]))
+    if cls is KeyUsageOnlyHasBitsInSet:
+        _expect_args(fname, args, 1, "[<KEY_USAGE_BIT>,...]")
+        if not isinstance(args[0], list) or not args[0] or not all(isinstance(v, str) for v in args[0]):
+            raise DSLError(f"{fname}: arg must be non-empty list of KEY_USAGE_BIT names")
+        return cls(bits=tuple(str(v) for v in args[0]))
     if cls is ExtKeyUsageHas:
         _expect_args(fname, args, 1, "<EKU_BIT>")
         return cls(bit=str(args[0]))
@@ -1301,6 +1878,9 @@ def parse(obj: Any) -> Compound:
     if cls is ExtRawValueContainsHex:
         _expect_args(fname, args, 2, "<OID_CONST> <hex_literal>")
         return cls(oid=str(args[0]), hex_lit=str(args[1]))
+    if cls is BasicConstraintsCAFalseEncodedAsEmptySequence:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
 
     if cls is ExtSubfieldPresent:
         if not (2 <= len(args) <= 4):
@@ -1330,6 +1910,12 @@ def parse(obj: Any) -> Compound:
                 f"AIAMethodLocationsAnyMatchRegex: unknown named regex "
                 f"'{regex_name}'. Pick one of: {sorted(V.NAMED_REGEX_NAMES)}")
         return cls(ext_oid=str(args[0]), method_oid=str(args[1]), pattern=regex_name)
+    if cls is AIAAccessDescriptionCountInRange:
+        _expect_args(fname, args, 2, "<lo:int> <hi:int|MAX_INT>")
+        return cls(lo=int(args[0]), hi=_int_or_maxint(args[1]))
+    if cls is AIAAccessLocationUniquePerMethod:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
 
     if cls is CRLDPHasNameRelative:
         _expect_args(fname, args, 0, "(no args)")
@@ -1345,6 +1931,11 @@ def parse(obj: Any) -> Compound:
         return cls(date_field=str(args[0]),
                    allowed_tags=tuple(str(t) for t in args[1]))
     if cls is CertPolicyExplicitTextHasEncodingTagInSet:
+        _expect_args(fname, args, 1, "<[ASN1_TYPE_NAME,...]>")
+        if not isinstance(args[0], list) or not args[0]:
+            raise DSLError(f"{fname}: arg must be non-empty list of ASN1_TYPE names")
+        return cls(allowed_tags=tuple(str(t) for t in args[0]))
+    if cls is CertPolicyExplicitTextAllHaveEncodingTagInSet:
         _expect_args(fname, args, 1, "<[ASN1_TYPE_NAME,...]>")
         if not isinstance(args[0], list) or not args[0]:
             raise DSLError(f"{fname}: arg must be non-empty list of ASN1_TYPE names")
@@ -1386,6 +1977,12 @@ def parse(obj: Any) -> Compound:
                SubtreeStringListAllMatchOrEmpty):
         _expect_args(fname, args, 2, "<subtree_string_list field> <predicate>")
         return cls(field=str(args[0]), predicate=parse(args[1]))
+    if cls is SubtreeStringListHasNonEmptyOrEmptyMarker:
+        _expect_args(fname, args, 1, "<subtree_string_list field>")
+        return cls(field=str(args[0]))
+    if cls is SubtreeStringListHasEmptyMarker:
+        _expect_args(fname, args, 1, "<subtree_string_list field>")
+        return cls(field=str(args[0]))
     if cls is SubtreeIPListAllOctetCountIn:
         _expect_args(fname, args, 2, "<subtree_ip_list field> <[count,...]>")
         if not isinstance(args[1], list) or not all(isinstance(v, int) for v in args[1]):
@@ -1413,6 +2010,14 @@ def parse(obj: Any) -> Compound:
         _expect_args(fname, args, 3, "<LIST_FIELD> <prefix:str> <predicate>")
         return cls(list_field=str(args[0]), prefix=str(args[1]),
                    predicate=parse(args[2]))
+    if cls is DNSNamesFQDNOrWildcardPortionMatchesRegex:
+        _expect_args(fname, args, 1, "<NAMED_REGEX>")
+        regex_name = str(args[0])
+        if regex_name not in V.NAMED_REGEX_NAMES:
+            raise DSLError(
+                f"DNSNamesFQDNOrWildcardPortionMatchesRegex: unknown named regex '{regex_name}'. "
+                f"Pick one of: {sorted(V.NAMED_REGEX_NAMES)}")
+        return cls(pattern=regex_name)
     if cls is ScalarInList:
         _expect_args(fname, args, 2, "<scalar_field> <list_field>")
         return cls(scalar_field=str(args[0]), list_field=str(args[1]))
@@ -1424,6 +2029,9 @@ def parse(obj: Any) -> Compound:
             raise DSLError(f"{fname}: list_fields cannot be empty")
         return cls(scalar_field=str(args[0]),
                    list_fields=tuple(str(v) for v in args[1]))
+    if cls is ListSubsetOfList:
+        _expect_args(fname, args, 2, "<source_list_field> <target_list_field>")
+        return cls(source_list=str(args[0]), target_list=str(args[1]))
     if cls is IPv4Conditional:
         _expect_args(fname, args, 3, "<ip_list field> <ipv4_predicate> <ipv6_predicate>")
         return cls(field=str(args[0]),
@@ -1443,6 +2051,94 @@ def parse(obj: Any) -> Compound:
     if cls is DomainComponentOrdered:
         _expect_args(fname, args, 0, "(no args) — checks Subject DN domainComponent ordering")
         return cls()
+    if cls is DNSOnionNamesHaveValidTorV3Address:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is DomainNamesDoNotEndWithIPReverseZoneSuffix:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is RDNCountInRange:
+        _expect_args(fname, args, 3, "<Subject|Issuer> <lo:int> <hi:int|MAX_INT>")
+        return cls(holder=str(args[0]), lo=int(args[1]), hi=_int_or_maxint(args[2]))
+    if cls is DNHasRDNSequence:
+        _expect_args(fname, args, 1, "<Subject|Issuer>")
+        return cls(holder=str(args[0]))
+    if cls is RDNHasSingleAttribute:
+        _expect_args(fname, args, 1, "<Subject|Issuer>")
+        return cls(holder=str(args[0]))
+    if cls is RDNSequenceHasCountryBefore:
+        _expect_args(fname, args, 1, "<Subject|Issuer>")
+        return cls(holder=str(args[0]))
+    if cls is SerialNumberDERSignBitZero:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is PolicyQualifierOIDInSet:
+        # Supports two forms: single oid_const or multiple oid_consts + forbid_other
+        if len(args) == 1 and isinstance(args[0], list):
+            # oid_consts form: [OID_CONST, ...]
+            return cls(oid_consts=tuple(str(o) for o in args[0]))
+        elif len(args) == 3:
+            # oid_const + oid_consts + forbid_other form
+            return cls(oid_const=str(args[0]),
+                       oid_consts=tuple(str(o) for o in args[1]) if isinstance(args[1], list) else (),
+                       forbid_other=bool(args[2]))
+        elif len(args) >= 1:
+            # Backward-compatible single oid_const form
+            return cls(oid_const=str(args[0]))
+        _expect_args(fname, args, 1, "<OID_CONST> or <[OID_CONST,...]>[, forbid_other]")
+        return cls()
+    if cls is PolicyQualifierOIDNotInSet:
+        _expect_args(fname, args, 1, "<OID_CONST>")
+        return cls(oid_const=str(args[0]))
+
+    # ---- New extension-aware atoms ----
+    if cls is ExtPolicyQualifierOIDInSet:
+        _expect_args(fname, args, 1, "<[OID_CONST,...]>")
+        if not isinstance(args[0], list) or not all(isinstance(o, str) for o in args[0]):
+            raise DSLError(f"{fname}: arg must be list of OID_CONST names")
+        return cls(allowed_oid_consts=tuple(str(o) for o in args[0]))
+    if cls is ExtPolicyQualifierOIDNotInSet:
+        _expect_args(fname, args, 1, "<OID_CONST>")
+        return cls(forbidden_oid_const=str(args[0]))
+    if cls is ExtKeyUsageHasBit:
+        _expect_args(fname, args, 1, "<KEY_USAGE_BIT>")
+        return cls(bit=str(args[0]))
+    if cls is ExtKeyUsageNotHasBit:
+        _expect_args(fname, args, 1, "<KEY_USAGE_BIT>")
+        return cls(bit=str(args[0]))
+    if cls is ExtKeyUsageAllBitsInSet:
+        _expect_args(fname, args, 1, "[<KEY_USAGE_BIT>,...]")
+        if not isinstance(args[0], list) or not all(isinstance(b, str) for b in args[0]):
+            raise DSLError(f"{fname}: arg must be list of KEY_USAGE_BIT names")
+        return cls(bits=tuple(str(b) for b in args[0]))
+    if cls is SerialNumberLengthInRange:
+        _expect_args(fname, args, 2, "<lo:int> <hi:int|MAX_INT>")
+        return cls(lo=int(args[0]), hi=_int_or_maxint(args[1]))
+    if cls is ExtHasAllGeneralNameTags:
+        _expect_args(fname, args, 1, "[<asn1_tag:int>,...]")
+        if not isinstance(args[0], list) or not all(isinstance(t, int) for t in args[0]):
+            raise DSLError(f"{fname}: arg must be list of ASN.1 tag ints")
+        return cls(required_tags=tuple(int(t) for t in args[0]))
+    if cls is ExtHasAnyGeneralNameTags:
+        _expect_args(fname, args, 1, "[<asn1_tag:int>,...]")
+        if not isinstance(args[0], list) or not all(isinstance(t, int) for t in args[0]):
+            raise DSLError(f"{fname}: arg must be list of ASN.1 tag ints")
+        return cls(allowed_tags=tuple(int(t) for t in args[0]))
+    if cls is SubjectCommonNameMatchesSAN:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is IssuerOrgMatchesSAN:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is ExtAIAHasOCSPNoHTTP:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is ExtHasDuplicateGeneralNames:
+        _expect_args(fname, args, 0, "(no args)")
+        return cls()
+    if cls is ExtNotPresentOrHasProperty:
+        _expect_args(fname, args, 2, "<OID_CONST> <predicate>")
+        return cls(oid=str(args[0]), property=parse(args[1]))
 
     raise DSLError(f"unhandled atom class {fname}")
 
@@ -1486,7 +2182,12 @@ def _validate(n, errs: list[str], in_item: bool):
     if isinstance(n, (IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
                       CRLDPHasNameRelative,
                       CRLDPHasNameRelativeWithMultiIssuer,
-                      SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN)):
+                      SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN,
+                      SubjectCommonNameFQDNMatchesDNSNameSAN)):
+        return
+    if isinstance(n, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
+        if n.pattern not in V.NAMED_REGEX_NAMES:
+            errs.append(f"SubjectCommonNameFQDNOrWildcardPortionMatchesRegex: unknown named regex '{n.pattern}'")
         return
 
     if isinstance(n, ValidityDateAsn1TagInSet):
@@ -1506,10 +2207,24 @@ def _validate(n, errs: list[str], in_item: bool):
             if t not in V.ASN1_BY_NAME:
                 errs.append(f"CertPolicyExplicitTextHasEncodingTagInSet: unknown ASN1_TYPE '{t}'")
         return
+    if isinstance(n, CertPolicyExplicitTextAllHaveEncodingTagInSet):
+        if not n.allowed_tags:
+            errs.append("CertPolicyExplicitTextAllHaveEncodingTagInSet: allowed_tags must be non-empty")
+        for t in n.allowed_tags:
+            if t not in V.ASN1_BY_NAME:
+                errs.append(f"CertPolicyExplicitTextAllHaveEncodingTagInSet: unknown ASN1_TYPE '{t}'")
+        return
 
     if isinstance(n, KeyUsageHas):
         if n.bit not in V.KU_BY_NAME:
             errs.append(f"unknown KEY_USAGE_BIT '{n.bit}'")
+        return
+    if isinstance(n, KeyUsageOnlyHasBitsInSet):
+        if not n.bits:
+            errs.append("KeyUsageOnlyHasBitsInSet: bits cannot be empty")
+        for bit in n.bits:
+            if bit not in V.KU_BY_NAME:
+                errs.append(f"KeyUsageOnlyHasBitsInSet: unknown KEY_USAGE_BIT '{bit}'")
         return
     if isinstance(n, ExtKeyUsageHas):
         if n.bit not in V.EKU_BY_NAME:
@@ -1699,6 +2414,8 @@ def _validate(n, errs: list[str], in_item: bool):
         if not re.fullmatch(r"[0-9a-fA-F]+", n.hex_lit) or len(n.hex_lit) % 2 != 0:
             errs.append(f"{type(n).__name__}: hex literal must be even-length hex (got {n.hex_lit[:30]!r})")
         return
+    if isinstance(n, BasicConstraintsCAFalseEncodedAsEmptySequence):
+        return
 
     if isinstance(n, ExtSubfieldPresent):
         if n.oid not in V.OID_BY_NAME:
@@ -1736,6 +2453,14 @@ def _validate(n, errs: list[str], in_item: bool):
             errs.append(f"AIAMethodLocationsAnyMatchRegex: unknown OID_CONST '{n.method_oid}'")
         if n.pattern not in V.NAMED_REGEX_NAMES:
             errs.append(f"AIAMethodLocationsAnyMatchRegex: unknown NAMED_REGEX '{n.pattern}'")
+        return
+    if isinstance(n, AIAAccessDescriptionCountInRange):
+        if n.lo < 0:
+            errs.append(f"AIAAccessDescriptionCountInRange: lo must be non-negative, got {n.lo}")
+        if n.hi != "MAX_INT" and (not isinstance(n.hi, int) or n.hi < n.lo):
+            errs.append(f"AIAAccessDescriptionCountInRange: hi must be int >= lo or 'MAX_INT', got {n.hi}")
+        return
+    if isinstance(n, AIAAccessLocationUniquePerMethod):
         return
 
     if isinstance(n, OidEq):
@@ -1819,6 +2544,20 @@ def _validate(n, errs: list[str], in_item: bool):
             errs.append(f"{type(n).__name__}: '{n.field}' go_type={f.go_type}, must be []GeneralSubtreeString")
         _validate(n.predicate, errs, in_item=True)
         return
+    if isinstance(n, SubtreeStringListHasNonEmptyOrEmptyMarker):
+        f = V.lookup_anyfield(n.field)
+        if f is None:
+            errs.append(f"SubtreeStringListHasNonEmptyOrEmptyMarker: unknown field '{n.field}'")
+        elif f.go_type != "[]GeneralSubtreeString":
+            errs.append(f"SubtreeStringListHasNonEmptyOrEmptyMarker: '{n.field}' go_type={f.go_type}, must be []GeneralSubtreeString")
+        return
+    if isinstance(n, SubtreeStringListHasEmptyMarker):
+        f = V.lookup_anyfield(n.field)
+        if f is None:
+            errs.append(f"SubtreeStringListHasEmptyMarker: unknown field '{n.field}'")
+        elif f.go_type != "[]GeneralSubtreeString":
+            errs.append(f"SubtreeStringListHasEmptyMarker: '{n.field}' go_type={f.go_type}, must be []GeneralSubtreeString")
+        return
     if isinstance(n, SubtreeIPListAllOctetCountIn):
         f = V.lookup_anyfield(n.field)
         if f is None:
@@ -1876,6 +2615,11 @@ def _validate(n, errs: list[str], in_item: bool):
         _validate(n.predicate, errs, in_item=True)
         return
 
+    if isinstance(n, DNSNamesFQDNOrWildcardPortionMatchesRegex):
+        if n.pattern not in V.NAMED_REGEX_NAMES:
+            errs.append(f"DNSNamesFQDNOrWildcardPortionMatchesRegex: unknown named regex '{n.pattern}'")
+        return
+
     if isinstance(n, ScalarInList):
         fa = V.lookup_anyfield(n.scalar_field)
         if fa is None:
@@ -1905,6 +2649,19 @@ def _validate(n, errs: list[str], in_item: bool):
             elif fl.semantic not in ("string_list", "ip_list"):
                 errs.append(f"ScalarInAnyOfLists: list_field '{lname}' "
                             f"semantic={fl.semantic}, must be string_list or ip_list")
+        return
+
+    if isinstance(n, ListSubsetOfList):
+        fs = V.lookup_anyfield(n.source_list)
+        if fs is None:
+            errs.append(f"ListSubsetOfList: unknown source_list '{n.source_list}'")
+        elif fs.semantic != "string_list":
+            errs.append(f"ListSubsetOfList: source_list '{n.source_list}' semantic={fs.semantic}, must be string_list")
+        ft = V.lookup_anyfield(n.target_list)
+        if ft is None:
+            errs.append(f"ListSubsetOfList: unknown target_list '{n.target_list}'")
+        elif ft.semantic != "string_list":
+            errs.append(f"ListSubsetOfList: target_list '{n.target_list}' semantic={ft.semantic}, must be string_list")
         return
 
     if isinstance(n, IPv4Conditional):
@@ -1953,6 +2710,23 @@ def _validate(n, errs: list[str], in_item: bool):
     if isinstance(n, DomainComponentOrdered):
         # DomainComponentOrdered is a zero-arg sentinel atom with no field args
         return
+    if isinstance(n, DNSOnionNamesHaveValidTorV3Address):
+        return
+    if isinstance(n, DomainNamesDoNotEndWithIPReverseZoneSuffix):
+        return
+    if isinstance(n, RDNCountInRange):
+        if n.holder not in ("Subject", "Issuer"):
+            errs.append(f"RDNCountInRange: holder must be Subject/Issuer, got '{n.holder}'")
+        hi = n.hi if isinstance(n.hi, int) else float("inf")
+        if n.lo < 0:
+            errs.append(f"RDNCountInRange: lo must be non-negative, got {n.lo}")
+        if isinstance(hi, int) and n.lo > hi:
+            errs.append(f"RDNCountInRange: lo={n.lo} > hi={n.hi}")
+        return
+    if isinstance(n, (DNHasRDNSequence, RDNHasSingleAttribute, RDNSequenceHasCountryBefore)):
+        if n.holder not in ("Subject", "Issuer"):
+            errs.append(f"{type(n).__name__}: holder must be Subject/Issuer, got '{n.holder}'")
+        return
 
     # ── FieldCount ──────────────────────────────────────────────────────
     if isinstance(n, FieldCount):
@@ -1995,6 +2769,71 @@ def _validate(n, errs: list[str], in_item: bool):
     if isinstance(n, ExtContentNonEmpty):
         if n.oid not in V.OID_BY_NAME:
             errs.append(f"ExtContentNonEmpty: unknown OID_CONST '{n.oid}'")
+        return
+
+    # ── New extension-aware atoms (2026-07-02) ─────────────────────────
+    if isinstance(n, ExtPolicyQualifierOIDInSet):
+        for oid in n.allowed_oid_consts:
+            if oid not in V.OID_BY_NAME:
+                errs.append(f"ExtPolicyQualifierOIDInSet: unknown OID_CONST '{oid}'")
+        return
+    if isinstance(n, ExtPolicyQualifierOIDNotInSet):
+        if n.forbidden_oid_const not in V.OID_BY_NAME:
+            errs.append(f"ExtPolicyQualifierOIDNotInSet: unknown OID_CONST '{n.forbidden_oid_const}'")
+        return
+    if isinstance(n, (ExtKeyUsageHasBit, ExtKeyUsageNotHasBit)):
+        valid_bits = {"DigitalSignature", "NonRepudiation", "KeyEncipherment",
+                       "DataEncipherment", "KeyAgreement", "KeyCertSign",
+                       "CRLSign", "EncipherOnly", "DecipherOnly"}
+        if n.bit not in valid_bits:
+            errs.append(f"{type(n).__name__}: unknown bit '{n.bit}'. Valid: {valid_bits}")
+        return
+    if isinstance(n, ExtKeyUsageAllBitsInSet):
+        valid_bits = {"DigitalSignature", "NonRepudiation", "KeyEncipherment",
+                       "DataEncipherment", "KeyAgreement", "KeyCertSign",
+                       "CRLSign", "EncipherOnly", "DecipherOnly"}
+        for bit in n.bits:
+            if bit not in valid_bits:
+                errs.append(f"ExtKeyUsageAllBitsInSet: unknown bit '{bit}'. Valid: {valid_bits}")
+        return
+    if isinstance(n, SerialNumberDERSignBitZero):
+        return
+    if isinstance(n, SerialNumberLengthInRange):
+        if not isinstance(n.lo, int) or n.lo < 1:
+            errs.append(f"SerialNumberLengthInRange: lo must be >= 1, got {n.lo}")
+        if n.hi != "MAX_INT" and (not isinstance(n.hi, int) or n.hi < n.lo):
+            errs.append(f"SerialNumberLengthInRange: hi must be int >= lo or 'MAX_INT', got {n.hi}")
+        return
+    if isinstance(n, ExtHasAllGeneralNameTags):
+        if n.oid not in V.OID_BY_NAME:
+            errs.append(f"ExtHasAllGeneralNameTags: unknown OID_CONST '{n.oid}'")
+        for tag in n.required_tags:
+            if not isinstance(tag, int) or tag < 0 or tag > 8:
+                errs.append(f"ExtHasAllGeneralNameTags: tag must be 0..8, got {tag}")
+        return
+    if isinstance(n, ExtHasAnyGeneralNameTags):
+        if n.oid not in V.OID_BY_NAME:
+            errs.append(f"ExtHasAnyGeneralNameTags: unknown OID_CONST '{n.oid}'")
+        for tag in n.allowed_tags:
+            if not isinstance(tag, int) or tag < 0 or tag > 8:
+                errs.append(f"ExtHasAnyGeneralNameTags: tag must be 0..8, got {tag}")
+        return
+    if isinstance(n, ExtAIAHasOCSPNoHTTP):
+        # Zero-arg sentinel, always valid
+        return
+    if isinstance(n, ExtHasDuplicateGeneralNames):
+        # Zero-arg sentinel, always valid
+        return
+    if isinstance(n, SubjectCommonNameMatchesSAN):
+        # Zero-arg sentinel, always valid
+        return
+    if isinstance(n, IssuerOrgMatchesSAN):
+        # Zero-arg sentinel, always valid
+        return
+    if isinstance(n, ExtNotPresentOrHasProperty):
+        if n.oid not in V.OID_BY_NAME:
+            errs.append(f"ExtNotPresentOrHasProperty: unknown OID_CONST '{n.oid}'")
+        _validate(n.property, errs)
         return
 
     errs.append(f"unhandled DSL node {type(n).__name__}")
@@ -2062,6 +2901,7 @@ ATOM_SIGNATURES = [
     ('CRLDPHasNameRelativeWithMultiIssuer', [], 'CRL Distribution Points extension is present AND contains at least one DistributionPoint whose distributionPoint CHOICE is nameRelativeToCRLIssuer AND whose cRLIssuer field has more than one GeneralName. Use Not(CRLDPHasNameRelativeWithMultiIssuer()) to express "MUST NOT use nameRelativeToCRLIssuer when cRLIssuer contains more than one distinguished name"'),
     ('ValidityDateAsn1TagInSet', ['<NotBefore|NotAfter>', ['<ASN1_TYPE>', '...']], 'the ASN.1 universal-class tag of the named validity-date field (read from RawTBSCertificate; zcrypto exposes only the parsed time.Time and loses the original tag) is in the allowed-tag set. Only the UTCTime/GeneralizedTime ASN1_TYPE values are semantically valid for validity dates. Use for "validity date NotBefore/NotAfter MUST/MUST NOT be encoded as {TYPE}" rules (e.g. "dates in 2050 or later MUST be GeneralizedTime")'),
     ('CertPolicyExplicitTextHasEncodingTagInSet', [['<ASN1_TYPE>', '...']], 'CertificatePolicies extension is present AND contains at least one explicitText (in a UserNotice policy qualifier, OID id-qt-unotice) whose DisplayText CHOICE tag is in the allowed set. DisplayText is a CHOICE among IA5String/VisibleString/BMPString/UTF8String — the CHOICE tag carries the encoding info. Use Not(CertPolicyExplicitTextHasEncodingTagInSet([VisibleString, BMPString])) to express "MUST NOT encode explicitText as VisibleString or BMPString"'),
+    ('CertPolicyExplicitTextAllHaveEncodingTagInSet', [['<ASN1_TYPE>', '...']], 'Every UserNotice explicitText in CertificatePolicies uses one of the allowed DisplayText CHOICE tags. Vacuously true if no explicitText exists. Use for "explicitText SHOULD/MUST use UTF8String" encoding rules.'),
     ('OidEq',               ['<OID_FIELD>', '<OID_CONST>'],          'single OID-typed field (e.g. PublicKeyAlgorithmOID) equals the named OID constant'),
     ('SubtreeIPListAnyHasOctetCount', ['<subtree_list>', '<8|32>'],  'a NameConstraints subtree IP list has at least one entry of count octets (IP+Mask): 8 = IPv4, 32 = IPv6'),
     ('BytesContainsOidDer', ['<BYTES_FIELD>', '<OID_CONST>'],        'bytes field contains the DER encoding of the named OID — use for "namedCurve MUST be secp384r1" / "AlgorithmIdentifier embeds OID X" without writing hex literals'),
@@ -2070,6 +2910,7 @@ ATOM_SIGNATURES = [
     ('SubtreeIPListAnyHasOctetCountAndNotAllZero', ['<subtree_list>', '<8|32>'], 'a NameConstraints subtree IP list has at least one entry of count octets where at least one byte is non-zero; the "real entry" counterpart of SubtreeIPListAnyAllZero. Use as Or(SubtreeIPListAnyHasOctetCountAndNotAllZero(F,32), SubtreeIPListAnyAllZero(F,32)) for "permittedSubtrees MUST contain real IPv6 entry OR ::0/0 marker" (R4633), and same with count=8 for IPv4 0.0.0.0/0 marker rule (R4632)'),
     ('SubtreeStringListAllMatch', ['<subtree_string_list>', '<predicate>'], 'iterate string-typed subtree list (PermittedDNSNames, ExcludedURIs, ...); apply ItemMatchesRegex/ItemEq/ItemInSet predicate to each entry .Data string. Use for "permitted subtree entries MUST be FQDN"-shape rules'),
     ('SubtreeStringListAnyMatch', ['<subtree_string_list>', '<predicate>'], 'iterate string-typed subtree list, satisfied if at least one entry matches predicate'),
+    ('SubtreeStringListHasEmptyMarker', ['<subtree_string_list>'], 'true when a NameConstraints string subtree list contains the zero-length dNSName marker, used to represent excludedSubtrees excluding all DNS names of that GeneralName type.'),
     ('SubtreeStringListAllMatchOrEmpty', ['<subtree_string_list>', '<predicate>'], 'like SubtreeStringListAllMatch but vacuously TRUE on empty list. Use for "if X is constrained in permittedSubtrees/excludedSubtrees, all entries must be Y" rules where the constraint applies only to populated sides — combine with And over (permitted, excluded) so each populated side is checked but empty sides do not violate (R3995)'),
     ('SubtreeIPListAllOctetCountIn', ['<subtree_ip_list>', ['<count>','...']], 'every entry in NameConstraints subtree IP list has total bytes (IP+Mask) in given set; use [8,32] for "every iPAddress is IPv4 or IPv6", [32] for "all IPv6", [8] for "all IPv4"'),
     ('SubtreeIPMaskValidCIDR', ['<subtree_ip_list>'], 'every entry in NameConstraints subtree IP list has its mask portion (Data.Mask) in valid CIDR form: contiguous high-order 1-bits followed by zeros (per RFC 4632). IP-version agnostic — works on IPv4 (4-byte mask) and IPv6 (16-byte mask). Use for "iPAddress MUST be encoded in the style of RFC 4632 (CIDR)" rules (R4007). Empty list = vacuous true.'),
@@ -2081,6 +2922,21 @@ ATOM_SIGNATURES = [
     ('ExtHasGeneralNameWithTag', ['<OID_CONST>', '<tag:int>'], 'ENCODING CHECK (NOT a presence check). True iff EVERY GeneralName entry in the named extension that has the given CHOICE tag is IA5String-encoded. Returns vacuously TRUE when zero entries of the given tag are present, so this atom CANNOT detect presence/absence — use ExtHasAnyGeneralNameOfTag for presence. RFC 5280 GeneralName tags: 0=otherName, 1=rfc822Name, 2=dNSName, 3=x400Address, 4=directoryName, 5=ediPartyName, 6=URI, 7=iPAddress, 8=registeredID. Use for "rfc822Name MUST be IA5String"-shape rules.'),
     ('ExtHasAnyGeneralNameOfTag', ['<OID_CONST>', '<tag:int>'], 'PRESENCE CHECK. True iff the named extension is present AND contains at least one GeneralName entry with the given CHOICE tag. Re-parses the raw extension SEQUENCE OF GeneralName because zcrypto exposes only DNSNames/EmailAddresses/URIs/IPAddresses (drops directoryName/otherName/ediPartyName/registeredID). RFC 5280 GeneralName tags: 0=otherName, 1=rfc822Name, 2=dNSName, 3=x400Address, 4=directoryName, 5=ediPartyName, 6=URI, 7=iPAddress, 8=registeredID. Use for "directoryName NOT RECOMMENDED in SAN" / "MUST contain at least one dNSName" presence rules.'),
     ('DomainComponentOrdered',   [],                                       'Subject DN contains domainComponent fields in a single contiguous ordered sequence (no gaps or intervening non-DC RDN types); use for "domainComponent fields MUST be in ordered sequence" rules (R4660)'),
+    ('DomainNamesDoNotEndWithIPReverseZoneSuffix', [],                     'Certificate domain-name fields (SAN dNSName and legacy subject commonName) do not end in an IP reverse-zone suffix: in-addr.arpa or ip6.arpa. Use for CABF rules banning Domain Names that end in an IP Reverse Zone Suffix.'),
+    # ── New extension-aware atoms (13 added 2026-07-02) ──────────────────
+    ('ExtPolicyQualifierOIDInSet', ['<OID_CONST>', ['<QUALIFIER_OID_CONST>', '...']], 'CertificatePolicies extension contains a qualifier (CPS-pointer/id-qt-unotice) whose policyQualifierId OID is in the allow-list. Vacuously true when extension absent. Use for "policy qualifiers MUST be CPS OID or UserNotice OID" rules.'),
+    ('ExtPolicyQualifierOIDNotInSet', ['<OID_CONST>', '<QUALIFIER_OID_CONST>'], 'CertificatePolicies extension does NOT contain any qualifier whose policyQualifierId OID equals the forbidden OID. Vacuously true when extension absent. Use for "CPS pointer OID MUST NOT appear" rules.'),
+    ('ExtKeyUsageHasBit', ['<KEY_USAGE_BIT>'], 'KeyUsage extension has the specified bit set in its bitstring. KEY_USAGE_BIT values: DigitalSignature, NonRepudiation, KeyEncipherment, DataEncipherment, KeyAgreement, KeyCertSign, CRLSign, EncipherOnly, DecipherOnly. Vacuous for non-RSA keys (KeyUsage may not be present).'),
+    ('ExtKeyUsageNotHasBit', ['<KEY_USAGE_BIT>'], 'KeyUsage extension does NOT have the specified bit set. KEY_USAGE_BIT values same as above. Use for "keyCertSign MUST NOT appear" rules.'),
+    ('ExtKeyUsageAllBitsInSet', [['<KEY_USAGE_BIT>', '...'], ], 'KeyUsage extension has EXACTLY the specified bits set (no more, no less). Use for "KeyUsage MUST be exactly {digitalSignature, keyEncipherment}" rules.'),
+    ('SerialNumberLengthInRange', ['<lo:int>', '<hi:int|MAX_INT>'], 'the byte length of SerialNumber.Bytes is in [lo,hi]. Use for "serialNumber MUST be 8-20 octets" rules (RFC 5280 §4.1.2.4).'),
+    ('ExtHasAllGeneralNameTags', ['<OID_CONST>', ['<asn1_tag:int>', '...']], 'the named extension (typically SAN=AiaOID) contains GeneralName entries of ALL specified ASN.1 CHOICE tag types. Tags: 0=otherName, 1=rfc822Name, 2=dNSName, 4=directoryName, 6=URI, 7=iPAddress, 8=registeredID. Vacuously true when extension absent.'),
+    ('ExtHasAnyGeneralNameTags', ['<OID_CONST>', ['<asn1_tag:int>', '...']], 'the named extension contains at least one GeneralName entry with ANY of the specified ASN.1 CHOICE tag types. Vacuously true when extension absent.'),
+    ('SubjectCommonNameMatchesSAN', [], 'Subject.CommonName equals at least one entry in SubjectAltNames (any type). Use for "CN MUST match a SAN entry" rules.'),
+    ('IssuerOrgMatchesSAN', [], 'Issuer.Organization is a substring of at least one SAN dNSName entry. Use for "issuer O field MUST match domain of a SAN" rules.'),
+    ('ExtAIAHasOCSPNoHTTP', [], 'AuthorityInfoAccess extension OCSP responder URLs do NOT use http:// scheme (only https:// or other schemes allowed). Vacuously true when extension absent or contains no OCSP entries.'),
+    ('ExtHasDuplicateGeneralNames', [], 'the SubjectAltName extension contains duplicate GeneralName values (across any types). Returns false when no duplicates found.'),
+    ('ExtNotPresentOrHasProperty', ['<OID_CONST>', '<compound>'], 'if the named extension is present, the nested compound predicate must hold; vacuously true if absent. Use for "if extension E is present, it must satisfy condition X" rules.'),
 ]
 
 COMPOUND_SIGNATURES = [
@@ -2090,7 +2946,7 @@ COMPOUND_SIGNATURES = [
 ]
 
 
-def schema_for_llm(max_chars: int = 12000) -> str:
+def schema_for_llm(max_chars: int = 18000) -> str:
     lines = ['DSL ATOMS:']
     for op, sig, doc in ATOM_SIGNATURES:
         sig_str = ' '.join(_fmt_sig(s) for s in sig)
@@ -2151,6 +3007,7 @@ def compound_to_dict(node: Compound) -> dict:
             "SubtreeIPListAllOctetCountIn",    # counts: tuple
             "AIAMethodLocationsTagInSet",      # allowed_tags: tuple
             "CertPolicyExplicitTextHasEncodingTagInSet",  # allowed_tags: tuple
+            "CertPolicyExplicitTextAllHaveEncodingTagInSet",  # allowed_tags: tuple
             "ExtensionURISchemeNotInSet",      # schemes: tuple
             "ValidityDateAsn1TagInSet",        # allowed_tags: tuple
             "ScalarInAnyOfLists",             # list_fields: tuple
@@ -2196,6 +3053,7 @@ def compound_to_dict(node: Compound) -> dict:
         if op_name in ("ListAllMatch", "ListAnyMatch", "WildcardFilter",
                        "AIAMethodLocationsAnyMatchRegex",
                        "CertPolicyExplicitTextHasEncodingTagInSet",
+                       "CertPolicyExplicitTextAllHaveEncodingTagInSet",
                        "AIAHasMethodOtherThan",
                        "AIAMethodLocationsTagInSet",
                        "IPv4Conditional",

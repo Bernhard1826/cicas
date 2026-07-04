@@ -32,7 +32,7 @@ from cryptography.hazmat.primitives import serialization
 HERE = Path(__file__).resolve().parent
 DEFAULT_INPUTS = HERE / "inputs"
 # A Google-operated log that is directly reachable from this host.
-DEFAULT_LOG = "https://ct.googleapis.com/logs/us1/argon2025h2/ct/v1/"
+DEFAULT_LOG = "https://ct.googleapis.com/logs/us1/argon2026h1/ct/v1/"
 
 
 def _get(url: str, timeout: float) -> dict:
@@ -339,7 +339,7 @@ def main():
         "skipped": skipped,
         "batch_errors": errors,
         "include_chain": args.include_chain,
-        "scan_command": f"python3 experiments/cert_detection/run.py --certs {certs_dir}",
+        "scan_command": f"python3 cicas_backend/experiments/cert_detection/run.py --certs {certs_dir}",
     }, indent=2))
 
 

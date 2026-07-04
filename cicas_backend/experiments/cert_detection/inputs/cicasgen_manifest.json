@@ -1,19 +1,7 @@
 {
   "zlint_v3": "/home/bernhard/projects/cicas/cicas_backend/zlint/v3",
-  "count": 78,
+  "count": 89,
   "lints": [
-    {
-      "lint_name": "cicasgen_when_root_ca_issuer_unique_id_absent_29217",
-      "rule_id": 29217,
-      "source": "CABF-BR",
-      "section": "7.1.2.1",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_root_ca_issuer_unique_id_absent_29217.go"
-    },
     {
       "lint_name": "cicasgen_when_root_ca_subject_unique_id_absent_29218",
       "rule_id": 29218,
@@ -27,8 +15,8 @@
       "file": "lints/cabf_br/lint_cicasgen_when_root_ca_subject_unique_id_absent_29218.go"
     },
     {
-      "lint_name": "cicasgen_not_aiahas_method_other_than_29235",
-      "rule_id": 29235,
+      "lint_name": "cicasgen_aiaaccess_location_unique_per_method_29238",
+      "rule_id": 29238,
       "source": "CABF-BR",
       "section": "7.1.2.10.3",
       "rule_text": "",
@@ -36,7 +24,7 @@
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_not_aiahas_method_other_than_29235.go"
+      "file": "lints/cabf_br/lint_cicasgen_aiaaccess_location_unique_per_method_29238.go"
     },
     {
       "lint_name": "cicasgen_not_aiahas_method_other_than_29240",
@@ -63,6 +51,42 @@
       "file": "lints/cabf_br/lint_cicasgen_when_cert_policy_present_policy_identifiers_count_29243.go"
     },
     {
+      "lint_name": "cicasgen_oid_list_count_in_set_policy_identifiers_29244",
+      "rule_id": 29244,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.5",
+      "rule_text": "",
+      "method": "llm",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_oid_list_count_in_set_policy_identifiers_29244.go"
+    },
+    {
+      "lint_name": "cicasgen_certificate_policies_has_no_policy_qualifiers_29246",
+      "rule_id": 29246,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.5",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_certificate_policies_has_no_policy_qualifiers_29246.go"
+    },
+    {
+      "lint_name": "cicasgen_oid_list_count_in_set_policy_identifiers_29247",
+      "rule_id": 29247,
+      "source": "CABF-BR",
+      "section": "7.1.2.10.5",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_oid_list_count_in_set_policy_identifiers_29247.go"
+    },
+    {
       "lint_name": "cicasgen_not_ext_subfield_present_name_const_29264",
       "rule_id": 29264,
       "source": "CABF-BR",
@@ -73,18 +97,6 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
       "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_name_const_29264.go"
-    },
-    {
-      "lint_name": "cicasgen_not_ext_subfield_present_name_const_29265",
-      "rule_id": 29265,
-      "source": "CABF-BR",
-      "section": "7.1.2.10.8",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_name_const_29265.go"
     },
     {
       "lint_name": "cicasgen_excluded_directory_names_absent_and_excluded_dnsnames_29269",
@@ -111,18 +123,6 @@
       "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_authority_key_id_28730.go"
     },
     {
-      "lint_name": "cicasgen_authority_key_id_present_29273",
-      "rule_id": 29273,
-      "source": "CABF-BR",
-      "section": "7.1.2.11.1",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_authority_key_id_present_29273.go"
-    },
-    {
       "lint_name": "cicasgen_not_ext_subfield_present_authority_key_id_29274",
       "rule_id": 29274,
       "source": "CABF-BR",
@@ -133,18 +133,6 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
       "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_authority_key_id_29274.go"
-    },
-    {
-      "lint_name": "cicasgen_when_crl_dist_present_crldistribution_points_count_29735",
-      "rule_id": 29735,
-      "source": "CABF-BR",
-      "section": "7.1.2.11.2",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_crl_dist_present_crldistribution_points_count_29735.go"
     },
     {
       "lint_name": "cicasgen_issuer_unique_id_absent_29298",
@@ -207,6 +195,18 @@
       "file": "lints/cabf_br/lint_cicasgen_policy_identifiers_count_29316.go"
     },
     {
+      "lint_name": "cicasgen_any_policy_list_contains_29321",
+      "rule_id": 29321,
+      "source": "CABF-BR",
+      "section": "7.1.2.2.6",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_any_policy_list_contains_29321.go"
+    },
+    {
       "lint_name": "cicasgen_not_any_policy_list_contains_29324",
       "rule_id": 29324,
       "source": "CABF-BR",
@@ -231,16 +231,16 @@
       "file": "lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29325.go"
     },
     {
-      "lint_name": "cicasgen_issuer_unique_id_absent_29332",
-      "rule_id": 29332,
+      "lint_name": "cicasgen_ext_policy_qualifier_oidin_set_29329",
+      "rule_id": 29329,
       "source": "CABF-BR",
-      "section": "7.1.2.3",
+      "section": "7.1.2.2.6",
       "rule_text": "",
       "method": "deterministic",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_issuer_unique_id_absent_29332.go"
+      "file": "lints/cabf_br/lint_cicasgen_ext_policy_qualifier_oidin_set_29329.go"
     },
     {
       "lint_name": "cicasgen_subject_unique_id_absent_29333",
@@ -255,16 +255,16 @@
       "file": "lints/cabf_br/lint_cicasgen_subject_unique_id_absent_29333.go"
     },
     {
-      "lint_name": "cicasgen_sig_alg_matches_tbssignature_29334",
-      "rule_id": 29334,
+      "lint_name": "cicasgen_policy_identifiers_count_29338",
+      "rule_id": 29338,
       "source": "CABF-BR",
-      "section": "7.1.2.3",
+      "section": "7.1.2.3.2",
       "rule_text": "",
-      "method": "deterministic",
+      "method": "llm",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_sig_alg_matches_tbssignature_29334.go"
+      "file": "lints/cabf_br/lint_cicasgen_policy_identifiers_count_29338.go"
     },
     {
       "lint_name": "cicasgen_policy_identifiers_count_and_any_policy_list_contains_29339",
@@ -303,8 +303,20 @@
       "file": "lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29343.go"
     },
     {
-      "lint_name": "cicasgen_issuer_unique_id_absent_29358",
-      "rule_id": 29358,
+      "lint_name": "cicasgen_ext_policy_qualifier_oidin_set_29347",
+      "rule_id": 29347,
+      "source": "CABF-BR",
+      "section": "7.1.2.3.2",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_ext_policy_qualifier_oidin_set_29347.go"
+    },
+    {
+      "lint_name": "cicasgen_sig_alg_matches_tbssignature_29360",
+      "rule_id": 29360,
       "source": "CABF-BR",
       "section": "7.1.2.4",
       "rule_text": "",
@@ -312,43 +324,7 @@
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_issuer_unique_id_absent_29358.go"
-    },
-    {
-      "lint_name": "cicasgen_subject_unique_id_absent_29359",
-      "rule_id": 29359,
-      "source": "CABF-BR",
-      "section": "7.1.2.4",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_subject_unique_id_absent_29359.go"
-    },
-    {
-      "lint_name": "cicasgen_issuer_unique_id_absent_29365",
-      "rule_id": 29365,
-      "source": "CABF-BR",
-      "section": "7.1.2.5",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_issuer_unique_id_absent_29365.go"
-    },
-    {
-      "lint_name": "cicasgen_subject_unique_id_absent_29366",
-      "rule_id": 29366,
-      "source": "CABF-BR",
-      "section": "7.1.2.5",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_subject_unique_id_absent_29366.go"
+      "file": "lints/cabf_br/lint_cicasgen_sig_alg_matches_tbssignature_29360.go"
     },
     {
       "lint_name": "cicasgen_sig_alg_matches_tbssignature_29367",
@@ -363,6 +339,18 @@
       "file": "lints/cabf_br/lint_cicasgen_sig_alg_matches_tbssignature_29367.go"
     },
     {
+      "lint_name": "cicasgen_permitted_dnsnames_present_or_subtree_string_list_any_29374",
+      "rule_id": 29374,
+      "source": "CABF-BR",
+      "section": "7.1.2.5.2",
+      "rule_text": "",
+      "method": "llm",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_permitted_dnsnames_present_or_subtree_string_list_any_29374.go"
+    },
+    {
       "lint_name": "cicasgen_permitted_directory_names_present_29375",
       "rule_id": 29375,
       "source": "CABF-BR",
@@ -373,18 +361,6 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
       "file": "lints/cabf_br/lint_cicasgen_permitted_directory_names_present_29375.go"
-    },
-    {
-      "lint_name": "cicasgen_not_ext_subfield_present_name_const_29376",
-      "rule_id": 29376,
-      "source": "CABF-BR",
-      "section": "7.1.2.5.2",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_name_const_29376.go"
     },
     {
       "lint_name": "cicasgen_not_ext_subfield_present_name_const_29377",
@@ -399,8 +375,44 @@
       "file": "lints/cabf_br/lint_cicasgen_not_ext_subfield_present_name_const_29377.go"
     },
     {
-      "lint_name": "cicasgen_when_is_ca_issuer_unique_id_absent_29392",
-      "rule_id": 29392,
+      "lint_name": "cicasgen_excluded_dnsnames_present_or_permitted_dnsnames_present_29378",
+      "rule_id": 29378,
+      "source": "CABF-BR",
+      "section": "7.1.2.5.2",
+      "rule_text": "",
+      "method": "llm",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_excluded_dnsnames_present_or_permitted_dnsnames_present_29378.go"
+    },
+    {
+      "lint_name": "cicasgen_subtree_string_list_has_non_empty_or_empty_marker_29382",
+      "rule_id": 29382,
+      "source": "CABF-BR",
+      "section": "7.1.2.5.2",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_subtree_string_list_has_non_empty_or_empty_marker_29382.go"
+    },
+    {
+      "lint_name": "cicasgen_name_constraints_excluded_subtrees_empty_29388",
+      "rule_id": 29388,
+      "source": "CABF-BR",
+      "section": "7.1.2.5.2",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_name_constraints_excluded_subtrees_empty_29388.go"
+    },
+    {
+      "lint_name": "cicasgen_sig_alg_matches_tbssignature_29394",
+      "rule_id": 29394,
       "source": "CABF-BR",
       "section": "7.1.2.6",
       "rule_text": "",
@@ -408,43 +420,31 @@
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_is_ca_issuer_unique_id_absent_29392.go"
+      "file": "lints/cabf_br/lint_cicasgen_sig_alg_matches_tbssignature_29394.go"
     },
     {
-      "lint_name": "cicasgen_when_subscriber_cert_issuer_unique_id_absent_29397",
-      "rule_id": 29397,
-      "source": "CABF-BR",
-      "section": "7.1.2.7",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_issuer_unique_id_absent_29397.go"
-    },
-    {
-      "lint_name": "cicasgen_when_subscriber_cert_sig_alg_matches_tbssignature_29399",
-      "rule_id": 29399,
-      "source": "CABF-BR",
-      "section": "7.1.2.7",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_sig_alg_matches_tbssignature_29399.go"
-    },
-    {
-      "lint_name": "cicasgen_ku_has_cert_sign_or_ku_has_digital_signature_or_ku_has_29408",
-      "rule_id": 29408,
+      "lint_name": "cicasgen_when_subscriber_cert_ku_has_digital_signature_29409",
+      "rule_id": 29409,
       "source": "CABF-BR",
       "section": "7.1.2.7.11",
       "rule_text": "",
-      "method": "llm",
+      "method": "deterministic",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_ku_has_cert_sign_or_ku_has_digital_signature_or_ku_has_29408.go"
+      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_ku_has_digital_signature_29409.go"
+    },
+    {
+      "lint_name": "cicasgen_not_ku_has_data_encipherment_29411",
+      "rule_id": 29411,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.11",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_ku_has_data_encipherment_29411.go"
     },
     {
       "lint_name": "cicasgen_when_subscriber_cert_dnsnames_present_or_ipaddresses_29414",
@@ -471,6 +471,18 @@
       "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_subject_alt_name_not_critical_29415.go"
     },
     {
+      "lint_name": "cicasgen_when_subscriber_cert_dnsnames_fqdnor_wildcard_portion_29420",
+      "rule_id": 29420,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.12",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_dnsnames_fqdnor_wildcard_portion_29420.go"
+    },
+    {
       "lint_name": "cicasgen_subject_alternate_name_critical_29800",
       "rule_id": 29800,
       "source": "CABF-BR",
@@ -481,6 +493,18 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
       "file": "lints/cabf_br/lint_cicasgen_subject_alternate_name_critical_29800.go"
+    },
+    {
+      "lint_name": "cicasgen_oid_policy_individual_validated_list_contains_29430",
+      "rule_id": 29430,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.3",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_oid_policy_individual_validated_list_contains_29430.go"
     },
     {
       "lint_name": "cicasgen_when_not_subject_locality_present_subject_province_29433",
@@ -519,18 +543,6 @@
       "file": "lints/cabf_br/lint_cicasgen_when_oid_policy_individual_validated_list_contains_29447.go"
     },
     {
-      "lint_name": "cicasgen_when_oid_policy_individual_validated_list_contains_29448",
-      "rule_id": 29448,
-      "source": "CABF-BR",
-      "section": "7.1.2.7.3",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_oid_policy_individual_validated_list_contains_29448.go"
-    },
-    {
       "lint_name": "cicasgen_when_not_subject_locality_present_subject_province_29460",
       "rule_id": 29460,
       "source": "CABF-BR",
@@ -567,6 +579,18 @@
       "file": "lints/cabf_br/lint_cicasgen_when_not_subject_province_present_subject_locality_29465.go"
     },
     {
+      "lint_name": "cicasgen_when_oid_policy_organization_validated_list_contains_29468",
+      "rule_id": 29468,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.4",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_oid_policy_organization_validated_list_contains_29468.go"
+    },
+    {
       "lint_name": "cicasgen_when_oid_policy_organization_validated_list_contains_29474",
       "rule_id": 29474,
       "source": "CABF-BR",
@@ -589,30 +613,6 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
       "file": "lints/cabf_br/lint_cicasgen_when_oid_policy_organization_validated_list_contains_29475.go"
-    },
-    {
-      "lint_name": "cicasgen_when_oid_policy_organization_validated_list_contains_29476",
-      "rule_id": 29476,
-      "source": "CABF-BR",
-      "section": "7.1.2.7.4",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_oid_policy_organization_validated_list_contains_29476.go"
-    },
-    {
-      "lint_name": "cicasgen_when_subscriber_cert_not_aiahas_method_other_than_29484",
-      "rule_id": 29484,
-      "source": "CABF-BR",
-      "section": "7.1.2.7.7",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_not_aiahas_method_other_than_29484.go"
     },
     {
       "lint_name": "cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490",
@@ -639,6 +639,18 @@
       "file": "lints/cabf_br/lint_cicasgen_when_cert_policy_present_policy_identifiers_count_29491.go"
     },
     {
+      "lint_name": "cicasgen_when_subscriber_cert_oid_list_count_in_set_policy_29492",
+      "rule_id": 29492,
+      "source": "CABF-BR",
+      "section": "7.1.2.7.9",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_oid_list_count_in_set_policy_29492.go"
+    },
+    {
       "lint_name": "cicasgen_when_subscriber_cert_not_any_policy_list_contains_29493",
       "rule_id": 29493,
       "source": "CABF-BR",
@@ -651,28 +663,40 @@
       "file": "lints/cabf_br/lint_cicasgen_when_subscriber_cert_not_any_policy_list_contains_29493.go"
     },
     {
-      "lint_name": "cicasgen_issuer_unique_id_absent_29499",
-      "rule_id": 29499,
+      "lint_name": "cicasgen_ext_policy_qualifier_oidin_set_29495",
+      "rule_id": 29495,
       "source": "CABF-BR",
-      "section": "7.1.2.8",
+      "section": "7.1.2.7.9",
       "rule_text": "",
       "method": "deterministic",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_issuer_unique_id_absent_29499.go"
+      "file": "lints/cabf_br/lint_cicasgen_ext_policy_qualifier_oidin_set_29495.go"
     },
     {
-      "lint_name": "cicasgen_subject_unique_id_absent_29500",
-      "rule_id": 29500,
+      "lint_name": "cicasgen_aiaaccess_description_count_in_range_29504",
+      "rule_id": 29504,
       "source": "CABF-BR",
-      "section": "7.1.2.8",
+      "section": "7.1.2.8.3",
       "rule_text": "",
       "method": "deterministic",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_subject_unique_id_absent_29500.go"
+      "file": "lints/cabf_br/lint_cicasgen_aiaaccess_description_count_in_range_29504.go"
+    },
+    {
+      "lint_name": "cicasgen_not_aiahas_method_other_than_29505",
+      "rule_id": 29505,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.3",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_not_aiahas_method_other_than_29505.go"
     },
     {
       "lint_name": "cicasgen_not_aiahas_method_other_than_29506",
@@ -687,8 +711,8 @@
       "file": "lints/cabf_br/lint_cicasgen_not_aiahas_method_other_than_29506.go"
     },
     {
-      "lint_name": "cicasgen_not_is_ca_29508",
-      "rule_id": 29508,
+      "lint_name": "cicasgen_basic_constraints_cafalse_encoded_as_empty_sequence_28708",
+      "rule_id": 28708,
       "source": "CABF-BR",
       "section": "7.1.2.8.4",
       "rule_text": "",
@@ -696,7 +720,7 @@
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_not_is_ca_29508.go"
+      "file": "lints/cabf_br/lint_cicasgen_basic_constraints_cafalse_encoded_as_empty_sequence_28708.go"
     },
     {
       "lint_name": "cicasgen_not_path_len_constraint_present_29509",
@@ -711,8 +735,8 @@
       "file": "lints/cabf_br/lint_cicasgen_not_path_len_constraint_present_29509.go"
     },
     {
-      "lint_name": "cicasgen_when_cert_policy_present_policy_identifiers_count_29513",
-      "rule_id": 29513,
+      "lint_name": "cicasgen_not_any_policy_list_contains_29514",
+      "rule_id": 29514,
       "source": "CABF-BR",
       "section": "7.1.2.8.8",
       "rule_text": "",
@@ -720,7 +744,19 @@
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_cert_policy_present_policy_identifiers_count_29513.go"
+      "file": "lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29514.go"
+    },
+    {
+      "lint_name": "cicasgen_ext_policy_qualifier_oidin_set_29518",
+      "rule_id": 29518,
+      "source": "CABF-BR",
+      "section": "7.1.2.8.8",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_ext_policy_qualifier_oidin_set_29518.go"
     },
     {
       "lint_name": "cicasgen_when_pre_certificate_signing_certificate_eku_list_28739",
@@ -735,18 +771,6 @@
       "file": "lints/cabf_br/lint_cicasgen_when_pre_certificate_signing_certificate_eku_list_28739.go"
     },
     {
-      "lint_name": "cicasgen_when_pre_certificate_signing_certificate_eku_list_29533",
-      "rule_id": 29533,
-      "source": "CABF-BR",
-      "section": "7.1.2.9.4",
-      "rule_text": "",
-      "method": "deterministic",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "pkg": "cabf_br",
-      "file": "lints/cabf_br/lint_cicasgen_when_pre_certificate_signing_certificate_eku_list_29533.go"
-    },
-    {
       "lint_name": "cicasgen_when_pre_certificate_signing_certificate_eku_list_29534",
       "rule_id": 29534,
       "source": "CABF-BR",
@@ -757,6 +781,42 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "cabf_br",
       "file": "lints/cabf_br/lint_cicasgen_when_pre_certificate_signing_certificate_eku_list_29534.go"
+    },
+    {
+      "lint_name": "cicasgen_dnhas_rdnsequence_subject_29557",
+      "rule_id": 29557,
+      "source": "CABF-BR",
+      "section": "7.1.4.1",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_dnhas_rdnsequence_subject_29557.go"
+    },
+    {
+      "lint_name": "cicasgen_rdnhas_single_attribute_subject_29558",
+      "rule_id": 29558,
+      "source": "CABF-BR",
+      "section": "7.1.4.1",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_rdnhas_single_attribute_subject_29558.go"
+    },
+    {
+      "lint_name": "cicasgen_rdnsequence_has_country_before_subject_29559",
+      "rule_id": 29559,
+      "source": "CABF-BR",
+      "section": "7.1.4.1",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "cabf_br",
+      "file": "lints/cabf_br/lint_cicasgen_rdnsequence_has_country_before_subject_29559.go"
     },
     {
       "lint_name": "cicasgen_when_version_present_version_in_set_31169",
@@ -783,6 +843,30 @@
       "file": "lints/rfc/lint_cicasgen_when_version_present_version_eq_31172.go"
     },
     {
+      "lint_name": "cicasgen_when_not_has_any_extension_and_issuer_unique_id_absent_31153",
+      "rule_id": 31153,
+      "source": "RFC5280",
+      "section": "4.1.2.1",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "rfc",
+      "file": "lints/rfc/lint_cicasgen_when_not_has_any_extension_and_issuer_unique_id_absent_31153.go"
+    },
+    {
+      "lint_name": "cicasgen_when_has_any_extension_version_eq_31403",
+      "rule_id": 31403,
+      "source": "RFC5280",
+      "section": "4.1.2.1",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "rfc",
+      "file": "lints/rfc/lint_cicasgen_when_has_any_extension_version_eq_31403.go"
+    },
+    {
       "lint_name": "cicasgen_serial_number_value_31123",
       "rule_id": 31123,
       "source": "RFC5280",
@@ -807,16 +891,16 @@
       "file": "lints/rfc/lint_cicasgen_sig_alg_matches_tbssignature_31396.go"
     },
     {
-      "lint_name": "cicasgen_not_dn_empty_issuer_31108",
-      "rule_id": 31108,
+      "lint_name": "cicasgen_validity_utctime_values_use_zulu_31175",
+      "rule_id": 31175,
       "source": "RFC5280",
-      "section": "4.1.2.4",
+      "section": "4.1.2.5.1",
       "rule_text": "",
-      "method": "llm",
+      "method": "deterministic",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "rfc",
-      "file": "lints/rfc/lint_cicasgen_not_dn_empty_issuer_31108.go"
+      "file": "lints/rfc/lint_cicasgen_validity_utctime_values_use_zulu_31175.go"
     },
     {
       "lint_name": "cicasgen_subject_alternate_name_critical_31132",
@@ -831,16 +915,16 @@
       "file": "lints/rfc/lint_cicasgen_subject_alternate_name_critical_31132.go"
     },
     {
-      "lint_name": "cicasgen_issuer_unique_id_absent_and_subject_unique_id_absent_31183",
-      "rule_id": 31183,
+      "lint_name": "cicasgen_ext_subfield_present_policy_constraints_or_ext_subfield_31056",
+      "rule_id": 31056,
       "source": "RFC5280",
-      "section": "4.1.2.8",
+      "section": "4.2.1.11",
       "rule_text": "",
       "method": "deterministic",
       "severity": "lint.Error",
       "synonymy_verdict": "EXPRESSES",
       "pkg": "rfc",
-      "file": "lints/rfc/lint_cicasgen_issuer_unique_id_absent_and_subject_unique_id_absent_31183.go"
+      "file": "lints/rfc/lint_cicasgen_ext_subfield_present_policy_constraints_or_ext_subfield_31056.go"
     },
     {
       "lint_name": "cicasgen_bytes_eq_31102",
@@ -879,6 +963,18 @@
       "file": "lints/rfc/lint_cicasgen_subject_alt_name_present_31065.go"
     },
     {
+      "lint_name": "cicasgen_when_subject_alt_name_present_and_not_dn_empty_subject_31067",
+      "rule_id": 31067,
+      "source": "RFC5280",
+      "section": "4.2.1.6",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "rfc",
+      "file": "lints/rfc/lint_cicasgen_when_subject_alt_name_present_and_not_dn_empty_subject_31067.go"
+    },
+    {
       "lint_name": "cicasgen_when_version_present_version_in_set_31342",
       "rule_id": 31342,
       "source": "RFC5280",
@@ -903,6 +999,18 @@
       "file": "lints/rfc/lint_cicasgen_when_version_present_version_eq_31344.go"
     },
     {
+      "lint_name": "cicasgen_when_version_present_version_eq_31346",
+      "rule_id": 31346,
+      "source": "RFC5280",
+      "section": "A.1",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "rfc",
+      "file": "lints/rfc/lint_cicasgen_when_version_present_version_eq_31346.go"
+    },
+    {
       "lint_name": "cicasgen_when_version_present_version_eq_31349",
       "rule_id": 31349,
       "source": "RFC5280",
@@ -913,6 +1021,18 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "rfc",
       "file": "lints/rfc/lint_cicasgen_when_version_present_version_eq_31349.go"
+    },
+    {
+      "lint_name": "cicasgen_ext_subfield_present_authority_key_id_and_ext_subfield_31160",
+      "rule_id": 31160,
+      "source": "RFC5280",
+      "section": "A.2",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "rfc",
+      "file": "lints/rfc/lint_cicasgen_ext_subfield_present_authority_key_id_and_ext_subfield_31160.go"
     },
     {
       "lint_name": "cicasgen_serial_number_value_31161",
@@ -937,6 +1057,18 @@
       "synonymy_verdict": "EXPRESSES",
       "pkg": "rfc",
       "file": "lints/rfc/lint_cicasgen_serial_number_len_31163.go"
+    },
+    {
+      "lint_name": "cicasgen_serial_number_dersign_bit_zero_31368",
+      "rule_id": 31368,
+      "source": "RFC5280",
+      "section": "B",
+      "rule_text": "",
+      "method": "deterministic",
+      "severity": "lint.Error",
+      "synonymy_verdict": "EXPRESSES",
+      "pkg": "rfc",
+      "file": "lints/rfc/lint_cicasgen_serial_number_dersign_bit_zero_31368.go"
     }
   ]
 }

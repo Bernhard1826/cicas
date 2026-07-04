@@ -92,6 +92,7 @@ class ObligationType(str, Enum):
     OPTIONAL = "OPTIONAL"
     REQUIRED = "REQUIRED"
     RECOMMENDED = "RECOMMENDED"
+    NOT_RECOMMENDED = "NOT RECOMMENDED"
 
 
 class PredicateType(str, Enum):

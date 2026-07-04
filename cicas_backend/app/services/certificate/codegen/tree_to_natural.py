@@ -39,6 +39,8 @@ REGEX_SEMANTIC_HINTS: dict[str, str] = {
         "is an LDH-labeled hostname with at least one dot (FQDN multi-label structure: per-label LDH compliance AND ≥2 labels)",
     "Re_LDH_Label":
         "is a single valid LDH label (no FQDN structure required)",
+    "Re_PunyOrLDH_Hostname":
+        "is composed of dot-joined LDH labels or ACE P-Labels, with P-Labels kept in xn-- form rather than converted to Unicode",
     "Re_ReservedLDH_Excluded":
         "is an LDH label that is NOT in the IANA-reserved LDH label set",
     "Re_HttpOrLdapStrict":
@@ -61,6 +63,8 @@ REGEX_SEMANTIC_HINTS: dict[str, str] = {
         "is a valid positive decimal integer (serial number string format, per RFC 5280)",
     "Re_FQDN_AtLeastTwoLabels":
         "is an LDH-labeled hostname with at least one dot (FQDN multi-label structure: per-label LDH compliance AND ≥2 labels)",
+    "Re_FQDN_PunyOrNonReservedLDH":
+        "is a dot-joined FQDN composed entirely of P-Labels (xn-- form) or Non-Reserved LDH labels",
 }
 
 
@@ -76,9 +80,9 @@ REGEX_SEMANTIC_HINTS: dict[str, str] = {
 # Keys: (field_name, value-as-string) tuples. Values: PKI phrase.
 # ---------------------------------------------------------------------
 FIELD_VALUE_HINTS: dict[tuple, str] = {
-    ("Version", "1"): "the certificate is X.509 version 1 (v1; zcrypto Version field value 1)",
-    ("Version", "2"): "the certificate is X.509 version 2 (v2; zcrypto Version field value 2; on-the-wire DER INTEGER value is 1)",
-    ("Version", "3"): "the certificate is X.509 version 3 (v3; zcrypto Version field value 3; on-the-wire DER INTEGER value is 2)",
+    ("Version", "1"): "the certificate is X.509 version 1 / v1 (DER version field absent or INTEGER 0; zcrypto decodes this as Version=1)",
+    ("Version", "2"): "the certificate is X.509 version 2 / v2 (DER version INTEGER value 1; zcrypto decodes this as Version=2)",
+    ("Version", "3"): "the certificate is X.509 version 3 / v3 (DER version INTEGER value 2; zcrypto decodes this as Version=3)",
 }
 
 
@@ -110,7 +114,13 @@ _OID_FRIENDLY = {
     "OidPolicyOrganizationValidated": "the CABF organization-validated Reserved Certificate Policy Identifier (2.23.140.1.2.2)",
     "OidPolicyIndividualValidated":   "the CABF individual-validated Reserved Certificate Policy Identifier (2.23.140.1.2.3)",
     "OidPolicyExtendedValidation":    "the CABF extended-validation Reserved Certificate Policy Identifier (2.23.140.1.1)",
+    "BRDomainValidatedOID":           "the CABF domain-validated Reserved Certificate Policy Identifier (2.23.140.1.2.1)",
+    "BROrganizationValidatedOID":     "the CABF organization-validated Reserved Certificate Policy Identifier (2.23.140.1.2.2)",
+    "BRIndividualValidatedOID":       "the CABF individual-validated Reserved Certificate Policy Identifier (2.23.140.1.2.3)",
+    "BRExtendedValidatedOID":         "the CABF extended-validation Reserved Certificate Policy Identifier (2.23.140.1.1)",
     "AnyPolicyOID":                   "the anyPolicy OID (2.5.29.32.0)",
+    "CpsOID":                         "id-qt-cps / CPS pointer policyQualifierId (1.3.6.1.5.5.7.2.1)",
+    "UserNoticeOID":                  "id-qt-unotice / UserNotice policyQualifierId (1.3.6.1.5.5.7.2.2)",
 }
 
 
@@ -118,9 +128,31 @@ def _oid_name(o) -> str:
     return _OID_FRIENDLY.get(o, str(o))
 
 
+_RESERVED_POLICY_OID_SETS = {
+    frozenset({
+        "OidPolicyDomainValidated",
+        "OidPolicyOrganizationValidated",
+        "OidPolicyIndividualValidated",
+        "OidPolicyExtendedValidation",
+    }),
+    frozenset({
+        "BRDomainValidatedOID",
+        "BROrganizationValidatedOID",
+        "BRIndividualValidatedOID",
+        "BRExtendedValidatedOID",
+    }),
+}
+
+
+def _is_reserved_policy_oid_set(oids) -> bool:
+    return frozenset(oids) in _RESERVED_POLICY_OID_SETS
+
+
 def _atom(n) -> str:
     if isinstance(n, dsl.ExtPresent):
         return f"the extension with OID {n.oid} is present"
+    if isinstance(n, dsl.HasAnyExtension):
+        return "the certificate contains at least one X.509 extension"
     if isinstance(n, dsl.ExtCritical):
         return f"the extension with OID {n.oid} is marked critical"
     if isinstance(n, dsl.ExtNotCritical):
@@ -144,23 +176,44 @@ def _atom(n) -> str:
     if isinstance(n, dsl.IsSubscriberCert):
         return "the certificate is a Subscriber certificate"
     if isinstance(n, dsl.SigAlgMatchesTBSSignature):
-        return ("the certificate's signatureAlgorithm field is byte-for-byte "
-                "identical to the tbsCertificate.signature field")
+        return ("the DER-encoded bytes of the outer Certificate.signatureAlgorithm "
+                "AlgorithmIdentifier are byte-for-byte identical to the DER-encoded "
+                "bytes of the TBSCertificate.signature AlgorithmIdentifier field; "
+                "this is not a comparison with the certificate signatureValue BIT STRING")
     if isinstance(n, dsl.CommonNameFromSAN):
         return ("the subject commonName, if present, equals one of the "
                 "subjectAltName dNSName or iPAddress entries")
+    if isinstance(n, dsl.SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
+        return ("all Domain Labels of the subject commonName Fully-Qualified Domain Name, "
+                "or of the FQDN portion of the subject commonName Wildcard Domain Name, "
+                f"{_regex_phrase(n.pattern)}")
+    if isinstance(n, dsl.SubjectCommonNameFQDNMatchesDNSNameSAN):
+        return ("if the subject commonName is a Fully-Qualified Domain Name or "
+                "Wildcard Domain Name, then it is a character-for-character copy "
+                "of a subjectAltName dNSName entry")
     if isinstance(n, dsl.NotAfterIsNoExpirySentinel):
         return ("the notAfter date is the GeneralizedTime no-expiration sentinel "
                 "99991231235959Z (RFC 5280 §4.1.2.5)")
+    if isinstance(n, dsl.ValidityUTCTimeValuesUseZulu):
+        return ("every validity time value encoded as UTCTime in the raw "
+                "TBSCertificate is expressed in Greenwich Mean Time / Zulu form "
+                "by ending with 'Z'")
     if isinstance(n, dsl.KeyUsageHas):
         return f"the KeyUsage extension asserts the {n.bit} bit"
+    if isinstance(n, dsl.KeyUsageOnlyHasBitsInSet):
+        return (f"every asserted KeyUsage bit is one of {list(n.bits)}; "
+                "any KeyUsage bit outside that allowed set is a violation")
     if isinstance(n, dsl.ExtKeyUsageHas):
         return f"the ExtendedKeyUsage extension asserts the {n.bit} usage"
     if isinstance(n, dsl.FieldEq):
         return _field_value_phrase(n.field, n.value)
     if isinstance(n, dsl.FieldNonEmpty):
+        if n.field == "Version":
+            return "the optional DER tbsCertificate.version field is explicitly present"
         return f"field {n.field} is non-empty (present)"
     if isinstance(n, dsl.FieldEmpty):
+        if n.field == "Version":
+            return "the optional DER tbsCertificate.version field is absent"
         return f"field {n.field} is empty (absent)"
     if isinstance(n, dsl.FieldMatchesRegex):
         return f"field {n.field} {_regex_phrase(n.pattern)}"
@@ -218,8 +271,9 @@ def _atom(n) -> str:
     if isinstance(n, dsl.DNDirectoryStringValuesEncodedAs):
         opts = " or ".join(n.types)
         return (f"every DirectoryString-type attribute value in the {n.dn} DN is "
-                f"ASN.1-encoded as {opts} (non-DirectoryString attributes such as "
-                f"countryName / domainComponent are exempt)")
+                f"ASN.1-encoded as {opts}; non-DirectoryString RFC 5280/X.520 "
+                f"exception attributes are skipped, including countryName, "
+                f"domainComponent, emailAddress, serialNumber, and dnQualifier")
     if isinstance(n, dsl.FieldContains):
         return f"field {n.field} contains the substring {n.substring!r}"
     if isinstance(n, dsl.CrossFieldEq):
@@ -237,6 +291,11 @@ def _atom(n) -> str:
     if isinstance(n, dsl.WildcardFilter):
         return (f"every entry in {n.list_field} that begins with prefix {n.prefix!r} "
                 f"satisfies ({_render(n.predicate)})")
+    if isinstance(n, dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex):
+        desc = _regex_phrase(n.pattern)
+        return (f"every subjectAltName dNSName satisfies {n.pattern}: for a non-wildcard entry, "
+                f"the full FQDN {desc}; for an entry beginning with '*.', the FQDN portion "
+                f"after the wildcard label {desc}")
     if isinstance(n, dsl.ItemMatchesRegex):
         return f"the iteration item {_regex_phrase(n.pattern)}"
     if isinstance(n, dsl.ItemNotMatchesRegex):
@@ -262,7 +321,12 @@ def _atom(n) -> str:
     if isinstance(n, dsl.OidListContains):
         return f"OID list {n.field} contains {_oid_name(n.oid)}"
     if isinstance(n, dsl.OidListCountInSet):
-        names = " or ".join(_oid_name(o) for o in n.allowed_oids)
+        if _is_reserved_policy_oid_set(n.allowed_oids):
+            names = ("a member of the complete CABF Reserved Certificate Policy "
+                     "Identifier set: DV (2.23.140.1.2.1), OV (2.23.140.1.2.2), "
+                     "IV (2.23.140.1.2.3), or EV (2.23.140.1.1)")
+        else:
+            names = " or ".join(_oid_name(o) for o in n.allowed_oids)
         hi = "unbounded" if n.hi == "MAX_INT" else n.hi
         rng = f"exactly {n.lo}" if n.lo == n.hi else f"between {n.lo} and {hi}"
         return (f"the number of entries in {n.field} that are "
@@ -273,16 +337,28 @@ def _atom(n) -> str:
         return f"the {n.holder} DN is the empty SEQUENCE"
     if isinstance(n, dsl.RDNCountInRange):
         return f"the {n.holder} DN contains between {n.lo} and {n.hi} RDNs"
+    if isinstance(n, dsl.DNHasRDNSequence):
+        return f"the {n.holder} Name is encoded as an ASN.1 RDNSequence: an outer SEQUENCE whose elements are RelativeDistinguishedName SETs"
     if isinstance(n, dsl.RDNHasSingleAttribute):
         return f"each RDN in the {n.holder} DN carries exactly one attribute-value pair"
     if isinstance(n, dsl.RDNSequenceHasCountryBefore):
         return f"if both countryName and stateOrProvinceName appear in the {n.holder} DN, countryName precedes stateOrProvinceName"
+    if isinstance(n, dsl.DNSOnionNamesHaveValidTorV3Address):
+        return "for every subjectAltName dNSName whose rightmost domain label is onion, the name has at least two labels and the label immediately before onion is a valid Tor v3 onion address label (exactly 56 base32 characters a-z2-7)"
+    if isinstance(n, dsl.DomainNamesDoNotEndWithIPReverseZoneSuffix):
+        return ("no certificate Domain Name in subjectAltName dNSName or legacy "
+                "subject commonName ends in an IP Reverse Zone Suffix "
+                "(in-addr.arpa or ip6.arpa)")
     if isinstance(n, dsl.ExtRawValueEqualsHex):
         return (f"the extension with OID {n.oid} is present "
                 f"AND its raw extnValue equals hex {n.hex_lit}")
     if isinstance(n, dsl.ExtRawValueContainsHex):
         return (f"the extension with OID {n.oid} is present "
                 f"AND its raw extnValue contains hex {n.hex_lit}")
+    if isinstance(n, dsl.BasicConstraintsCAFalseEncodedAsEmptySequence):
+        return ("a basicConstraints extension that encodes the cA boolean as FALSE "
+                "uses the DER DEFAULT form: the extnValue OCTET STRING is exactly "
+                "the empty SEQUENCE hex 3000; an explicit BOOLEAN FALSE encoding is a violation")
     if isinstance(n, dsl.ExtSubfieldPresent):
         sub = n.subfield or f"the [{n.tag}] context-tagged sub-element"
         if n.path == "generalsubtree":
@@ -295,8 +371,13 @@ def _atom(n) -> str:
     if isinstance(n, dsl.SubtreeIPListAnyHasOctetCount):
         kind = {8: "IPv4 (4-octet IP + 4-octet mask)",
                 32: "IPv6 (16-octet IP + 16-octet mask)"}.get(n.count, f"{n.count}-octet")
+        marker = ""
+        if n.count == 8:
+            marker = "; an all-zero 8-octet 0.0.0.0/0 marker counts as the required IPv4 entry"
+        elif n.count == 32:
+            marker = "; an all-zero 32-octet ::0/0 marker counts as the required IPv6 entry"
         return (f"at least one entry in {n.field} has IP+Mask total of "
-                f"{n.count} octets ({kind})")
+                f"{n.count} octets ({kind}){marker}")
     if isinstance(n, dsl.SubtreeIPListAnyAllZero):
         kind = {8: "IPv4 0.0.0.0/0 marker",
                 32: "IPv6 ::0/0 marker"}.get(n.count, f"{n.count}-octet all-zero")
@@ -315,6 +396,19 @@ def _atom(n) -> str:
     if isinstance(n, dsl.SubtreeStringListAnyMatch):
         return (f"at least one entry in subtree string list {n.field} satisfies "
                 f"({_render(n.predicate)})")
+    if isinstance(n, dsl.SubtreeStringListHasNonEmptyOrEmptyMarker):
+        return (f"subtree string list {n.field} contains either a non-empty dNSName "
+                "permittedSubtrees entry, or a zero-length dNSName marker indicating "
+                "that no domain names are permitted")
+    if isinstance(n, dsl.SubtreeStringListHasEmptyMarker):
+        return (f"subtree string list {n.field} contains the zero-length dNSName "
+                "marker indicating that all domain names of the dNSName type are excluded")
+    if isinstance(n, dsl.NameConstraintsExcludedSubtreesEmpty):
+        return ("the nameConstraints extension is absent, has no excludedSubtrees "
+                "field, or has an empty excludedSubtrees sequence")
+    if isinstance(n, dsl.NameConstraintsPermittedSubtreesNonEmpty):
+        return ("the nameConstraints extension contains a permittedSubtrees field "
+                "with at least one GeneralSubtree value")
     if isinstance(n, dsl.SubtreeStringListAllMatchOrEmpty):
         return (f"subtree string list {n.field} is empty OR every entry in it "
                 f"satisfies ({_render(n.predicate)})")
@@ -326,11 +420,19 @@ def _atom(n) -> str:
                 f"in valid CIDR form (contiguous high-order 1-bits followed "
                 f"by zeros, per RFC 4632)")
     if isinstance(n, dsl.ScalarInList):
+        if n.scalar_field == "Subject.EmailAddress" and n.list_field == "EmailAddresses":
+            return ("if the Subject DN contains an emailAddress attribute, that "
+                    "same mailbox value appears as a subjectAltName rfc822Name")
         return f"scalar field {n.scalar_field} appears in list field {n.list_field}"
     if isinstance(n, dsl.ScalarInAnyOfLists):
         lists = ", ".join(n.list_fields)
         return (f"scalar field {n.scalar_field} appears in at least one of the "
                 f"list fields [{lists}]")
+    if isinstance(n, dsl.ListSubsetOfList):
+        if n.source_list == "Subject.EmailAddress" and n.target_list == "EmailAddresses":
+            return ("every emailAddress attribute value in the Subject DN, if any, "
+                    "appears as a subjectAltName rfc822Name value")
+        return f"every value in list field {n.source_list} appears in list field {n.target_list}"
     if isinstance(n, dsl.IPv4Conditional):
         return (f"for each IP in {n.field}: if IPv4 then "
                 f"({_render(n.ipv4_predicate)}); if IPv6 then "
@@ -383,6 +485,14 @@ def _atom(n) -> str:
         hint = REGEX_SEMANTIC_HINTS.get(n.pattern, n.pattern)
         return (f"at least one AccessDescription in extension {n.ext_oid} "
                 f"whose accessMethod is {n.method_oid} is a URI that {hint}")
+    if isinstance(n, dsl.AIAAccessDescriptionCountInRange):
+        return (f"the Authority Information Access extension, when present, contains "
+                f"between {n.lo} and {n.hi} AccessDescription entries in its "
+                f"AuthorityInfoAccessSyntax sequence")
+    if isinstance(n, dsl.AIAAccessLocationUniquePerMethod):
+        return ("within the Authority Information Access extension, AccessDescription "
+                "entries that have the same accessMethod have pairwise unique "
+                "accessLocation GeneralName values")
     if isinstance(n, dsl.CRLDPHasNameRelative):
         return ("the CRL Distribution Points extension contains at least one "
                 "DistributionPoint using nameRelativeToCRLIssuer (not fullName)")
@@ -399,6 +509,11 @@ def _atom(n) -> str:
         return (f"the CertificatePolicies extension contains at least one "
                 f"UserNotice explicitText whose DisplayText CHOICE tag is "
                 f"one of [{tags}]")
+    if isinstance(n, dsl.CertPolicyExplicitTextAllHaveEncodingTagInSet):
+        tags = ", ".join(str(t) for t in n.allowed_tags)
+        return (f"every UserNotice explicitText in the CertificatePolicies "
+                f"extension has a DisplayText CHOICE tag in [{tags}]; "
+                f"certificates with no explicitText satisfy this encoding rule")
     if isinstance(n, dsl.PolicyQualifierOIDInSet):
         oid_name = n.oid_const
         return (f"the CertificatePolicies extension contains a policy qualifier "
@@ -407,6 +522,17 @@ def _atom(n) -> str:
         oid_name = n.oid_const
         return (f"the CertificatePolicies extension contains no policy qualifier "
                 f"with OID {oid_name}")
+    if isinstance(n, dsl.ExtPolicyQualifierOIDInSet):
+        names = " or ".join(_oid_name(o) for o in n.allowed_oid_consts)
+        return (f"the CertificatePolicies extension contains no policyQualifierId "
+                f"outside the permitted set [{names}]; certificates with no "
+                f"policyQualifiers satisfy this prohibition")
+    if isinstance(n, dsl.ExtPolicyQualifierOIDNotInSet):
+        return (f"no policyQualifierId inside the CertificatePolicies extension "
+                f"equals {_oid_name(n.forbidden_oid_const)}")
+    if isinstance(n, dsl.CertificatePoliciesHasNoPolicyQualifiers):
+        return ("the CertificatePolicies extension is absent or every "
+                "PolicyInformation has no policyQualifiers")
     if isinstance(n, dsl.AlgorithmIdentifierBytesMatch):
         if n.neg:
             return f"the algorithm identifier is NOT {n.oid_const}"
@@ -417,6 +543,8 @@ def _atom(n) -> str:
     if isinstance(n, dsl.SerialNumberOctetLengthInRange):
         return (f"the certificate serial number has a byte length in the range "
                 f"[{n.lo}, {n.hi}]")
+    if isinstance(n, dsl.SerialNumberDERSignBitZero):
+        return "the DER-encoded serialNumber INTEGER has its sign bit clear: the high bit of the first content octet is zero"
     raise dsl.DSLError(f"tree_to_natural: unhandled atom type {type(n).__name__}")
 
 
@@ -426,6 +554,21 @@ def _render(n) -> str:
     if isinstance(n, dsl.And):
         return " AND ".join(f"({_render(p)})" for p in n.parts)
     if isinstance(n, dsl.Or):
+        if len(n.parts) == 2:
+            a, b = n.parts
+            pair = (a, b)
+            if isinstance(a, dsl.SubtreeIPListAnyAllZero) and isinstance(b, dsl.SubtreeIPListAnyHasOctetCountAndNotAllZero):
+                pair = (b, a)
+            real, zero = pair
+            if (isinstance(real, dsl.SubtreeIPListAnyHasOctetCountAndNotAllZero)
+                    and isinstance(zero, dsl.SubtreeIPListAnyAllZero)
+                    and real.field == zero.field and real.count == zero.count):
+                kind = "IPv4" if real.count == 8 else "IPv6" if real.count == 32 else f"{real.count}-octet IP"
+                marker = "IPv4 0.0.0.0/0 all-zero 8-octet marker" if real.count == 8 else "IPv6 ::0/0 all-zero 32-octet marker"
+                return (f"{real.field} contains either an ordinary {kind} iPAddress "
+                        f"subtree entry or the required {marker} fallback entry; "
+                        f"the marker satisfies the rule's fallback case when no "
+                        f"ordinary {kind} iPAddress subtree is present")
         return " OR ".join(f"({_render(p)})" for p in n.parts)
     if isinstance(n, dsl.When):
         # conditional node nested inside the tree (vs the top-level precondition

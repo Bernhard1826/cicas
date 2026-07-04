@@ -551,6 +551,11 @@ Therefore:
 Do NOT mark these as DOES_NOT_EXPRESS just because the rule used "present"
 and the code uses "non-empty" -- in Go, those are the same thing for lists.
 
+OR-ALTERNATIVE COVERAGE: If (A) states a constraint over "X or Y" / "X and Y"
+alternatives, then (B) faithfully covers the rule when it applies that same
+constraint to both named alternatives. Do NOT reject (B) as overbroad merely
+because it covers one alternative and the other alternative named by (A).
+
 EXTENSION-DERIVED FLAT FIELDS: zcrypto pre-parses several extensions into
 flat top-level []byte / []string fields on Certificate. A check on the flat
 field IS a check on the parsed sub-field of the extension:
@@ -618,21 +623,23 @@ def judge_expresses(rule_text: str, code_sem: str, *,
     """
     if profile_scope:
         psb = (
-            f"\nPROFILE SCOPE: rule (A) is from certificate-profile section "
-            f'"{profile_scope}". Treat this profile scope as an implicit '
-            "antecedent of (A), especially when (A) is a single extracted "
-            "table row. A precondition in (B) that matches the profile "
-            "scope EXPRESSES that scope faithfully and is NOT an extra "
-            "narrowing condition. Examples: Root CA profile -> Root CA guard; "
-            "Subscriber Certificate profile -> Subscriber certificate guard; "
-            "EV/OV/IV/DV profile -> matching reserved certificate policy OID "
-            "guard; Precertificate Signing / Precertificate profile -> "
+            f"\nRULE CONTEXT: rule (A) was extracted from a standards section "
+            f'or table titled "{profile_scope}". Treat this title as implicit '
+            "background for interpreting terse table rows and omitted subjects "
+            "(for example, a Common Name Attribute table row is about commonName). "
+            "When the title is a certificate-profile title, a precondition in "
+            "(B) that matches that profile EXPRESSES the scope faithfully and is "
+            "NOT an extra narrowing condition. Examples: Root CA profile -> Root "
+            "CA guard; Subscriber Certificate profile -> Subscriber certificate "
+            "guard; EV/OV/IV/DV profile -> matching reserved certificate policy "
+            "OID guard; Precertificate Signing / Precertificate profile -> "
             "PreCertificateSigningCertificateEKU guard; TLS/Subordinate/CA "
-            "profile -> CA/Subordinate-CA guard. If (B)'s only apparent "
-            "extra condition is one of these profile markers, IGNORE it as "
-            "scope, not semantics. Reject a scope guard only when it is "
-            "incompatible with the named profile or adds an unrelated "
-            "condition not entailed by the profile.\n"
+            "profile -> CA/Subordinate-CA guard. Reject a scope guard only when "
+            "it is incompatible with the named context or adds an unrelated "
+            "condition not entailed by that context. If RULE CONTEXT explicitly "
+            "names a standard OID or identifier, use that identifier to interpret "
+            "terse or truncated table cells in (A); do not ignore it merely "
+            "because the extracted row text is incomplete.\n"
         )
     else:
         psb = ""

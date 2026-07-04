@@ -3,20 +3,22 @@
 Paper §8.2 — lint coverage analysis (Table 2).
 
 Question: of the system's lint-able rules, how many are already implemented by a
-*same-source* zlint lint (full coverage), and how many remain as the
-code-generation domain (uncovered)?
+native zlint lint (full coverage), and how many remain as the code-generation
+domain (uncovered)?
 
 Method (as described in §8.2):
   - The per-rule coverage verdict (full / partial / none) is computed by the
-    BACKEND coverage service — candidate retrieval by source/section, a
-    field-level LLM judge (subject / obligation / predicate / constraint), and a
-    deterministic "wrong-field" consistency gate that only downgrades. See
+    BACKEND coverage service — candidate retrieval by source/section, with
+    CABF-BR rules allowed to match native RFC5280 zlint lints when the RFC lint
+    logically covers the CABF requirement; a field-level LLM judge (subject /
+    obligation / predicate / constraint); and a deterministic "wrong-field"
+    consistency gate that only downgrades. See
     app/services/certificate/zlint_interface.py and
     app/api/zlint_analysis_routes.py (check_batch_coverage). Verdicts are
     persisted on rules.lint_coverage / rules.lint_covered.
   - This script does NOT recompute verdicts; it AGGREGATES the persisted verdicts
-    into Table 2 and recomputes the zlint same-source reference counts directly
-    from the bundled zlint v3 Go source (Source metadata field).
+    into Table 2 and recomputes the native zlint reference counts directly from
+    the bundled zlint v3 Go source (Source metadata field).
 
 Inputs (snapshot written to inputs/ by --snapshot):
   inputs/lintable_rules.jsonl   lint-able rules with their stored verdict
@@ -28,15 +30,15 @@ Outputs (written to outputs/):
   outputs/per_rule_coverage.jsonl per-rule full/none verdict
 
 Run:
-  python experiments/coverage_analysis/run.py            # aggregate + render Table 2
-  python experiments/coverage_analysis/run.py --snapshot # also refresh inputs/
+  python3 cicas_backend/experiments/coverage_analysis/run.py            # aggregate + render Table 2
+  python3 cicas_backend/experiments/coverage_analysis/run.py --snapshot # also refresh inputs/
 
 Expected (current refreshed snapshot):
-  lint-able 322 = CABF 226 + RFC5280  96
-  full      129 = CABF  79 + RFC5280  50
-  uncovered 192 = CABF 146 + RFC5280  46   (= judged code-generation domain φ_G)
-  pending     1 = CABF   1 + RFC5280   0   (excluded from φ_G until judged)
-  zlint same-source cert reference: CABF 164 lints, RFC5280 115 lints
+  lint-able 317 = CABF 224 + RFC5280  93
+  full      154 = CABF 102 + RFC5280  52
+  uncovered 163 = CABF 122 + RFC5280  41   (= judged code-generation domain phi_G)
+  pending     0 = CABF   0 + RFC5280   0
+  native zlint cert reference: CABF 164 lints, RFC5280 115 lints
 
 If a refreshed extraction has lint-able rows with lint_coverage IS NULL, they are
 reported as pending rather than folded into uncovered. Pending rows must be judged
@@ -142,10 +144,10 @@ def render_md(table):
     cabf, rfc = by["CABF"], by["RFC5280"]
     rc, rr = ref.get("CABF", {}), ref.get("RFC5280", {})
     L = []
-    L.append("# Table 2 — zlint same-source coverage of lint-able rules\n")
+    L.append("# Table 2 — native zlint coverage of lint-able rules\n")
     L.append("| 项 | CABF | RFC 5280 | 合计 |")
     L.append("|---|---:|---:|---:|")
-    L.append(f"| *zlint 同源证书 lint（参照分母）* | *{rc.get('cert','?')}* | *{rr.get('cert','?')}* | *{rc.get('cert',0)+rr.get('cert',0)}* |")
+    L.append(f"| *zlint 原生证书 lint（参照分母）* | *{rc.get('cert','?')}* | *{rr.get('cert','?')}* | *{rc.get('cert',0)+rr.get('cert',0)}* |")
     L.append(f"| *　— CRL lint（分母外）* | *{rc.get('crl','?')}* | *{rr.get('crl','?')}* | *{rc.get('crl',0)+rr.get('crl',0)}* |")
     L.append(f"| full（完整覆盖） | {cabf['full']} | {rfc['full']} | **{t['full']}** |")
     L.append(f"| 已判未覆盖（codegen 定义域） | {cabf['uncovered']} | {rfc['uncovered']} | **{t['uncovered']}** |")
