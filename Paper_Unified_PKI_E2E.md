@@ -167,7 +167,7 @@ _图 2：四条件 lintability 判定的确定性流程。IR 字段先经过四�
 
 ## 6. 受限代码生成与验证
 
-以大语言模型直接生成检查代码面临两方面固有困难。其一是**幻觉**：模型可能将字段名误写为另一个恰好存在却语义无关的字段，或使 OID 出现单位错误。其二是**输出不稳定**：相同的代码生成提示在多次调用下往往产生不同输出，且生成结果既不保证可编译、也不保证逻辑正确。为消除这两类不确定性，本文不在开放的 Go 代码空间中生成，而是将规则的代码体约束在一个有限闭合的 DSL 树空间 $\mathcal{T}_{\mathcal{V}}$ 内：每条规则的代码体只能是该空间中的一棵树，再经确定性函数渲染为 Go 代码。本节依次给出该空间的构造（§6.1–§6.2）、树的合成（§6.3–§6.4）与生成结果的验证（§6.5）。
+以大语言模型直接生成检查代码面临两方面固有困难。其一是**幻觉**：模型可能将字段名误写为另一个恰好存在却语义无关的字段，或使 OID 出现单位错误。其二是**输出不稳定**：相同的代码生成提示在多次调用下往往产生不同输出，且生成结果既不保证可编译、也不保证逻辑正确。为消除这两类不确定性，本文将规则的代码体约束在一个有限闭合的 DSL 树空间 $\mathcal{T}_{\mathcal{V}}$ 内：每条规则的代码体只能是该空间中的一棵树，再经确定性函数渲染为 Go 代码。
 
 ### 6.1 原子模板与 IR 填充
 
@@ -284,12 +284,12 @@ SAIV 借鉴反向传播的思路：先定下整个流程要优化的目标，再
 
 - **G3（已覆盖规则的反向可执行性）**：规则若在 zlint 等 lint 工具中存在对应实现，则必然 lintable，目标是违反计数 $N_{\mathrm{viol}}=0$。
 
-在此标签之上，SAIV 把三类质量信号形式化为可计算残差：**召回守恒残差** $\mathcal{L}_{\mathrm{recall}}$（附录 G 式 6）以对称归一化度量定理 1 的理想恒等被违反的程度；**代码忠实残差** $\mathcal{L}_{\mathrm{code}}$（附录 G 式 7）是 lintable 集上正确性标签的平均缺口；二者加权为**总损失** $\mathcal{L}_{\mathrm{total}}$（附录 G 式 8，默认 $w_R=w_C=0.5$）。第三类是双判定源一致性残差 $N_{\mathrm{viol}}$（§7.4）。
+在此标签之上，SAIV 把三类质量信号形式化为可计算残差：**召回守恒残差** $\mathcal{L}_{\mathrm{recall}}$（附录 F 式 6）以对称归一化度量定理 1 的理想恒等被违反的程度；**代码忠实残差** $\mathcal{L}_{\mathrm{code}}$（附录 F 式 7）是 lintable 集上正确性标签的平均缺口；二者加权为**总损失** $\mathcal{L}_{\mathrm{total}}$（附录 F 式 8，默认 $w_R=w_C=0.5$）。第三类是双判定源一致性残差 $N_{\mathrm{viol}}$（§7.4）。
 
 | 目标 | 残差 | 主要修复方向 | 修复对象 |
 |---|---|---|---|
-| G1 召回完整性 | $\mathcal{L}_{\mathrm{recall}}$（附录 G 式 6） | — | 召回逻辑 |
-| G2 同义性 | $\mathcal{L}_{\mathrm{code}}$（附录 G 式 7） | IR 内容、DSL 生成、验证判定三类修复 | IR 内容修正 / DSL 树重合成 / 判定与摘要复核 |
+| G1 召回完整性 | $\mathcal{L}_{\mathrm{recall}}$（附录 F 式 6） | — | 召回逻辑 |
+| G2 同义性 | $\mathcal{L}_{\mathrm{code}}$（附录 F 式 7） | IR 内容、DSL 生成、验证判定三类修复 | IR 内容修正 / DSL 树重合成 / 判定与摘要复核 |
 | G3 双判定源一致 | $N_{\mathrm{viol}}$（§7.4） | 验证判定一致性修复 | $\phi_C$ 假阴性 / 外部覆盖标签假阳性 |
 
 表中只给出目标到修复方向的对应关系；具体修复操作及其记号在 §7.3 中定义。
@@ -674,86 +674,7 @@ $\sigma_{\mathrm{mech}}$（定义见 §6.3）由原子模板-短语字典 $\math
 
 每次调用的完整 prompt 由四区段依次拼接：**区段 A（Rule Context）**——源 ID、章节号、规则 ID、逐字 `rule_text` 与 `source` 元数据；**区段 B（Structured IR）**——扁平展开的 IR 四/五元组；**区段 C（DSL Schema）**——实现中的 $\mathcal{V}$ 与 $\mathcal{A}$ 目录（按分量分组的字段名清单与按语义簇分组的原子模板签名表，附每原子模板一行 PKI 语义注释；论文附录 C 仅列代表性示例）；**区段 D（Output Protocol）**——两种合法 JSON 形态的精确 schema 与一条 minimal positive 示例。
 
-### 附录 F：全文符号表（§5–§8 及相关附录）
-
-本表汇集正文 §5–§8 与附录 C/D/G 中出现的主要记号，供随查。**尤须区分几组易混记号**：正常取值 $\varepsilon$（无前提）↔ 失败标记 $\bot$（合成失败）↔ $\perp_{\mathrm{NT}}$（LLM 弃权）；渲染函数 $\rho$ ↔ 修复算子族 $\mathcal{P}_\bullet$；单规则谓词 $\phi_C$ ↔ 集合级分类器 $\psi_C$；词汇表 $\mathcal{V}$ ↔ 附录 G 证明中的违反集 $\mathcal{W}$；证书 $c$ ↔ 代码 $\mathrm{code}(r)$。
-
-**集合与空间**
-
-| 记号 | 含义 | 首见 |
-|---|---|---|
-| $\mathcal{D}$ | 标准文档语料（算法 1 代码块内记作 D） | §7.2 |
-| $\mathcal{R}_{\mathrm{kw}}$ | RFC 2119 关键词召回的候选规则集 | §4.3 |
-| $\mathcal{R}_N,\mathcal{R}_L,\mathcal{R}_U$ | 噪声 / lintable / not lintable 规则集 | §7.2 |
-| $\mathcal{R}_L^{\mathrm{cov}},\mathcal{R}_L^{\mathrm{uncov}}$ | 已 / 未被外部 lint 覆盖的 lintable 规则 | §7.2 |
-| $\mathcal{A}$ | 有限闭合的原子模板集（$\lvert\mathcal{A}\rvert=79$） | §6.1 |
-| $\mathcal{V}$ | 类型化词汇表（七分量不相交并） | §6.2 |
-| $\mathcal{T}$ | DSL 树空间（式 1） | §6.1 |
-| $\mathcal{T}_{\mathcal{V}}$ | 参数全部合法的 DSL 树子集（$\phi_G$ 值域） | §6.2 |
-| $\mathcal{T}_\varepsilon$ | $\mathcal{T}\cup\{\varepsilon\}$，含"无前提"的前提空间 | §6.1 |
-| $\mathcal{W}$ | （附录 G 证明）违反集，$N_{\mathrm{viol}}=\lvert\mathcal{W}\rvert$ | 附录 G |
-| $N$ | §5 中承载"非编码类"义务的类别集合 | §5 |
-
-**模块、算子与函数**
-
-| 记号 | 含义 | 首见 |
-|---|---|---|
-| $\Pi=\phi_V\circ\phi_G\circ\phi_C\circ\phi_R$ | 提取→分类→生成→验证全流程 | §7.1 |
-| $\phi_R,\phi_G,\phi_V$ | 提取 / 生成 / 验证模块 | §7.1 |
-| $\phi_C$ | 单规则 lintability 谓词 $r\mapsto\{0,1\}$（§5 四条件） | §5 |
-| $\psi_C$ | 集合级分类器：噪声过滤 + $\phi_C$，输出 $(\mathcal{R}_N,\mathcal{R}_L,\mathcal{R}_U)$ | §7.1 |
-| $\phi_J$ | 二元仲裁器（FLIP / SPURIOUS） | 附录 G |
-| $\mu$ | IR 谓词 → 候选原子模板的多对多映射 | §6.1 |
-| $\rho$ | 渲染函数：DSL 树 → Go 代码 | §6.3 |
-| $\sigma_{\mathrm{mech}}$ | 机械翻译：DSL 树 → code_summary | §6.3 |
-| $\eta$ | LLM 输出解析函数（返合法树 / 类型错误 / $\perp_{\mathrm{NT}}$） | §6.4 |
-| $\Phi_{\mathrm{post}}$ | 确定性后处理器（绑定 `Description`/`Citation`/`Name` 及元数据） | §6.4 |
-| $\mathcal{P}_R,\mathcal{P}_C,\mathcal{P}_G,\mathcal{P}_V$ | SAIV 修复算子，下标对应被修模块 $\phi_\bullet$ | §7.3 |
-| $\mathcal{P}_A$ | 离线词汇扩展通道（新原子模板经证书级执行验证认证并入 $\mathcal{A}$） | §7.3 |
-| $\mathrm{code}(r)=\rho(t_r)$ | 规则 $r$ 的生成 Go 代码 | 附录 G |
-| $\mathrm{compile},\ s_{\mathrm{struct}},\ \mathrm{syn}$ | 编译通过 / 结构完整度 / 同义评判器输出 | 附录 G |
-| $\mathrm{spec}(r)$ | 规则 $r$ 的规范原文 | 附录 G |
-| $\lambda_{\mathrm{code}}(r)$ | 代码正确性标签（式 5） | 附录 G |
-| $\mathrm{cov}_{\mathcal{T}}(r)$ | 外部工具覆盖档 {full, partial, none}（§8.2 算法 2） | §8.2 |
-| $\mathrm{Severity}(r)$ | 义务 → 严重级别（Error / Warn） | §6.1 |
-
-**判定、求值与逻辑**
-
-| 记号 | 含义 | 首见 |
-|---|---|---|
-| $C_1,C_2,C_3,C_4$ | lintability 四条件（道义 / 主体 / 运行时 / 过程） | §5 |
-| $\mathrm{lintable}(r)$ | lintability 标签（四条件合取） | §5 |
-| $\mathbb{1}[\cdot]$ | 指示函数（真取 1、否则取 0） | §5 |
-| $\lVert u\rVert(c)$ | DSL 树 / 前提 $u$ 在证书 $c$ 上求值的布尔结果 | §6.1 |
-| $(p,q)$ | 规则代码体：可选前提 $p$、主断言 $q$（式 2） | §6.1 |
-| $a(\bar v)$ | 原子模板谓词 $a\in\mathcal{A}$ 及其参数列表 $\bar v$ | §6.1 |
-
-**残差、阈值与迭代**
-
-| 记号 | 含义 | 首见 |
-|---|---|---|
-| $\mathcal{L}_{\mathrm{recall}}$ | 召回守恒残差（式 6） | §7.2 |
-| $\mathcal{L}_{\mathrm{code}}$ | 代码忠实残差（式 7） | §7.2 |
-| $\mathcal{L}_{\mathrm{total}}$ | 总损失（式 8），$w_R,w_C$ 为权重 | §7.2 |
-| $N_{\mathrm{viol}}$ | 双判定源一致性违反计数（目标为 0） | §7.2 |
-| $\theta$ | 终止阈值（作用于 $\mathcal{L}_{\mathrm{total}}$，默认 0.05） | §7.4 |
-| $\tau_R,\tau_C$ | 阶段路由阈值（式 9，决定下一轮修哪个模块） | 附录 G |
-| $p_{\mathrm{fail}}^{(t)},\ \bar{s}_{\mathrm{struct}}^{(t)}$ | 第 $t$ 轮编译失败率 / 平均结构得分 | 附录 G |
-| $K$ | 最大迭代数（默认 10） | §7.4 |
-
-**易混特殊值与等价记号**
-
-| 记号 | 含义 | 首见 |
-|---|---|---|
-| $\varepsilon$ | "无前提"占位符——**正常取值** | §6.1 |
-| $\bot$ | 确定性合成失败 / 无结果 | §6.4 |
-| $\perp_{\mathrm{NT}}$ | LLM"无模板"弃权（与 $\bot$ 同属"无可用结果"） | §6.4 |
-| $\mathrm{Code}\equiv\mathrm{IR}$ | 代码忠实于中间表示（证书级执行验证，确定性） | §6.5 |
-| $\mathrm{Code}\equiv\mathrm{Spec}$ | 代码与规范同义（评判器判定，最终判据） | §6.5 |
-| $c$ | 单张证书 | §6.1 |
-| $r,\ t\,/\,t_r$ | 规则 / 其 DSL 树 | §6 |
-
-### 附录 G：SAIV 残差与阶段路由的形式化细节
+### 附录 F：SAIV 残差与阶段路由的形式化细节
 
 本附录汇集 §7.3–§7.4 正文中引用的精确数学形式化，以供需要形式核查的读者查阅。
 
