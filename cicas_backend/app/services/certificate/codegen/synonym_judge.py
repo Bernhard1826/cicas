@@ -64,14 +64,17 @@ AILINK_SYSTEM = ("You are a precise assistant for PKI / X.509 certificate rule "
 def _call_ailink(prompt: str, max_tokens: int, temperature: float) -> str:
     """Call the unified ai.ailink1.com OpenAI-compatible endpoint (gpt-5.5).
     A system message is mandatory for this endpoint."""
-    payload = {
+    base_payload = {
         "model": AILINK_MODEL,
         "messages": [{"role": "system", "content": AILINK_SYSTEM},
                      {"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
         "temperature": temperature,
     }
+    use_token_limit = True
     for attempt in range(6):
+        payload = dict(base_payload)
+        if use_token_limit:
+            payload["max_tokens"] = max_tokens
         try:
             with httpx.Client(trust_env=False, timeout=400.0) as c:
                 r = c.post(f"{AILINK_BASE}/chat/completions",
@@ -89,6 +92,14 @@ def _call_ailink(prompt: str, max_tokens: int, temperature: float) -> str:
                         continue
                     return f"__ERROR__ 200-unparseable: {r.text[:200]}"
             body = r.text
+            if (r.status_code == 400
+                    and use_token_limit
+                    and "Unsupported parameter" in body
+                    and any(name in body for name in (
+                        "max_tokens", "max_output_tokens", "max_completion_tokens",
+                    ))):
+                use_token_limit = False
+                continue
             # ai.ailink1.com intermittently fails its upstream and returns a
             # transient error (often HTTP 400 carrying an SSE 'upstream_error');
             # treat that as retryable, not a real bad request.
@@ -576,6 +587,36 @@ SEVERITY EQUIVALENCE: lint.Error <=> MUST/MUST NOT/SHALL/PROHIBITED;
 lint.Warn <=> SHOULD/SHOULD NOT/RECOMMENDED; lint.Notice <=> MAY/OPTIONAL.
 A code returning lint.Warn for a SHOULD rule IS faithful.
 
+FINAL-LINT SCOPE STRICTNESS: When (B) says "The final generated in-tree zlint
+certificate lint applies to X", X is the actual zlint CheckApplies scope and
+is part of the generated lint's meaning. It must be equivalent to the rule's
+scope in (A). A superclass or neighboring profile is NOT equivalent to a
+narrower profile named by (A): for example, "Subordinate CA certificates" does
+NOT express "Cross-Certified Subordinate CA certificates" or "Technically
+Constrained Non-TLS Subordinate CA certificates"; "Subscriber certificates"
+does NOT express "Organization Validated Subscriber certificates" unless (A)
+really applies to all subscriber certificates. Reject (B) if CheckApplies is
+broader, narrower, or missing a profile/time condition stated by (A).
+
+ISSUER-ACTOR VS CERTIFICATE-TYPE SCOPE: In RFC/CABF prose, wording like
+"CAs MUST encode/force/use ..." usually names the obligated issuing actor; it
+does NOT by itself mean the lint should apply only to certificates whose subject
+is a CA. Infer a CA-certificate scope only when (A) says "CA certificate(s)",
+"conforming CA certificates", a CA certificate profile/table, or an equivalent
+certificate-type condition. For actor-scoped certificate encoding constraints
+such as serialNumber format, applying the lint to issued certificates generally
+does not add a CA-certificate-only scope.
+
+TABLE-FRAGMENT STRICTNESS: Some (A) inputs are extracted rows from a larger
+standards table. If (A) includes "Nearby rows from the same source
+section/table", use those rows to interpret terse cells such as "MUST /",
+"MUST / MAY", or a blank value column. Do not treat one fragment row as a
+complete standalone rule when the nearby rows define alternatives or
+conditional presence. For example, if nearby rows show attribute X is required
+when Y is absent and attribute Y is required when X is absent, then (B) does
+NOT express the table by unconditionally requiring only X or only Y; it drops
+the alternative.
+
 {profile_scope_block}
 === (A) RULE (original normative text) ===
 {rule_text}
@@ -643,7 +684,7 @@ def judge_expresses(rule_text: str, code_sem: str, *,
         )
     else:
         psb = ""
-    _rt = (rule_text or "")[:1500]
+    _rt = (rule_text or "")[:3000]
     _cs = (code_sem or "")[:1000]
     prompt = (JUDGE_PROMPT
               .replace("{profile_scope_block}", psb)
@@ -700,8 +741,21 @@ def judge_vote(rule_text: str, code_sem: str, *, k: int = 5,
     nd  = sum(1 for v in votes if v.get("verdict") == "DOES_NOT_EXPRESS")
     nerr = sum(1 for v in votes
                if v.get("verdict") not in ("EXPRESSES", "DOES_NOT_EXPRESS"))
-    verdict = "EXPRESSES" if ne > nd else "DOES_NOT_EXPRESS"
     decided = ne + nd
+    if decided == 0:
+        sample_why = ""
+        for v in votes:
+            sample_why = v.get("why") or v.get("missing_or_wrong") or v.get("raw") or ""
+            if sample_why:
+                break
+        return {
+            "verdict": "ERROR",
+            "n_expresses": ne, "n_dne": nd, "n_err": nerr,
+            "k": k,
+            "agreement": 0.0,
+            "sample_why": sample_why[:200],
+        }
+    verdict = "EXPRESSES" if ne > nd else "DOES_NOT_EXPRESS"
     sample_why = ""
     for v in votes:
         if v.get("verdict") == verdict and v.get("why"):

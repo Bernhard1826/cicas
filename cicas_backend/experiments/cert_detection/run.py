@@ -71,7 +71,6 @@ ZLINT = BACKEND / "zlint" / "v3" / "zlint"
 TESTDATA = BACKEND / "zlint" / "v3" / "testdata"
 MANIFEST = INPUTS / "cicasgen_manifest.json"  # snapshot written by --snapshot
 CABF_BR_EFFECTIVE = datetime(2012, 7, 1, tzinfo=timezone.utc)
-PAPER_REPORTABLE_RULE_IDS = {28730, 29274}
 
 
 def _safe_name(path: Path) -> str:
@@ -125,17 +124,14 @@ def _is_strict_reportable_finding(row: dict, certs_dir: Path | None, manifest: d
         return False
     lint = row.get("lint")
     meta = manifest.get(lint, {})
-    rule_id = row.get("rule_id") or meta.get("rule_id")
-    try:
-        rule_id_int = int(rule_id)
-    except (TypeError, ValueError):
-        return False
-    if rule_id_int not in PAPER_REPORTABLE_RULE_IDS:
+    if row.get("upstream_also_flagged") is not False:
         return False
     if certs_dir is None:
         return False
-    not_before = _cert_not_before(certs_dir / row.get("cert", ""))
-    return bool(not_before and not_before >= CABF_BR_EFFECTIVE)
+    if meta.get("source") == "CABF-BR" or row.get("standard") == "CABF-BR":
+        not_before = _cert_not_before(certs_dir / row.get("cert", ""))
+        return bool(not_before and not_before >= CABF_BR_EFFECTIVE)
+    return True
 
 
 def _strict_reportable_from_audit(audit: list[dict], manifest: dict, certs_dir: Path) -> list[dict]:
@@ -349,7 +345,8 @@ def run_external_corpus(args, manifest: dict):
 
 
 def render_md(summary, by_lint, uncertain_counts, n_shipped, audit_counts=None,
-              strict_reportable=0):
+              strict_reportable=0, independent_false_positives=0,
+              unresolved_spurious=0):
     s = summary
     confirmed = uncertain_counts.get("CONFIRMED_REAL", 0)
     genuine = s["REAL"] + confirmed
@@ -380,7 +377,9 @@ def render_md(summary, by_lint, uncertain_counts, n_shipped, audit_counts=None,
         L.append("")
     L.append(f"**Strict reportable result: {strict_reportable} findings are independently "
              f"CONFIRMED and not quality-gated.** Raw triage calls {genuine}/{s['total']} "
-             f"genuine, {s['SPURIOUS']} false positives, with "
+             f"genuine and marks {s['SPURIOUS']} finding(s) as weak-oracle SPURIOUS; "
+             f"independent audit leaves {independent_false_positives} REFUTED finding(s) "
+             f"and {unresolved_spurious} unresolved SPURIOUS finding(s), with "
              f"{(audit_counts or {}).get('NOCHECK', 0)} NOCHECK findings excluded from "
              f"the reliable-claim set.\n")
     L.append("Per-lint detections (firing on the testdata corpus):\n")
@@ -453,6 +452,11 @@ def main():
     audit_conflicts = [a for a in audit
                        if a["triage"] in ("REAL", "UNCERTAIN")
                        and a["indep"] in ("REFUTED", "ERROR")]
+    audit_false_positives = [a for a in audit if a["indep"] == "REFUTED"]
+    unresolved_spurious = [
+        a for a in audit
+        if a["triage"] == "SPURIOUS" and a["indep"] != "CONFIRMED"
+    ]
     # NOCHECK on a finding means the auditor could not independently verify that
     # family.  It is excluded from strict paper claims rather than counted as a
     # reportable defect.
@@ -480,16 +484,25 @@ def main():
                "independent_audit": dict(ua),
                "independent_conflicts": len(audit_conflicts),
                "independent_unverified": len(audit_unverified),
+               "independent_false_positives": len(audit_false_positives),
+               "unresolved_spurious": len(unresolved_spurious),
                "strict_reportable_findings": len(strict_reportable),
                "genuine": t["summary"]["REAL"] + uc.get("CONFIRMED_REAL", 0),
-               "false_positives": t["summary"]["SPURIOUS"]}
+               "triage_spurious": t["summary"]["SPURIOUS"],
+               "false_positives": len(audit_false_positives) + len(unresolved_spurious)}
     (OUTPUTS / "detection_summary.json").write_text(json.dumps(summary, indent=2))
     md = render_md(t["summary"], t["by_lint"], dict(uc), n_shipped, dict(ua),
-                   len(strict_reportable))
+                   len(strict_reportable), len(audit_false_positives),
+                   len(unresolved_spurious))
     (OUTPUTS / "detection_summary.md").write_text(md)
 
     print(md)
-    assert t["summary"]["SPURIOUS"] == 0, "FALSE POSITIVE present — SAIV gate not clean"
+    assert not audit_false_positives, (
+        f"independent audit REFUTED {len(audit_false_positives)} finding(s): "
+        f"{[(a['lint'], a['cert']) for a in audit_false_positives[:10]]}")
+    assert not unresolved_spurious, (
+        f"{len(unresolved_spurious)} triage-SPURIOUS finding(s) were not independently "
+        f"confirmed: {[(a['lint'], a['cert'], a['indep']) for a in unresolved_spurious[:10]]}")
     if uc.get("REMAINS_UNCERTAIN", 0):
         print(f"[warn] {uc.get('REMAINS_UNCERTAIN', 0)} UNCERTAIN finding(s) "
               "remain excluded from strict claims", flush=True)
@@ -498,7 +511,8 @@ def main():
         f"genuine: {[(a['lint'], a['cert']) for a in audit_conflicts]}")
     print(f"[ok] strict_reportable={len(strict_reportable)}; "
           f"triage_genuine={summary['genuine']}/{t['summary']['total']}; "
-          f"false_positives=0; independent audit CONFIRMED={ua.get('CONFIRMED',0)} "
+          f"false_positives=0; triage_spurious={t['summary']['SPURIOUS']} "
+          f"(independent-confirmed); independent audit CONFIRMED={ua.get('CONFIRMED',0)} "
           f"REFUTED={ua.get('REFUTED',0)} NOCHECK={ua.get('NOCHECK',0)} "
           f"(NOCHECK excluded from reliable claims); "
           f"wrote outputs/ -> {OUTPUTS}")

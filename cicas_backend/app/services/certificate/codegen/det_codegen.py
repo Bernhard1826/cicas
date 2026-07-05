@@ -485,21 +485,27 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
         _extract_utctime_zulu_atom,
         _extract_basic_constraints_default_false_atom,
         _extract_serial_der_sign_bit_atom,
+        _extract_name_constraints_fallback_marker_atom,
+        _extract_ip_version_octet_atom,
         _extract_ip_reverse_zone_suffix_atom,
         _extract_dns_fqdn_wildcard_portion_atom,
         _extract_aia_access_description_count_atom,
         _extract_aia_unique_location_per_method_atom,
         _extract_aia_permitted_access_methods_atom,
+        _extract_unrestricted_anyeku_only_atom,
+        _extract_extkeyusage_only_allowed_usages_atom,
         _extract_keyusage_only_allowed_bits_atom,
-        _extract_name_constraints_fallback_marker_atom,
         _extract_permitted_dns_ip_or_excluded_all_atom,
         _extract_excluded_subtrees_empty_atom,
         _extract_permitted_subtrees_nonempty_atom,
         _extract_common_name_domain_label_atom,
         _extract_common_name_dnsname_copy_atom,
         _extract_tor_v3_onion_dns_atom,
+        _extract_spki_algid_exact_hex_atom,
+        _extract_signature_algid_exact_hex_atom,
         _extract_sigalg_match_atom,
         _extract_rsa_public_key_not_pss_atom,
+        _extract_name_constraints_directoryname_not_recommended_atom,
         _extract_keyusage_not_recommended_bit_atom,
         _extract_subject_attr_not_recommended_atom,
         _extract_keyusage_bit_atom,
@@ -628,6 +634,65 @@ def _extract_serial_der_sign_bit_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_ip_version_octet_atom(ir: dict) -> Optional[object]:
+    """RFC 5280 iPAddress octet-length rows scoped by IP version.
+
+    SAN iPAddress rows constrain IPv4 and IPv6 separately (4 vs 16 octets).
+    NameConstraints iPAddress subtree rows also constrain IPv4/IPv6 separately
+    but count address+mask bytes (8 vs 32). Use version-scoped atoms so an IPv4
+    row is not widened to all IP addresses.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "ipaddress" not in key and "ipaddress" not in subj:
+        return None
+    if "zerooctets" in key and ("noipv4ipaddress" in key or "noipv6ipaddress" in key):
+        return None
+
+    version = None
+    if ("ipversion4" in key or "ipv4" in key
+            or re.search(r"\bIP\s+version\s+4\b", raw, re.I)):
+        version = 4
+    elif ("ipversion6" in key or "ipv6" in key
+            or re.search(r"\bIP\s+version\s+6\b", raw, re.I)):
+        version = 6
+    if version is None:
+        return None
+
+    in_name_constraints = "nameconstraints" in subj or "permittedsubtrees" in subj or "excludedsubtrees" in subj
+    if in_name_constraints:
+        raw_key = _compact_text(raw)
+        if "permittedsubtrees" not in raw_key and "excludedsubtrees" not in raw_key:
+            fields = ("PermittedIPAddresses", "ExcludedIPAddresses")
+        elif "permittedsubtrees" in subj or "permittedsubtrees" in raw_key:
+            fields = ("PermittedIPAddresses",)
+        elif "excludedsubtrees" in subj or "excludedsubtrees" in raw_key:
+            fields = ("ExcludedIPAddresses",)
+        else:
+            return None
+        count = 8 if version == 4 else 32
+        if str(count) not in key and ("eight" not in key if version == 4 else "thirtytwo" not in key):
+            return None
+        parts = []
+        for field in fields:
+            parts.append(tv_dsl.SubtreeIPListVersionAllOctetCount(field, version, count))
+            if "rfc4632" in key or "cidr" in key:
+                parts.append(tv_dsl.SubtreeIPVersionMaskValidCIDR(field, version))
+        if len(parts) == 1:
+            return parts[0]
+        return tv_dsl.And(parts=tuple(parts))
+
+    if "subjectaltname" in subj or "subjectalternativename" in key or "generalname" in key:
+        count = 4 if version == 4 else 16
+        word = "four" if version == 4 else "sixteen"
+        if str(count) not in key and word not in key and ("ipv4address" not in key if version == 4 else "ipv6address" not in key):
+            return None
+        return tv_dsl.IPListVersionAllOctetCount("IPAddresses", version, count)
+
+    return None
+
+
 def _extract_ip_reverse_zone_suffix_atom(ir: dict) -> Optional[object]:
     """CABF issuance ban for Domain Names ending in IP reverse-zone suffixes."""
     raw = _full_ir_text(ir)
@@ -713,6 +778,58 @@ def _extract_aia_permitted_access_methods_atom(ir: dict) -> Optional[object]:
     ))
 
 
+def _extract_signature_algid_exact_hex_atom(ir: dict) -> Optional[object]:
+    """Certificate signature AlgorithmIdentifier exact DER bytes."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    if "algorithmidentifier" not in key or "byteforbyteidentical" not in key:
+        return None
+    if "subjectpublickeyinfo" in key or "subjectpublickey" in key:
+        return None
+    m = re.search(r"`?([0-9a-fA-F]{12,})`?", raw)
+    if not m:
+        return None
+    hex_lit = m.group(1)
+    if len(hex_lit) % 2 != 0:
+        return None
+    hex_lit = hex_lit.lower()
+    oid_by_hex = {
+        "300a06082a8648ce3d040302": "OidSignatureSHA256withECDSA",
+        "300a06082a8648ce3d040303": "OidSignatureSHA384withECDSA",
+        "300a06082a8648ce3d040304": "OidSignatureSHA512withECDSA",
+    }
+    oid = oid_by_hex.get(hex_lit)
+    atom = tv_dsl.SignatureAlgorithmIdentifiersEqualHex(hex_lit)
+    if oid:
+        return tv_dsl.When(cond=tv_dsl.OidEq("SignatureAlgorithmOID", oid), main=atom)
+    return atom
+
+
+def _extract_spki_algid_exact_hex_atom(ir: dict) -> Optional[object]:
+    """SubjectPublicKeyInfo.algorithm AlgorithmIdentifier exact DER bytes."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "subjectpublickeyinfo" not in key and "subjectpublickeyinfo" not in subj_key:
+        return None
+    m = re.search(r"`?([0-9a-fA-F]{20,})`?", raw)
+    if not m:
+        return None
+    hex_lit = m.group(1).lower()
+    curve_by_hex = {
+        "301306072a8648ce3d020106082a8648ce3d030107": "OidEcCurveP256",
+        "301006072a8648ce3d020106052b81040022": "OidEcCurveP384",
+        "301006072a8648ce3d020106052b81040023": "OidEcCurveP521",
+    }
+    curve_oid = curve_by_hex.get(hex_lit)
+    if not curve_oid:
+        return None
+    return tv_dsl.When(
+        cond=tv_dsl.BytesContainsOidDer("RawSubjectPublicKeyInfo", curve_oid),
+        main=tv_dsl.SPKIAlgorithmIdentifierEqualsHex(hex_lit),
+    )
+
+
 def _extract_sigalg_match_atom(ir: dict) -> Optional[object]:
     """Certificate.signatureAlgorithm equals TBSCertificate.signature AlgorithmIdentifier."""
     raw = _full_ir_text(ir)
@@ -768,11 +885,70 @@ _ALL_KEY_USAGE_BITS = (
 )
 
 
+def _extract_extkeyusage_only_allowed_usages_atom(ir: dict) -> Optional[object]:
+    """ExtendedKeyUsage table row: Any other value MUST NOT / NOT RECOMMENDED.
+
+    The allowed set is derived from the table title/spec context, not rule ids.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    title_key = _compact_text(str(ir.get("_rule_title") or ir.get("title") or ""))
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "anyothervalue" not in key:
+        return None
+    if "mustnot" not in key and "notrecommended" not in key:
+        return None
+    if "extendedkeyusage" not in key and "extkeyusage" not in subj_key:
+        return None
+    if "unrestricted" in title_key and "anyextendedkeyusage" in key:
+        return None
+
+    allowed: Optional[tuple[str, ...]] = None
+    if "technicallyconstrainedprecertificatesigningcaextendedkeyusage" in title_key:
+        allowed = ("PreCertificateSigningCertificate",)
+    elif "ocspresponderextendedkeyusage" in title_key:
+        allowed = ("OcspSigning",)
+    elif "cacertificateextendedkeyusage" in title_key:
+        allowed = (
+            "ServerAuth", "ClientAuth", "CodeSigning", "EmailProtection",
+            "TimeStamping", "OcspSigning", "Any",
+            "PreCertificateSigningCertificate",
+        )
+    elif "crosscertifiedsubordinatecaextendedkeyusagerestricted" in title_key:
+        allowed = (
+            "ServerAuth", "ClientAuth", "EmailProtection", "CodeSigning",
+            "TimeStamping", "Any",
+        )
+    if not allowed:
+        return None
+    return tv_dsl.ExtKeyUsageOnlyHasUsagesInSet(allowed)
+
+
+def _extract_unrestricted_anyeku_only_atom(ir: dict) -> Optional[object]:
+    """Unrestricted EKU form: anyExtendedKeyUsage, if present, is the only EKU."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    title_key = _compact_text(str(ir.get("_rule_title") or ir.get("title") or ""))
+    if "crosscertifiedsubordinatecaextendedkeyusageunrestricted" not in title_key:
+        return None
+    if "alternatively" in key:
+        return None
+    if "onlykeyusagepresent" not in key and "anyextendedkeyusage" not in key:
+        return None
+    return tv_dsl.When(
+        cond=tv_dsl.ExtKeyUsageHas("Any"),
+        main=tv_dsl.ExtKeyUsageCountInRange(1, 1),
+    )
+
+
 def _extract_keyusage_only_allowed_bits_atom(ir: dict) -> Optional[object]:
     """KeyUsage table row: Any other value MUST NOT / NOT RECOMMENDED."""
     raw = _full_ir_text(ir)
     key = _compact_text(raw)
     subj_key = _compact_text(str(ir.get("subject") or ""))
+    title_key = _compact_text(str(ir.get("_rule_title") or ir.get("title") or ""))
+    if "extendedkeyusage" in key or "extkeyusage" in subj_key or "extendedkeyusage" in title_key:
+        return None
     if "keyusage" not in subj_key and "keyusage" not in key:
         return None
     if "anyothervalue" not in key:
@@ -827,8 +1003,32 @@ def _extract_subject_attr_not_recommended_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_name_constraints_directoryname_not_recommended_atom(ir: dict) -> Optional[object]:
+    """NameConstraints directoryName name type is NOT RECOMMENDED.
+
+    The name type can appear on either permittedSubtrees or excludedSubtrees, so
+    the pass condition is absence from both parsed subtree lists.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    title_key = _compact_text(str(ir.get("_rule_title") or ir.get("title") or ""))
+    if "directoryname" not in key or "notrecommended" not in key:
+        return None
+    if "nameconstraints" not in key and "nameconstraints" not in title_key:
+        return None
+    return tv_dsl.And(parts=(
+        tv_dsl.Not(tv_dsl.FieldNonEmpty("PermittedDirectoryNames")),
+        tv_dsl.Not(tv_dsl.FieldNonEmpty("ExcludedDirectoryNames")),
+    ))
+
+
 def _extract_name_constraints_fallback_marker_atom(ir: dict) -> Optional[object]:
-    """NameConstraints fallback marker rows: no real subtree entry => zero marker."""
+    """NameConstraints fallback marker rows require an IP entry for that family.
+
+    If no family-specific iPAddress subtree is otherwise present, the all-zero
+    range marker is the required entry. On the final certificate this is
+    equivalent to requiring at least one subtree entry of the family length.
+    """
     raw = _full_ir_text(ir)
     key = _compact_text(raw)
     subj = str(ir.get("subject") or "").lower()
@@ -839,15 +1039,9 @@ def _extract_name_constraints_fallback_marker_atom(ir: dict) -> Optional[object]
     if "nodnsnameinstance" in key and "zerolengthdnsname" in key:
         return tv_dsl.SubtreeStringListHasNonEmptyOrEmptyMarker("PermittedDNSNames")
     if "noipv4ipaddress" in key and "8zerooctets" in key:
-        return tv_dsl.Or(parts=(
-            tv_dsl.SubtreeIPListAnyHasOctetCountAndNotAllZero("PermittedIPAddresses", 8),
-            tv_dsl.SubtreeIPListAnyAllZero("PermittedIPAddresses", 8),
-        ))
+        return tv_dsl.SubtreeIPListAnyHasOctetCount("PermittedIPAddresses", 8)
     if "noipv6ipaddress" in key and "32zerooctets" in key:
-        return tv_dsl.Or(parts=(
-            tv_dsl.SubtreeIPListAnyHasOctetCountAndNotAllZero("PermittedIPAddresses", 32),
-            tv_dsl.SubtreeIPListAnyAllZero("PermittedIPAddresses", 32),
-        ))
+        return tv_dsl.SubtreeIPListAnyHasOctetCount("PermittedIPAddresses", 32)
     return None
 
 

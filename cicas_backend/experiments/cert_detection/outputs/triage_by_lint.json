@@ -1,135 +1,5 @@
 [
   {
-    "lint": "cicasgen_ext_subfield_present_policy_constraints_or_ext_subfield_31056",
-    "fires": 1073,
-    "applies": 1077,
-    "error_frac": 0.996,
-    "REAL": 982,
-    "SPURIOUS": 91,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_when_version_present_version_eq_31346",
-    "fires": 1064,
-    "applies": 1077,
-    "error_frac": 0.988,
-    "REAL": 973,
-    "SPURIOUS": 91,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_when_version_present_version_eq_31349",
-    "fires": 1064,
-    "applies": 1077,
-    "error_frac": 0.988,
-    "REAL": 973,
-    "SPURIOUS": 91,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_subject_alternate_name_critical_31132",
-    "fires": 695,
-    "applies": 1077,
-    "error_frac": 0.645,
-    "REAL": 636,
-    "SPURIOUS": 59,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_bytes_eq_31102",
-    "fires": 240,
-    "applies": 259,
-    "error_frac": 0.927,
-    "REAL": 208,
-    "SPURIOUS": 32,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_subject_alt_name_present_31065",
-    "fires": 365,
-    "applies": 1077,
-    "error_frac": 0.339,
-    "REAL": 333,
-    "SPURIOUS": 32,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_permitted_directory_names_present_29375",
-    "fires": 186,
-    "applies": 233,
-    "error_frac": 0.798,
-    "REAL": 160,
-    "SPURIOUS": 26,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_subtree_string_list_has_non_empty_or_empty_marker_29382",
-    "fires": 184,
-    "applies": 233,
-    "error_frac": 0.79,
-    "REAL": 159,
-    "SPURIOUS": 25,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_oid_list_count_in_set_policy_identifiers_29244",
-    "fires": 121,
-    "applies": 257,
-    "error_frac": 0.471,
-    "REAL": 96,
-    "SPURIOUS": 25,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_oid_list_count_in_set_policy_identifiers_29247",
-    "fires": 121,
-    "applies": 257,
-    "error_frac": 0.471,
-    "REAL": 96,
-    "SPURIOUS": 25,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29468",
-    "fires": 118,
-    "applies": 215,
-    "error_frac": 0.549,
-    "REAL": 101,
-    "SPURIOUS": 17,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_policy_identifiers_count_and_any_policy_list_contains_29339",
-    "fires": 200,
-    "applies": 233,
-    "error_frac": 0.858,
-    "REAL": 190,
-    "SPURIOUS": 10,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
-    "lint": "cicasgen_any_policy_list_contains_29321",
-    "fires": 197,
-    "applies": 233,
-    "error_frac": 0.845,
-    "REAL": 187,
-    "SPURIOUS": 10,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
     "lint": "cicasgen_when_subscriber_cert_oid_list_count_in_set_policy_29492",
     "fires": 353,
     "applies": 748,
@@ -150,22 +20,22 @@
     "suspect": true
   },
   {
-    "lint": "cicasgen_when_subscriber_cert_ku_has_digital_signature_29409",
-    "fires": 301,
-    "applies": 748,
-    "error_frac": 0.402,
-    "REAL": 300,
-    "SPURIOUS": 1,
-    "UNCERTAIN": 0,
-    "suspect": true
-  },
-  {
     "lint": "cicasgen_when_oid_policy_individual_validated_list_contains_29447",
     "fires": 10,
     "applies": 31,
     "error_frac": 0.323,
     "REAL": 9,
     "SPURIOUS": 1,
+    "UNCERTAIN": 0,
+    "suspect": true
+  },
+  {
+    "lint": "cicasgen_ext_key_usage_only_has_usages_in_set_29510",
+    "fires": 12,
+    "applies": 12,
+    "error_frac": 1.0,
+    "REAL": 12,
+    "SPURIOUS": 0,
     "UNCERTAIN": 0,
     "suspect": true
   },
@@ -180,16 +50,6 @@
     "suspect": true
   },
   {
-    "lint": "cicasgen_name_constraints_excluded_subtrees_empty_29388",
-    "fires": 68,
-    "applies": 233,
-    "error_frac": 0.292,
-    "REAL": 68,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
     "lint": "cicasgen_subject_alternate_name_critical_29800",
     "fires": 13,
     "applies": 62,
@@ -200,73 +60,13 @@
     "suspect": false
   },
   {
-    "lint": "cicasgen_excluded_directory_names_absent_and_excluded_dnsnames_29269",
-    "fires": 53,
-    "applies": 257,
-    "error_frac": 0.206,
-    "REAL": 53,
+    "lint": "cicasgen_when_subscriber_cert_subject_common_name_fqdnmatches_29672",
+    "fires": 120,
+    "applies": 748,
+    "error_frac": 0.16,
+    "REAL": 120,
     "SPURIOUS": 0,
     "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_policy_identifiers_count_29316",
-    "fires": 42,
-    "applies": 233,
-    "error_frac": 0.18,
-    "REAL": 40,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 2,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_rdnhas_single_attribute_subject_29558",
-    "fires": 171,
-    "applies": 1034,
-    "error_frac": 0.165,
-    "REAL": 171,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_any_policy_list_contains_29324",
-    "fires": 36,
-    "applies": 233,
-    "error_frac": 0.155,
-    "REAL": 20,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 16,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_any_policy_list_contains_29325",
-    "fires": 36,
-    "applies": 233,
-    "error_frac": 0.155,
-    "REAL": 20,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 16,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_any_policy_list_contains_29342",
-    "fires": 36,
-    "applies": 233,
-    "error_frac": 0.155,
-    "REAL": 20,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 16,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_any_policy_list_contains_29343",
-    "fires": 36,
-    "applies": 233,
-    "error_frac": 0.155,
-    "REAL": 20,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 16,
     "suspect": false
   },
   {
@@ -275,36 +75,6 @@
     "applies": 31,
     "error_frac": 0.129,
     "REAL": 4,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_subscriber_cert_dnsnames_fqdnor_wildcard_portion_29420",
-    "fires": 72,
-    "applies": 748,
-    "error_frac": 0.096,
-    "REAL": 69,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 3,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730",
-    "fires": 20,
-    "applies": 257,
-    "error_frac": 0.078,
-    "REAL": 20,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_certificate_policies_has_no_policy_qualifiers_29246",
-    "fires": 17,
-    "applies": 257,
-    "error_frac": 0.066,
-    "REAL": 17,
     "SPURIOUS": 0,
     "UNCERTAIN": 0,
     "suspect": false
@@ -320,71 +90,11 @@
     "suspect": false
   },
   {
-    "lint": "cicasgen_issuer_unique_id_absent_29298",
-    "fires": 15,
-    "applies": 233,
-    "error_frac": 0.064,
-    "REAL": 15,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_rdnsequence_has_country_before_subject_29559",
-    "fires": 65,
-    "applies": 1034,
-    "error_frac": 0.063,
-    "REAL": 61,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 4,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29463",
-    "fires": 10,
-    "applies": 215,
-    "error_frac": 0.047,
-    "REAL": 8,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 2,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_not_has_any_extension_and_issuer_unique_id_absent_31153",
-    "fires": 47,
-    "applies": 1077,
-    "error_frac": 0.044,
-    "REAL": 47,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
     "lint": "cicasgen_when_subscriber_cert_not_any_policy_list_contains_29493",
     "fires": 26,
     "applies": 748,
     "error_frac": 0.035,
     "REAL": 26,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_ext_policy_qualifier_oidin_set_29329",
-    "fires": 8,
-    "applies": 233,
-    "error_frac": 0.034,
-    "REAL": 8,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_ext_policy_qualifier_oidin_set_29347",
-    "fires": 8,
-    "applies": 233,
-    "error_frac": 0.034,
-    "REAL": 8,
     "SPURIOUS": 0,
     "UNCERTAIN": 0,
     "suspect": false
@@ -410,46 +120,6 @@
     "suspect": false
   },
   {
-    "lint": "cicasgen_ext_subfield_present_authority_key_id_and_ext_subfield_31160",
-    "fires": 18,
-    "applies": 1077,
-    "error_frac": 0.017,
-    "REAL": 18,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274",
-    "fires": 4,
-    "applies": 257,
-    "error_frac": 0.016,
-    "REAL": 4,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_serial_number_len_31163",
-    "fires": 13,
-    "applies": 1077,
-    "error_frac": 0.012,
-    "REAL": 13,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_eku_has_any_ext_key_usage_count_28713",
-    "fires": 2,
-    "applies": 233,
-    "error_frac": 0.009,
-    "REAL": 2,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
     "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29474",
     "fires": 2,
     "applies": 215,
@@ -470,37 +140,7 @@
     "suspect": false
   },
   {
-    "lint": "cicasgen_ext_policy_qualifier_oidin_set_29495",
-    "fires": 6,
-    "applies": 748,
-    "error_frac": 0.008,
-    "REAL": 6,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_not_cert_policy_explicit_text_has_encoding_tag_in_set_30984",
-    "fires": 6,
-    "applies": 1077,
-    "error_frac": 0.006,
-    "REAL": 6,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
     "lint": "cicasgen_when_version_present_version_eq_31172",
-    "fires": 7,
-    "applies": 1077,
-    "error_frac": 0.006,
-    "REAL": 7,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_version_present_version_eq_31344",
     "fires": 7,
     "applies": 1077,
     "error_frac": 0.006,
@@ -520,46 +160,6 @@
     "suspect": false
   },
   {
-    "lint": "cicasgen_when_version_present_version_in_set_31342",
-    "fires": 5,
-    "applies": 1077,
-    "error_frac": 0.005,
-    "REAL": 5,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_sig_alg_matches_tbssignature_29300",
-    "fires": 1,
-    "applies": 233,
-    "error_frac": 0.004,
-    "REAL": 1,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_sig_alg_matches_tbssignature_29360",
-    "fires": 1,
-    "applies": 233,
-    "error_frac": 0.004,
-    "REAL": 1,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_sig_alg_matches_tbssignature_29367",
-    "fires": 1,
-    "applies": 233,
-    "error_frac": 0.004,
-    "REAL": 1,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
     "lint": "cicasgen_sig_alg_matches_tbssignature_31396",
     "fires": 4,
     "applies": 1077,
@@ -570,81 +170,11 @@
     "suspect": false
   },
   {
-    "lint": "cicasgen_subject_unique_id_absent_29299",
-    "fires": 1,
-    "applies": 233,
-    "error_frac": 0.004,
-    "REAL": 1,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_subject_unique_id_absent_29333",
-    "fires": 1,
-    "applies": 233,
-    "error_frac": 0.004,
-    "REAL": 1,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_subject_alt_name_present_and_not_dn_empty_subject_31067",
-    "fires": 4,
-    "applies": 1077,
-    "error_frac": 0.004,
-    "REAL": 4,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_when_subscriber_cert_subject_alt_name_not_critical_29415",
-    "fires": 3,
-    "applies": 748,
-    "error_frac": 0.004,
-    "REAL": 3,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
     "lint": "cicasgen_when_has_any_extension_version_eq_31403",
     "fires": 3,
     "applies": 1077,
     "error_frac": 0.003,
     "REAL": 3,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_serial_number_dersign_bit_zero_31368",
-    "fires": 2,
-    "applies": 1077,
-    "error_frac": 0.002,
-    "REAL": 2,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_serial_number_value_31123",
-    "fires": 2,
-    "applies": 1077,
-    "error_frac": 0.002,
-    "REAL": 2,
-    "SPURIOUS": 0,
-    "UNCERTAIN": 0,
-    "suspect": false
-  },
-  {
-    "lint": "cicasgen_serial_number_value_31161",
-    "fires": 2,
-    "applies": 1077,
-    "error_frac": 0.002,
-    "REAL": 2,
     "SPURIOUS": 0,
     "UNCERTAIN": 0,
     "suspect": false

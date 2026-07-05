@@ -24,9 +24,9 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from . import tree_codegen, render
+from . import dsl, tree_codegen, render
 from .det_codegen import severity_from_obligation
-from .tree_to_natural import tree_slug
+from .tree_to_natural import tree_slug, tree_to_natural
 
 
 # package directory per source. Anything else is rejected — we only ship into
@@ -144,15 +144,18 @@ def resolve_package(source: str) -> tuple[str, str]:
 # the profile cannot be determined unambiguously we fall back to `true` (the old
 # behavior), so this change can remove false positives but never add them.
 #
-# §7.1.2.1   Root CA                 -> IsRootCA
-# §7.1.2.2   Cross-Cert'd Sub CA     -> IsSubCA
-# §7.1.2.3   Internal/Sub CA         -> IsSubCA
-# §7.1.2.4/5 Technically-Constrained -> IsSubCA
-# §7.1.2.6   Subscriber              -> IsSubscriberCert
-# §7.1.2.7   Subscriber              -> IsSubscriberCert
-# §7.1.2.8   OCSP Responder          -> IsDelegatedOCSPResponderCert
-# §7.1.2.10  CA Certificate (common) -> IsCACert
-# §7.1.2.11  Common to all CAs       -> IsCACert
+# CABF BR v2 profile map used by the current DB:
+# §7.1.2.1   Root CA                                   -> IsRootCA
+# §7.1.2.2   Cross-Certified Subordinate CA            -> IsSubCA
+# §7.1.2.3   Technically Constrained Non-TLS Sub CA     -> IsSubCA
+# §7.1.2.4   Technically Constrained Precert Signing CA -> IsSubCA + precert-signing EKU
+# §7.1.2.5   Technically Constrained TLS Sub CA         -> IsSubCA + server-auth profile signal
+# §7.1.2.6   TLS Subordinate CA                        -> IsSubCA + server-auth profile signal
+# §7.1.2.7   Subscriber                                -> IsSubscriberCert
+# §7.1.2.8   OCSP Responder                            -> IsDelegatedOCSPResponderCert
+# §7.1.2.9   Precertificate                            -> CT poison extension present
+# §7.1.2.10  CA Certificate                            -> IsCACert
+# §7.1.2.11  Common certificate requirements           -> all certificates
 _SCOPE_BY_TITLE = (
     ("ocsp responder", "util.IsDelegatedOCSPResponderCert(c)"),
     ("root ca", "util.IsRootCA(c)"),
@@ -177,9 +180,9 @@ def _section_scope(section: str) -> Optional[str]:
     carries (see e_cert_policy_ov_requires_province_or_locality), so we do the
     same: gate on IsSubscriberCert AND the tier's BR policy OID.
 
-        §7.1.2.7    common subscriber      -> IsSubscriberCert
-        §7.1.2.7.1  common subscriber      -> IsSubscriberCert
-        §7.1.2.7.2  Domain Validated       -> IsSubscriberCert + DV OID
+        §7.1.2.7    common subscriber       -> IsSubscriberCert
+        §7.1.2.7.1  common subscriber       -> IsSubscriberCert
+        §7.1.2.7.2  Domain Validated        -> IsSubscriberCert + DV OID
         §7.1.2.7.3  Individual Validated    -> IsSubscriberCert + IV OID
         §7.1.2.7.4  Organization Validated  -> IsSubscriberCert + OV OID
         §7.1.2.7.5  Extended Validation     -> IsSubscriberCert + EV
@@ -211,13 +214,16 @@ def _section_scope(section: str) -> Optional[str]:
         1: "util.IsRootCA(c)",
         2: "util.IsSubCA(c)",
         3: "util.IsSubCA(c)",
-        4: "util.IsSubCA(c)",
-        5: "util.IsSubCA(c)",
-        6: "util.IsSubscriberCert(c)",
+        4: ("util.IsSubCA(c) && "
+            "util.SliceContainsOID(c.UnknownExtKeyUsage, "
+            "util.PreCertificateSigningCertificateEKU)"),
+        5: "util.IsSubCA(c) && util.IsServerAuthCert(c)",
+        6: "util.IsSubCA(c) && util.IsServerAuthCert(c)",
         7: "util.IsSubscriberCert(c)",
         8: "util.IsDelegatedOCSPResponderCert(c)",
+        9: "util.IsExtInCert(c, util.CtPoisonOID)",
         10: "util.IsCACert(c)",
-        11: "util.IsCACert(c)",
+        11: "true",
     }.get(profile)
 
 
@@ -242,8 +248,35 @@ def _is_aki_keyid_presence_rule(ir: Optional[dict]) -> bool:
     return subject == _AKI_KEYID_SUBJECT and obligation in ("MUST", "SHALL")
 
 
+def _dedupe_exprs(exprs: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for expr in exprs:
+        e = (expr or "").strip()
+        if not e or e == "true" or e in seen:
+            continue
+        seen.add(e)
+        out.append(e)
+    return out
+
+
+def _top_level_when_condition(tree) -> Optional[dsl.Compound]:
+    """Return the applicability condition from a top-level When node.
+
+    The DSL semantic for When(C, P) is "the rule applies when C; P must hold".
+    In an executable zlint, that condition belongs in CheckApplies so the final
+    lint reports NA outside the rule's scope instead of PASS. This is a generic
+    transformation over the DSL shape, not a per-rule exception.
+    """
+    if isinstance(tree, dsl.When):
+        return tree.cond
+    return None
+
+
 def check_applies_expr(section: str, title: str,
-                       ir: Optional[dict] = None) -> tuple[str, bool]:
+                       ir: Optional[dict] = None,
+                       tree: Optional[dsl.Compound] = None,
+                       precondition: Optional[dsl.Compound] = None) -> tuple[str, bool]:
     """Return (go_bool_expr, needs_util) for a lint's CheckApplies guard.
 
     Section number is the authoritative divisor; the title is a fallback when
@@ -253,25 +286,170 @@ def check_applies_expr(section: str, title: str,
     `ir` (the rule's extracted IR) lets us apply requirement-specific scope
     carve-outs grounded in the obligation itself, e.g. the self-signed exemption
     for an AKI-keyIdentifier presence rule."""
-    expr = _section_scope(section)
-    if expr is None:
+    scope_expr = _section_scope(section)
+    if scope_expr is None:
         t = (title or "").lower()
         for needle, pred in _SCOPE_BY_TITLE:
             if needle in t:
-                expr = pred
+                scope_expr = pred
                 break
-    if expr is None and not _is_aki_keyid_presence_rule(ir):
-        return "true", False
+    if scope_expr is None:
+        scope_expr = "true"
+
+    exprs = [scope_expr]
+    if precondition is not None:
+        exprs.append(render.render(precondition))
+    when_cond = _top_level_when_condition(tree)
+    if when_cond is not None:
+        exprs.append(render.render(when_cond))
 
     # Requirement-grounded narrowing: exempt self-signed certs from the
     # AKI-keyIdentifier presence obligation (mirrors zlint's own carve-out).
     if _is_aki_keyid_presence_rule(ir):
-        base = expr or "true"
-        if base == "true":
-            return "!util.IsSelfSigned(c)", True
-        return f"{base} && !util.IsSelfSigned(c)", True
+        exprs.append("!util.IsSelfSigned(c)")
 
-    return expr, True
+    uniq = _dedupe_exprs(exprs)
+    expr = " && ".join(f"({e})" for e in uniq) if uniq else "true"
+    return expr, "util." in expr
+
+
+_APPLIES_EXPR_NATURAL = {
+    "true": "all certificates parsed by zlint",
+    "util.IsRootCA(c)": "Root CA certificates",
+    "util.IsSubCA(c)": "Subordinate CA certificates",
+    "util.IsSubCA(c) && util.IsServerAuthCert(c)":
+        "TLS Subordinate CA certificates identified by zlint's server-auth profile predicate",
+    "util.IsCACert(c)": "CA certificates",
+    "util.IsSubscriberCert(c)": "Subscriber certificates",
+    "util.IsDelegatedOCSPResponderCert(c)": "Delegated OCSP responder certificates",
+    "util.IsExtInCert(c, util.CtPoisonOID)": "Precertificates with the CT poison extension present",
+    "util.IsSubCA(c) && util.SliceContainsOID(c.UnknownExtKeyUsage, util.PreCertificateSigningCertificateEKU)":
+        "Subordinate CA certificates asserting the CT Precertificate Signing Certificate EKU",
+    "!util.IsSelfSigned(c)": "certificates that are not self-signed",
+    "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRDomainValidatedOID)":
+        "Subscriber certificates asserting the CABF domain-validated Reserved Certificate Policy Identifier (2.23.140.1.2.1)",
+    "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRIndividualValidatedOID)":
+        "Subscriber certificates asserting the CABF individual-validated Reserved Certificate Policy Identifier (2.23.140.1.2.3)",
+    "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BROrganizationValidatedOID)":
+        "Subscriber certificates asserting the CABF organization-validated Reserved Certificate Policy Identifier (2.23.140.1.2.2)",
+    "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRExtendedValidatedOID)":
+        "Subscriber certificates asserting the CABF extended-validation Reserved Certificate Policy Identifier (2.23.140.1.1)",
+}
+
+
+def _condition_natural(condition: dsl.Compound) -> str:
+    return tree_to_natural(condition)
+
+
+def check_applies_natural(section: str, title: str,
+                          ir: Optional[dict] = None,
+                          tree: Optional[dsl.Compound] = None,
+                          precondition: Optional[dsl.Compound] = None) -> str:
+    """Mechanical English for the exact in-tree CheckApplies guard.
+
+    This is intentionally derived from ``check_applies_expr`` rather than from
+    rule context.  The shipping synonymy gate must compare the final emitted
+    zlint scope with the specification; a broad guard such as ``IsSubCA`` must
+    be visible to the judge rather than hidden behind a profile-scope hint.
+    """
+    scope_expr = _section_scope(section)
+    if scope_expr is None:
+        t = (title or "").lower()
+        for needle, pred in _SCOPE_BY_TITLE:
+            if needle in t:
+                scope_expr = pred
+                break
+    if scope_expr is None:
+        scope_expr = "true"
+
+    def _norm_scope_piece(text: str) -> str:
+        text = (text or "").lower()
+        text = re.sub(r"`[^`]+`", "", text)
+        text = re.sub(r"[^a-z0-9]+", " ", text)
+        words = [
+            w for w in text.split()
+            if w not in {
+                "certificates", "certificate", "where", "the", "a", "an", "is",
+                "are", "parsed", "by", "zlint",
+            }
+        ]
+        return " ".join(words)
+
+    pieces: list[str] = []
+    if scope_expr != "true":
+        pieces.append(_APPLIES_EXPR_NATURAL.get(
+            scope_expr,
+            f"certificates satisfying `{scope_expr}`",
+        ))
+    if precondition is not None:
+        pieces.append(f"certificates where {_condition_natural(precondition)}")
+    when_cond = _top_level_when_condition(tree)
+    if when_cond is not None:
+        cond_piece = f"certificates where {_condition_natural(when_cond)}"
+        if _norm_scope_piece(cond_piece) not in {
+            _norm_scope_piece(p) for p in pieces
+        }:
+            pieces.append(cond_piece)
+    if _is_aki_keyid_presence_rule(ir):
+        pieces.append("certificates that are not self-signed")
+
+    # Remove exact duplicate English fragments after composing profile +
+    # structured condition.
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in pieces:
+        if p not in seen:
+            out.append(p)
+            seen.add(p)
+    if not out:
+        return "all certificates parsed by zlint"
+    if len(out) == 1:
+        return out[0]
+    return "certificates satisfying all of these applicability conditions: " + "; ".join(out)
+
+
+def _pass_condition_under_check_applies(tree) -> str:
+    """Mechanical pass condition after CheckApplies has already held true.
+
+    Emitted zlint first evaluates CheckApplies. Since we move the standalone
+    precondition and the top-level When condition into CheckApplies, the Execute
+    predicate is equivalent to the consequent while CheckApplies is true. The Go
+    may still contain the vacuous conditional, but the final lint semantics are
+    clearer and stricter when summarized this way.
+    """
+    effective = tree.main if isinstance(tree, dsl.When) else tree
+    return tree_to_natural(effective)
+
+
+
+def intree_semantics_summary(section: str,
+                             title: str,
+                             tree,
+                             precondition=None,
+                             severity: str = "lint.Error",
+                             ir: Optional[dict] = None,
+                             pass_condition_text: Optional[str] = None) -> str:
+    """Mechanical σ(final zlint lint), including CheckApplies and severity.
+
+    Earlier synonymy measurements rendered only the DSL predicate.  That is not
+    enough for a shipped lint: the actual zlint behavior is CheckApplies +
+    Execute + lint severity (+ any date metadata).  This summary is the string
+    the strict shipping judge should compare against the original rule context.
+    """
+    applies = check_applies_natural(section, title, ir, tree, precondition)
+    pass_condition = pass_condition_text or _pass_condition_under_check_applies(tree)
+    sev_short = {
+        "lint.Error": "Error",
+        "lint.Warn": "Warn",
+        "lint.Notice": "Notice",
+    }.get(severity, severity)
+    return (
+        "The final generated in-tree zlint certificate lint applies to "
+        f"{applies}. When CheckApplies is true, the lint returns lint.{sev_short} "
+        "on violation and lint.Pass when the following condition is satisfied: "
+        f"{pass_condition}. The generated lint metadata does not set an "
+        "EffectiveDate field."
+    )
 
 
 def render_intree_file(rule_id: int,
@@ -294,7 +472,8 @@ def render_intree_file(rule_id: int,
 
     # Profile-scope guard: narrow CheckApplies to the certificate type the rule
     # is written for. Falls back to "true" when the profile is ambiguous.
-    applies_expr, needs_util = check_applies_expr(section, title, ir)
+    applies_expr, needs_util = check_applies_expr(
+        section, title, ir, tree=tree, precondition=precondition)
     if needs_util:
         imports.add("github.com/zmap/zlint/v3/util")
 

@@ -153,6 +153,36 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "return bytes.Equal(certSigAlg, tbsSigAlg)",
         ])
 
+    if isinstance(n, dsl.SignatureAlgorithmIdentifiersEqualHex):
+        lit = _hex_literal(n.hex_lit)
+        return _iife_bool([
+            f"want := {lit}",
+            "input := cryptobyte.String(c.Raw)",
+            "var cert cryptobyte.String",
+            "if !input.ReadASN1(&cert, asn1.SEQUENCE) { return false }",
+            "var tbsCert cryptobyte.String",
+            "if !cert.ReadASN1(&tbsCert, asn1.SEQUENCE) { return false }",
+            "var certSigAlg cryptobyte.String",
+            "if !cert.ReadASN1(&certSigAlg, asn1.SEQUENCE) { return false }",
+            "if !tbsCert.SkipOptionalASN1(asn1.Tag(0).Constructed().ContextSpecific()) { return false }",
+            "if !tbsCert.SkipASN1(asn1.INTEGER) { return false }",
+            "var tbsSigAlg cryptobyte.String",
+            "if !tbsCert.ReadASN1(&tbsSigAlg, asn1.SEQUENCE) { return false }",
+            "return bytes.Equal(certSigAlg, want) && bytes.Equal(tbsSigAlg, want)",
+        ])
+
+    if isinstance(n, dsl.SPKIAlgorithmIdentifierEqualsHex):
+        lit = _hex_literal(n.hex_lit)
+        return _iife_bool([
+            f"want := {lit}",
+            "input := cryptobyte.String(c.RawSubjectPublicKeyInfo)",
+            "var spki cryptobyte.String",
+            "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
+            "var alg cryptobyte.String",
+            "if !spki.ReadASN1(&alg, asn1.SEQUENCE) { return false }",
+            "return bytes.Equal(alg, want)",
+        ])
+
     if isinstance(n, dsl.NotAfterIsNoExpirySentinel):
         # RFC 5280 §4.1.2.5: the "no well-defined expiration date" marker is
         # notAfter == 99991231235959Z (GeneralizedTime). zcrypto parses it to
@@ -272,6 +302,8 @@ def _emit(n, *, in_item: bool, item_var) -> str:
     if isinstance(n, dsl.ExtKeyUsageHas):
         bit = V.EKU_BY_NAME[n.bit].go_expr
         return f"util.HasEKU(c, {bit})"
+    if isinstance(n, dsl.ExtKeyUsageOnlyHasUsagesInSet):
+        return _emit_eku_only_allowed(n.bits)
 
     # ----- field equality / set / regex / non-empty -----
     if isinstance(n, dsl.FieldEq):
@@ -400,6 +432,25 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"}}",
             f"return true",
         ])
+    if isinstance(n, dsl.IPListVersionAllOctetCount):
+        f = V.lookup_anyfield(n.field)
+        if n.version == 4:
+            return _iife_bool([
+                f"for _, _ip := range {f.go_expr} {{",
+                "\tif _ip.To4() == nil { continue }",
+                f"\tif len(_ip) != {n.count} {{ return false }}",
+                "}",
+                "return true",
+            ])
+        if n.version == 6:
+            return _iife_bool([
+                f"for _, _ip := range {f.go_expr} {{",
+                "\tif _ip.To4() != nil { continue }",
+                f"\tif len(_ip) != {n.count} {{ return false }}",
+                "}",
+                "return true",
+            ])
+        raise dsl.DSLError(f"IPListVersionAllOctetCount: unsupported version {n.version}")
     if isinstance(n, dsl.OidListContains):
         f = V.lookup_anyfield(n.field)
         ge = V.OID_BY_NAME[n.oid].go_expr
@@ -1119,6 +1170,19 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"return false",
         ])
 
+    if isinstance(n, dsl.SubtreeIPListVersionAllOctetCount):
+        f = V.lookup_anyfield(n.field)
+        ip_len = 4 if n.version == 4 else 16 if n.version == 6 else None
+        if ip_len is None:
+            raise dsl.DSLError(f"SubtreeIPListVersionAllOctetCount: unsupported version {n.version}")
+        return _iife_bool([
+            f"for _, _s := range {f.go_expr} {{",
+            f"\tif len(_s.Data.IP) != {ip_len} {{ continue }}",
+            f"\tif len(_s.Data.IP)+len(_s.Data.Mask) != {n.count} {{ return false }}",
+            "}",
+            "return true",
+        ])
+
     if isinstance(n, dsl.BytesContainsOidDer):
         f = V.lookup_anyfield(n.field)
         oid_field = V.OID_BY_NAME[n.oid]
@@ -1278,6 +1342,27 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             f"\t}}",
             f"}}",
             f"return true",
+        ])
+    if isinstance(n, dsl.SubtreeIPVersionMaskValidCIDR):
+        f = V.lookup_anyfield(n.field)
+        ip_len = 4 if n.version == 4 else 16 if n.version == 6 else None
+        if ip_len is None:
+            raise dsl.DSLError(f"SubtreeIPVersionMaskValidCIDR: unsupported version {n.version}")
+        return _iife_bool([
+            f"for _, _s := range {f.go_expr} {{",
+            f"\tif len(_s.Data.IP) != {ip_len} {{ continue }}",
+            "\t_seenZero := false",
+            "\tfor _, _b := range _s.Data.Mask {",
+            "\t\tfor _bit := 7; _bit >= 0; _bit-- {",
+            "\t\t\tif (_b >> uint(_bit)) & 1 == 1 {",
+            "\t\t\t\tif _seenZero { return false }",
+            "\t\t\t} else {",
+            "\t\t\t\t_seenZero = true",
+            "\t\t\t}",
+            "\t\t}",
+            "\t}",
+            "}",
+            "return true",
         ])
 
 
@@ -2215,6 +2300,52 @@ def _norm_bit_name(s: str) -> str:
     return _BIT_ALIASES.get(canonical, canonical)
 
 
+def _eku_allowed_exprs(bits: tuple) -> tuple[list[str], list[str]]:
+    """Split EKU_BIT names into stdlib x509.ExtKeyUsage and OID expressions."""
+    std_exprs: list[str] = []
+    oid_exprs: list[str] = []
+    for bit in bits:
+        fd = V.EKU_BY_NAME.get(str(bit))
+        if fd is None:
+            raise dsl.DSLError(f"ExtKeyUsageOnlyHasUsagesInSet: unknown EKU bit {bit!r}")
+        if fd.go_type == "x509.ExtKeyUsage":
+            std_exprs.append(fd.go_expr)
+        elif fd.go_type == "asn1.ObjectIdentifier":
+            oid_exprs.append(fd.go_expr)
+        else:
+            raise dsl.DSLError(
+                f"ExtKeyUsageOnlyHasUsagesInSet: unsupported EKU type {fd.go_type!r} for {bit!r}"
+            )
+    return std_exprs, oid_exprs
+
+
+def _emit_eku_only_allowed(bits: tuple) -> str:
+    std_exprs, oid_exprs = _eku_allowed_exprs(bits)
+    lines: list[str] = []
+    if std_exprs:
+        std_cond = " || ".join(f"_eku == {expr}" for expr in std_exprs)
+        lines.extend([
+            "for _, _eku := range c.ExtKeyUsage {",
+            f"\tif {std_cond} {{ continue }}",
+            "\treturn false",
+            "}",
+        ])
+    else:
+        lines.append("if len(c.ExtKeyUsage) > 0 { return false }")
+    if oid_exprs:
+        oid_cond = " || ".join(f"_eku.Equal({expr})" for expr in oid_exprs)
+        lines.extend([
+            "for _, _eku := range c.UnknownExtKeyUsage {",
+            f"\tif {oid_cond} {{ continue }}",
+            "\treturn false",
+            "}",
+        ])
+    else:
+        lines.append("if len(c.UnknownExtKeyUsage) > 0 { return false }")
+    lines.append("return true")
+    return _iife_bool(lines)
+
+
 def _oid_dotted(name: str) -> Optional[str]:
     """Look up a named OID in the vocab and return its dotted-decimal form, or None."""
     if name in V.OID_BY_NAME:
@@ -2671,6 +2802,13 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, dsl.ExtSubfieldPresent):
         imps.add("github.com/zmap/zlint/v3/util")
         imps.add("encoding/asn1")
+    if isinstance(n, dsl.ExtKeyUsageOnlyHasUsagesInSet):
+        for bit in n.bits:
+            fd = V.EKU_BY_NAME.get(str(bit))
+            if fd and "util." in fd.go_expr:
+                imps.add("github.com/zmap/zlint/v3/util")
+            if fd and "asn1." in fd.go_expr:
+                imps.add("encoding/asn1")
     if isinstance(n, dsl.AIAAccessDescriptionCountInRange):
         imps.add("github.com/zmap/zlint/v3/util")
         imps.add("encoding/asn1")
@@ -2683,6 +2821,14 @@ def _walk_imports(n, imps: set[str]):
         imps.add("encoding/asn1")
 
     if isinstance(n, dsl.SigAlgMatchesTBSSignature):
+        imps.add("bytes")
+        imps.add("golang.org/x/crypto/cryptobyte")
+        imps.add("golang.org/x/crypto/cryptobyte/asn1")
+    if isinstance(n, dsl.SignatureAlgorithmIdentifiersEqualHex):
+        imps.add("bytes")
+        imps.add("golang.org/x/crypto/cryptobyte")
+        imps.add("golang.org/x/crypto/cryptobyte/asn1")
+    if isinstance(n, dsl.SPKIAlgorithmIdentifierEqualsHex):
         imps.add("bytes")
         imps.add("golang.org/x/crypto/cryptobyte")
         imps.add("golang.org/x/crypto/cryptobyte/asn1")
@@ -2836,8 +2982,10 @@ def _walk_imports(n, imps: set[str]):
             imps.add("github.com/zmap/zlint/v3/util")
     if isinstance(n, dsl.BytesContainsOidDer):
         imps.add("bytes")
-    # SubtreeIPListAnyHasOctetCount: no extra imports needed (operates on
-    # already-typed []GeneralSubtreeIP and inline len()).
+    # IPListVersionAllOctetCount / SubtreeIPListAnyHasOctetCount /
+    # SubtreeIPListVersionAllOctetCount / SubtreeIPVersionMaskValidCIDR:
+    # no extra imports needed (operate on already-typed IP/subtree values
+    # and inline len()/To4()/bit tests).
 
 
 def _walk_vocab(n, out: dict):
@@ -2851,6 +2999,8 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, (dsl.KeyUsageHas, dsl.KeyUsageOnlyHasBitsInSet)):
         bump(out, "ku_bits")
     elif isinstance(n, dsl.ExtKeyUsageHas):
+        bump(out, "eku_bits")
+    elif isinstance(n, dsl.ExtKeyUsageOnlyHasUsagesInSet):
         bump(out, "eku_bits")
     elif isinstance(n, dsl.ExtKeyUsageHasBit):
         bump(out, "eku_bits")
@@ -2879,6 +3029,8 @@ def _walk_vocab(n, out: dict):
         bump(out, "fields")
         bump(out, "fields")
     elif isinstance(n, dsl.IPListAllOctetCount):
+        bump(out, "fields")
+    elif isinstance(n, dsl.IPListVersionAllOctetCount):
         bump(out, "fields")
     elif isinstance(n, dsl.OidListContains):
         bump(out, "fields")
@@ -2917,6 +3069,8 @@ def _walk_vocab(n, out: dict):
         bump(out, "oids")
     elif isinstance(n, dsl.SubtreeIPListAnyHasOctetCount):
         bump(out, "fields")
+    elif isinstance(n, dsl.SubtreeIPListVersionAllOctetCount):
+        bump(out, "fields")
     elif isinstance(n, dsl.BytesContainsOidDer):
         bump(out, "fields")
         bump(out, "oids")
@@ -2940,6 +3094,8 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, dsl.SubtreeIPListAllOctetCountIn):
         bump(out, "fields")
     elif isinstance(n, dsl.SubtreeIPMaskValidCIDR):
+        bump(out, "fields")
+    elif isinstance(n, dsl.SubtreeIPVersionMaskValidCIDR):
         bump(out, "fields")
     elif isinstance(n, dsl.FieldContains):
         bump(out, "fields")
@@ -3078,6 +3234,9 @@ def _walk_vocab(n, out: dict):
     if isinstance(n, dsl.ExtKeyUsageAllBitsInSet):
         bits_expr = " | ".join(f"x509.{_norm_bit_name(b)}" for b in n.bits)
         return f"(c.KeyUsage & {bits_expr}) == {bits_expr}"
+
+    if isinstance(n, dsl.ExtKeyUsageOnlyHasUsagesInSet):
+        return _emit_eku_only_allowed(n.bits)
 
     # ---- SerialNumberLengthInRange ----
     if isinstance(n, dsl.SerialNumberLengthInRange):

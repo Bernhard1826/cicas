@@ -453,6 +453,15 @@ def verify(lint: str, cert: Path, probe: ZlintProbe) -> tuple[str, str]:
         return ("CONFIRMED", "certPolicies present, 0 PolicyInformation") \
             if not _policy_oids(t, cert) else ("REFUTED", "certPolicies has policies")
 
+    if "when_subscriber_cert_oid_list_count_in_set_policy" in lint:
+        if _is_ca(t):
+            return "REFUTED", "cert is a CA (out of subscriber scope)"
+        reserved = {OV_POLICY, IV_POLICY, "2.23.140.1.2.1", "2.23.140.1.1"}
+        oids = _policy_oids(t, cert)
+        n = len(oids & reserved)
+        return ("CONFIRMED", f"subscriber has {n} CABF reserved policy OID(s): {sorted(oids & reserved)}") \
+            if n != 1 else ("REFUTED", "subscriber has exactly one CABF reserved policy OID")
+
     if "when_subscriber_cert_not_path_len_constraint_present" in lint:
         present, _, body = _ext(t, "X509v3 Basic Constraints")
         if not present:

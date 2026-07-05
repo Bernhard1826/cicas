@@ -180,6 +180,15 @@ def _atom(n) -> str:
                 "AlgorithmIdentifier are byte-for-byte identical to the DER-encoded "
                 "bytes of the TBSCertificate.signature AlgorithmIdentifier field; "
                 "this is not a comparison with the certificate signatureValue BIT STRING")
+    if isinstance(n, dsl.SignatureAlgorithmIdentifiersEqualHex):
+        return ("both certificate signature AlgorithmIdentifier encodings "
+                "(the outer Certificate.signatureAlgorithm field and the "
+                "TBSCertificate.signature field) are byte-for-byte identical "
+                f"to DER hex {n.hex_lit}; this is not a substring test")
+    if isinstance(n, dsl.SPKIAlgorithmIdentifierEqualsHex):
+        return ("the SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER "
+                f"encoding is byte-for-byte identical to hex {n.hex_lit}; "
+                "this is not a substring test")
     if isinstance(n, dsl.CommonNameFromSAN):
         return ("the subject commonName, if present, equals one of the "
                 "subjectAltName dNSName or iPAddress entries")
@@ -202,9 +211,15 @@ def _atom(n) -> str:
         return f"the KeyUsage extension asserts the {n.bit} bit"
     if isinstance(n, dsl.KeyUsageOnlyHasBitsInSet):
         return (f"every asserted KeyUsage bit is one of {list(n.bits)}; "
-                "any KeyUsage bit outside that allowed set is a violation")
+                "any KeyUsage bit outside that allowed set is outside this "
+                "predicate's accepted set")
     if isinstance(n, dsl.ExtKeyUsageHas):
         return f"the ExtendedKeyUsage extension asserts the {n.bit} usage"
+    if isinstance(n, dsl.ExtKeyUsageOnlyHasUsagesInSet):
+        return (f"every asserted ExtendedKeyUsage KeyPurposeId is one of "
+                f"{list(n.bits)}; any ExtendedKeyUsage value outside that "
+                "allowed set, including an unknown EKU OID, is outside this "
+                "predicate's accepted set")
     if isinstance(n, dsl.FieldEq):
         return _field_value_phrase(n.field, n.value)
     if isinstance(n, dsl.FieldNonEmpty):
@@ -258,6 +273,14 @@ def _atom(n) -> str:
         if n.lo == hi:
             return f"field {n.field} occurs exactly {n.lo} time(s)"
         return f"field {n.field} occurs between {n.lo} and {hi} time(s)"
+    if isinstance(n, dsl.ExtKeyUsageCountInRange):
+        hi = n.hi
+        scope = "counting both standard EKU values and unknown EKU OIDs"
+        if hi == "MAX_INT" or hi is None:
+            return f"the ExtendedKeyUsage extension contains at least {n.lo} KeyPurposeId value(s), {scope}"
+        if n.lo == hi:
+            return f"the ExtendedKeyUsage extension contains exactly {n.lo} KeyPurposeId value(s), {scope}"
+        return f"the ExtendedKeyUsage extension contains between {n.lo} and {hi} KeyPurposeId value(s), {scope}"
     if isinstance(n, dsl.FieldEncodedAs):
         opts = " or ".join(n.types)
         # For whole-DN holders (Subject/Issuer) the generated code walks the
@@ -316,6 +339,14 @@ def _atom(n) -> str:
         return f"raw bytes of {n.field} contain the DER encoding of OID {n.oid}"
     if isinstance(n, dsl.IPListAllOctetCount):
         return f"every IP in {n.field} has {n.count} octets"
+    if isinstance(n, dsl.IPListVersionAllOctetCount):
+        if n.field == "IPAddresses":
+            return (f"every IPv{n.version} subjectAltName GeneralName "
+                    f"iPAddress OCTET STRING has exactly {n.count} octets; "
+                    "other IP versions are outside this rule row's scope")
+        return (f"every IPv{n.version} iPAddress entry in {n.field} has "
+                f"exactly {n.count} octets; other IP versions are outside "
+                "this rule row's scope")
     if isinstance(n, dsl.IPListAllOctetCountIn):
         return f"every IP in {n.field} has octet count in {list(n.counts)}"
     if isinstance(n, dsl.OidListContains):
@@ -367,6 +398,12 @@ def _atom(n) -> str:
         return (f"the {n.oid} extension is present AND its {sub} sub-field "
                 f"(ASN.1 context tag [{n.tag}]) is present in the encoded extension")
     if isinstance(n, dsl.OidEq):
+        if n.field == "PublicKeyAlgorithmOID":
+            return (f"the SubjectPublicKeyInfo.algorithm AlgorithmIdentifier OID "
+                    f"equals OID constant {n.oid}")
+        if n.field == "SignatureAlgorithmOID":
+            return (f"the certificate signatureAlgorithm AlgorithmIdentifier OID "
+                    f"equals OID constant {n.oid}")
         return f"OID field {n.field} equals OID constant {n.oid}"
     if isinstance(n, dsl.SubtreeIPListAnyHasOctetCount):
         kind = {8: "IPv4 (4-octet IP + 4-octet mask)",
@@ -378,6 +415,11 @@ def _atom(n) -> str:
             marker = "; an all-zero 32-octet ::0/0 marker counts as the required IPv6 entry"
         return (f"at least one entry in {n.field} has IP+Mask total of "
                 f"{n.count} octets ({kind}){marker}")
+    if isinstance(n, dsl.SubtreeIPListVersionAllOctetCount):
+        kind = "4-octet IP + 4-octet mask" if n.version == 4 else "16-octet IP + 16-octet mask"
+        return (f"every IPv{n.version} iPAddress subtree entry in {n.field} "
+                f"has IP+Mask total of {n.count} octets ({kind}); other IP "
+                "versions are outside this rule row's scope")
     if isinstance(n, dsl.SubtreeIPListAnyAllZero):
         kind = {8: "IPv4 0.0.0.0/0 marker",
                 32: "IPv6 ::0/0 marker"}.get(n.count, f"{n.count}-octet all-zero")
@@ -419,6 +461,11 @@ def _atom(n) -> str:
         return (f"every entry in subtree IP list {n.field} has its mask "
                 f"in valid CIDR form (contiguous high-order 1-bits followed "
                 f"by zeros, per RFC 4632)")
+    if isinstance(n, dsl.SubtreeIPVersionMaskValidCIDR):
+        return (f"every IPv{n.version} iPAddress subtree entry in {n.field} "
+                "has a mask in valid CIDR form (contiguous high-order 1-bits "
+                "followed by zeros, per RFC 4632); other IP versions are "
+                "outside this rule row's scope")
     if isinstance(n, dsl.ScalarInList):
         if n.scalar_field == "Subject.EmailAddress" and n.list_field == "EmailAddresses":
             return ("if the Subject DN contains an emailAddress attribute, that "
@@ -550,6 +597,26 @@ def _atom(n) -> str:
 
 def _render(n) -> str:
     if isinstance(n, dsl.Not):
+        inner = n.inner
+        if isinstance(inner, dsl.ExtSubfieldPresent):
+            sub = inner.subfield or f"the [{inner.tag}] context-tagged sub-element"
+            if inner.path == "generalsubtree":
+                return (f"no GeneralSubtree inside the {inner.oid} extension carries "
+                        f"the {sub} field (ASN.1 context tag [{inner.tag}])")
+            return (f"the {sub} sub-field (ASN.1 context tag [{inner.tag}]) "
+                    f"is absent from the encoded {inner.oid} extension; if the "
+                    f"{inner.oid} extension itself is absent, the sub-field is absent")
+        if isinstance(inner, dsl.OidListContains):
+            return f"OID list {inner.field} does not contain {_oid_name(inner.oid)}"
+        if isinstance(inner, dsl.FieldNonEmpty):
+            return _atom(dsl.FieldEmpty(inner.field))
+        if isinstance(inner, dsl.ExtPresent):
+            return f"the extension with OID {inner.oid} is absent"
+        if isinstance(inner, dsl.AIAHasMethodOtherThan):
+            oids = ", ".join(inner.allowed_oids)
+            return (f"every AccessDescription in extension {inner.ext_oid} has "
+                    f"an accessMethod in the permitted set [{oids}]; no "
+                    "AccessDescription uses any other accessMethod")
         return f"NOT ({_render(n.inner)})"
     if isinstance(n, dsl.And):
         return " AND ".join(f"({_render(p)})" for p in n.parts)
@@ -691,6 +758,8 @@ _SLUG_VERB: dict[str, str] = {
     "FieldContains": "contains",
     "OidListContains": "list_contains", "IPListAllOctetCount": "ip_octets",
     "RSAModulusBitsInRange": "rsa_modulus_bits", "RSAPublicExponentInRange": "rsa_exponent",
+    "SignatureAlgorithmIdentifiersEqualHex": "sigalg_hex",
+    "SPKIAlgorithmIdentifierEqualsHex": "spki_algid_hex",
     "PublicKeyAlgorithmIs": "pubkey_alg", "DNEmpty": "dn_empty",
 }
 # Attribute that names the SUBJECT of the atom, in priority order.

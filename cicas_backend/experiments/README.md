@@ -8,10 +8,10 @@ experiment directories are self-contained: script entry point, `inputs/`,
 
 | Paper (`Paper_Unified_PKI_E2E.md`) | directory | what it produces |
 |---|---|---|
-| **§8.2** lint coverage analysis (Table 2) | [`coverage_analysis/`](coverage_analysis/) | native zlint coverage over 317 lint-able rules → 154 full / 163 codegen domain / 0 pending |
-| **system metric** code generation + synonymy | [`codegen_metrics/`](codegen_metrics/) | over the 163 uncovered rules → 126 generated / 53 synonymous |
+| **§8.2** lint coverage analysis (Table 2) | [`coverage_analysis/`](coverage_analysis/) | native zlint coverage over 315 lint-able rules → 154 full / 161 codegen domain / 0 pending |
+| **system metric** code generation + synonymy | [`codegen_metrics/`](codegen_metrics/) | over the 161 uncovered rules → 149 generated / 113 synonymous |
 | **§8.4** lintability external validation (TABLE III) | [`external_validation/`](external_validation/) | CICAS vs zlint-maintainer CABF BR sheets (1.4.8 / 2.0.2) → recall / κ / P / F1 |
-| **§8.5** certificate detection as a SAIV gate | [`cert_detection/`](cert_detection/) | current 53-lint gate is failing: 343 SPURIOUS findings; use outputs as a regression signal, not a success claim |
+| **§8.5** certificate detection as a SAIV gate | [`cert_detection/`](cert_detection/) | outputs are stale relative to the current 113-lint synonymy manifest; rerun only after codegen/synonymy residuals are accepted |
 
 `results/` is not a paper experiment. It stores shared backend reference
 snapshots, including `lint_ir_summaries.json`, which the zlint coverage service

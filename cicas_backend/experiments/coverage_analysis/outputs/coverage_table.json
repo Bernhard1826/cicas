@@ -2,26 +2,26 @@
   "by_source": [
     {
       "source": "CABF",
-      "lintable": 224,
-      "checked": 224,
+      "lintable": 223,
+      "checked": 223,
       "full": 102,
-      "uncovered": 122,
+      "uncovered": 121,
       "pending": 0
     },
     {
       "source": "RFC5280",
-      "lintable": 93,
-      "checked": 93,
+      "lintable": 92,
+      "checked": 92,
       "full": 52,
-      "uncovered": 41,
+      "uncovered": 40,
       "pending": 0
     }
   ],
   "total": {
-    "lintable": 317,
-    "checked": 317,
+    "lintable": 315,
+    "checked": 315,
     "full": 154,
-    "uncovered": 163,
+    "uncovered": 161,
     "pending": 0
   },
   "zlint_reference": {

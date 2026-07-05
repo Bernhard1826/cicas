@@ -55,17 +55,6 @@
     "code_eq_ir_certified": true
   },
   {
-    "rule_id": 29244,
-    "source": "CABF-BR",
-    "section": "7.1.2.10.5",
-    "title": "CA Certificate Certificate Policies",
-    "lint_name": "cicasgen_oid_list_count_in_set_policy_identifiers_29244",
-    "filename": "lint_cicasgen_oid_list_count_in_set_policy_identifiers_29244.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_oid_list_count_in_set_policy_identifiers_29244.go",
-    "method": "llm",
-    "code_eq_ir_certified": true
-  },
-  {
     "rule_id": 29246,
     "source": "CABF-BR",
     "section": "7.1.2.10.5",
@@ -169,11 +158,22 @@
     "source": "CABF-BR",
     "section": "7.1.2.2.4",
     "title": "Cross-Certified Subordinate CA Extended Key Usage - Unrestricted",
-    "lint_name": "cicasgen_when_eku_has_any_ext_key_usage_count_28713",
-    "filename": "lint_cicasgen_when_eku_has_any_ext_key_usage_count_28713.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_eku_has_any_ext_key_usage_count_28713.go",
+    "lint_name": "cicasgen_when_eku_has_any_ext_key_usage_count_in_range_28713",
+    "filename": "lint_cicasgen_when_eku_has_any_ext_key_usage_count_in_range_28713.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_eku_has_any_ext_key_usage_count_in_range_28713.go",
     "method": "deterministic",
-    "code_eq_ir_certified": true
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 29738,
+    "source": "CABF-BR",
+    "section": "7.1.2.2.4",
+    "title": "Cross-Certified Subordinate CA Extended Key Usage - Unrestricted",
+    "lint_name": "cicasgen_when_eku_has_any_ext_key_usage_count_in_range_29738",
+    "filename": "lint_cicasgen_when_eku_has_any_ext_key_usage_count_in_range_29738.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_eku_has_any_ext_key_usage_count_in_range_29738.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
   },
   {
     "rule_id": 29316,
@@ -209,17 +209,6 @@
     "code_eq_ir_certified": true
   },
   {
-    "rule_id": 29325,
-    "source": "CABF-BR",
-    "section": "7.1.2.2.6",
-    "title": "Cross-Certified Subordinate CA Certificate Certificate Policies",
-    "lint_name": "cicasgen_not_any_policy_list_contains_29325",
-    "filename": "lint_cicasgen_not_any_policy_list_contains_29325.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29325.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": true
-  },
-  {
     "rule_id": 29329,
     "source": "CABF-BR",
     "section": "7.1.2.2.6",
@@ -242,28 +231,6 @@
     "code_eq_ir_certified": true
   },
   {
-    "rule_id": 29338,
-    "source": "CABF-BR",
-    "section": "7.1.2.3.2",
-    "title": "Technically Constrained Non-TLS Subordinate CA Certificate Policies",
-    "lint_name": "cicasgen_policy_identifiers_count_29338",
-    "filename": "lint_cicasgen_policy_identifiers_count_29338.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/tc_probe/synonymous_lints/cabf_br/lint_cicasgen_policy_identifiers_count_29338.go",
-    "method": "llm",
-    "code_eq_ir_certified": true
-  },
-  {
-    "rule_id": 29339,
-    "source": "CABF-BR",
-    "section": "7.1.2.3.2",
-    "title": "Technically Constrained Non-TLS Subordinate CA Certificate Policies",
-    "lint_name": "cicasgen_policy_identifiers_count_and_any_policy_list_contains_29339",
-    "filename": "lint_cicasgen_policy_identifiers_count_and_any_policy_list_contains_29339.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_policy_identifiers_count_and_any_policy_list_contains_29339.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": true
-  },
-  {
     "rule_id": 29342,
     "source": "CABF-BR",
     "section": "7.1.2.3.2",
@@ -275,39 +242,6 @@
     "code_eq_ir_certified": true
   },
   {
-    "rule_id": 29343,
-    "source": "CABF-BR",
-    "section": "7.1.2.3.2",
-    "title": "Technically Constrained Non-TLS Subordinate CA Certificate Policies",
-    "lint_name": "cicasgen_not_any_policy_list_contains_29343",
-    "filename": "lint_cicasgen_not_any_policy_list_contains_29343.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_not_any_policy_list_contains_29343.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": true
-  },
-  {
-    "rule_id": 29347,
-    "source": "CABF-BR",
-    "section": "7.1.2.3.2",
-    "title": "Technically Constrained Non-TLS Subordinate CA Certificate Policies",
-    "lint_name": "cicasgen_ext_policy_qualifier_oidin_set_29347",
-    "filename": "lint_cicasgen_ext_policy_qualifier_oidin_set_29347.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_ext_policy_qualifier_oidin_set_29347.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": false
-  },
-  {
-    "rule_id": 29745,
-    "source": "CABF-BR",
-    "section": "7.1.2.3.2",
-    "title": "Technically Constrained Non-TLS Subordinate CA Certificate Policies",
-    "lint_name": "cicasgen_certificate_policies_has_no_policy_qualifiers_and_ext_29745",
-    "filename": "lint_cicasgen_certificate_policies_has_no_policy_qualifiers_and_ext_29745.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_certificate_policies_has_no_policy_qualifiers_and_ext_29745.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": false
-  },
-  {
     "rule_id": 29360,
     "source": "CABF-BR",
     "section": "7.1.2.4",
@@ -317,6 +251,17 @@
     "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_sig_alg_matches_tbssignature_29360.go",
     "method": "deterministic",
     "code_eq_ir_certified": true
+  },
+  {
+    "rule_id": 29362,
+    "source": "CABF-BR",
+    "section": "7.1.2.4.2",
+    "title": "Technically Constrained Precertificate Signing CA Extended Key Usage",
+    "lint_name": "cicasgen_ext_key_usage_only_has_usages_in_set_29362",
+    "filename": "lint_cicasgen_ext_key_usage_only_has_usages_in_set_29362.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_ext_key_usage_only_has_usages_in_set_29362.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
   },
   {
     "rule_id": 29367,
@@ -352,14 +297,14 @@
     "code_eq_ir_certified": false
   },
   {
-    "rule_id": 29378,
+    "rule_id": 29379,
     "source": "CABF-BR",
     "section": "7.1.2.5.2",
     "title": "Technically Constrained TLS Subordinate CA Name Constraints",
-    "lint_name": "cicasgen_excluded_dnsnames_present_or_permitted_dnsnames_present_29378",
-    "filename": "lint_cicasgen_excluded_dnsnames_present_or_permitted_dnsnames_present_29378.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/tc_probe/synonymous_lints/cabf_br/lint_cicasgen_excluded_dnsnames_present_or_permitted_dnsnames_present_29378.go",
-    "method": "llm",
+    "lint_name": "cicasgen_not_permitted_directory_names_present_and_not_excluded_29379",
+    "filename": "lint_cicasgen_not_permitted_directory_names_present_and_not_excluded_29379.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_not_permitted_directory_names_present_and_not_excluded_29379.go",
+    "method": "deterministic",
     "code_eq_ir_certified": true
   },
   {
@@ -479,7 +424,7 @@
     "title": "Individual Validated",
     "lint_name": "cicasgen_oid_policy_individual_validated_list_contains_29430",
     "filename": "lint_cicasgen_oid_policy_individual_validated_list_contains_29430.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/vac_probe/synonymous_lints/cabf_br/lint_cicasgen_oid_policy_individual_validated_list_contains_29430.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_oid_policy_individual_validated_list_contains_29430.go",
     "method": "deterministic",
     "code_eq_ir_certified": true
   },
@@ -583,28 +528,6 @@
     "code_eq_ir_certified": true
   },
   {
-    "rule_id": 29475,
-    "source": "CABF-BR",
-    "section": "7.1.2.7.4",
-    "title": "Organization Validated",
-    "lint_name": "cicasgen_when_oid_policy_organization_validated_list_contains_29475",
-    "filename": "lint_cicasgen_when_oid_policy_organization_validated_list_contains_29475.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_oid_policy_organization_validated_list_contains_29475.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": true
-  },
-  {
-    "rule_id": 29754,
-    "source": "CABF-BR",
-    "section": "7.1.2.7.4",
-    "title": "Organization Validated",
-    "lint_name": null,
-    "filename": null,
-    "output_path": null,
-    "method": "llm",
-    "code_eq_ir_certified": false
-  },
-  {
     "rule_id": 29480,
     "source": "CABF-BR",
     "section": "7.1.2.7.5",
@@ -620,9 +543,9 @@
     "source": "CABF-BR",
     "section": "7.1.2.7.8",
     "title": "Subscriber Certificate Basic Constraints",
-    "lint_name": "cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490",
-    "filename": "lint_cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_subscriber_cert_not_path_len_constraint_present_29490.go",
+    "lint_name": "cicasgen_not_when_subscriber_cert_not_path_len_constraint_present_29490",
+    "filename": "lint_cicasgen_not_when_subscriber_cert_not_path_len_constraint_present_29490.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_not_when_subscriber_cert_not_path_len_constraint_present_29490.go",
     "method": "deterministic",
     "code_eq_ir_certified": false
   },
@@ -653,9 +576,9 @@
     "source": "CABF-BR",
     "section": "7.1.2.7.9",
     "title": "Subscriber Certificate Certificate Policies",
-    "lint_name": "cicasgen_when_subscriber_cert_not_any_policy_list_contains_29493",
-    "filename": "lint_cicasgen_when_subscriber_cert_not_any_policy_list_contains_29493.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_subscriber_cert_not_any_policy_list_contains_29493.go",
+    "lint_name": "cicasgen_not_when_subscriber_cert_not_any_policy_list_contains_29493",
+    "filename": "lint_cicasgen_not_when_subscriber_cert_not_any_policy_list_contains_29493.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_not_when_subscriber_cert_not_any_policy_list_contains_29493.go",
     "method": "deterministic",
     "code_eq_ir_certified": true
   },
@@ -664,9 +587,9 @@
     "source": "CABF-BR",
     "section": "7.1.2.7.9",
     "title": "Subscriber Certificate Certificate Policies",
-    "lint_name": "cicasgen_ext_policy_qualifier_oidin_set_29495",
-    "filename": "lint_cicasgen_ext_policy_qualifier_oidin_set_29495.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_ext_policy_qualifier_oidin_set_29495.go",
+    "lint_name": "cicasgen_when_subscriber_cert_ext_policy_qualifier_oidin_set_29495",
+    "filename": "lint_cicasgen_when_subscriber_cert_ext_policy_qualifier_oidin_set_29495.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_subscriber_cert_ext_policy_qualifier_oidin_set_29495.go",
     "method": "deterministic",
     "code_eq_ir_certified": false
   },
@@ -726,6 +649,17 @@
     "code_eq_ir_certified": false
   },
   {
+    "rule_id": 29510,
+    "source": "CABF-BR",
+    "section": "7.1.2.8.5",
+    "title": "OCSP Responder Extended Key Usage",
+    "lint_name": "cicasgen_ext_key_usage_only_has_usages_in_set_29510",
+    "filename": "lint_cicasgen_ext_key_usage_only_has_usages_in_set_29510.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_ext_key_usage_only_has_usages_in_set_29510.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
     "rule_id": 29514,
     "source": "CABF-BR",
     "section": "7.1.2.8.8",
@@ -781,14 +715,36 @@
     "code_eq_ir_certified": true
   },
   {
-    "rule_id": 29546,
+    "rule_id": 29538,
     "source": "CABF-BR",
-    "section": "7.1.3.1.2",
+    "section": "7.1.3.1.1",
+    "title": "RSA",
+    "lint_name": "cicasgen_when_pubkey_alg_rsa_not_oid_eq_oid_rsassapss_29538",
+    "filename": "lint_cicasgen_when_pubkey_alg_rsa_not_oid_eq_oid_rsassapss_29538.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_pubkey_alg_rsa_not_oid_eq_oid_rsassapss_29538.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 29769,
+    "source": "CABF-BR",
+    "section": "7.1.3.2.2",
     "title": "ECDSA",
-    "lint_name": null,
-    "filename": null,
-    "output_path": null,
-    "method": "llm",
+    "lint_name": "cicasgen_when_oid_eq_oid_signature_sha384with_ecdsa_sigalg_hex_29769",
+    "filename": "lint_cicasgen_when_oid_eq_oid_signature_sha384with_ecdsa_sigalg_hex_29769.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_oid_eq_oid_signature_sha384with_ecdsa_sigalg_hex_29769.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 29770,
+    "source": "CABF-BR",
+    "section": "7.1.3.2.2",
+    "title": "ECDSA",
+    "lint_name": "cicasgen_when_oid_eq_oid_signature_sha512with_ecdsa_sigalg_hex_29770",
+    "filename": "lint_cicasgen_when_oid_eq_oid_signature_sha512with_ecdsa_sigalg_hex_29770.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_oid_eq_oid_signature_sha512with_ecdsa_sigalg_hex_29770.go",
+    "method": "deterministic",
     "code_eq_ir_certified": false
   },
   {
@@ -821,6 +777,17 @@
     "lint_name": "cicasgen_when_subscriber_cert_subject_common_name_fqdnmatches_29672",
     "filename": "lint_cicasgen_when_subscriber_cert_subject_common_name_fqdnmatches_29672.go",
     "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_when_subscriber_cert_subject_common_name_fqdnmatches_29672.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 29801,
+    "source": "CABF-BR",
+    "section": "7.1.4.3",
+    "title": "Subscriber Certificate Common Name Attribute",
+    "lint_name": "cicasgen_iplist_version_all_octet_count_ipaddresses_29801",
+    "filename": "lint_cicasgen_iplist_version_all_octet_count_ipaddresses_29801.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/cabf_br/lint_cicasgen_iplist_version_all_octet_count_ipaddresses_29801.go",
     "method": "deterministic",
     "code_eq_ir_certified": false
   },
@@ -946,6 +913,28 @@
     "code_eq_ir_certified": true
   },
   {
+    "rule_id": 31046,
+    "source": "RFC5280",
+    "section": "4.2.1.10",
+    "title": "Name Constraints",
+    "lint_name": "cicasgen_subtree_iplist_version_all_octet_count_permitted_31046",
+    "filename": "lint_cicasgen_subtree_iplist_version_all_octet_count_permitted_31046.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_subtree_iplist_version_all_octet_count_permitted_31046.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 31047,
+    "source": "RFC5280",
+    "section": "4.2.1.10",
+    "title": "Name Constraints",
+    "lint_name": "cicasgen_subtree_iplist_version_all_octet_count_permitted_31047",
+    "filename": "lint_cicasgen_subtree_iplist_version_all_octet_count_permitted_31047.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_subtree_iplist_version_all_octet_count_permitted_31047.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
     "rule_id": 31056,
     "source": "RFC5280",
     "section": "4.2.1.11",
@@ -979,17 +968,6 @@
     "code_eq_ir_certified": false
   },
   {
-    "rule_id": 30984,
-    "source": "RFC5280",
-    "section": "4.2.1.4",
-    "title": "Certificate Policies",
-    "lint_name": "cicasgen_not_cert_policy_explicit_text_has_encoding_tag_in_set_30984",
-    "filename": "lint_cicasgen_not_cert_policy_explicit_text_has_encoding_tag_in_set_30984.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_not_cert_policy_explicit_text_has_encoding_tag_in_set_30984.go",
-    "method": "deterministic",
-    "code_eq_ir_certified": false
-  },
-  {
     "rule_id": 31065,
     "source": "RFC5280",
     "section": "4.2.1.6",
@@ -1016,11 +994,33 @@
     "source": "RFC5280",
     "section": "4.2.1.6",
     "title": "Subject Alternative Name",
-    "lint_name": "cicasgen_ext_has_any_general_name_of_tag_subject_alternate_name_31068",
-    "filename": "lint_cicasgen_ext_has_any_general_name_of_tag_subject_alternate_name_31068.go",
-    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_ext_has_any_general_name_of_tag_subject_alternate_name_31068.go",
+    "lint_name": "cicasgen_ext_has_general_name_with_tag_subject_alternate_name_31068",
+    "filename": "lint_cicasgen_ext_has_general_name_with_tag_subject_alternate_name_31068.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_ext_has_general_name_with_tag_subject_alternate_name_31068.go",
     "method": "llm",
-    "code_eq_ir_certified": true
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 31069,
+    "source": "RFC5280",
+    "section": "4.2.1.6",
+    "title": "Subject Alternative Name",
+    "lint_name": "cicasgen_iplist_version_all_octet_count_ipaddresses_31069",
+    "filename": "lint_cicasgen_iplist_version_all_octet_count_ipaddresses_31069.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_iplist_version_all_octet_count_ipaddresses_31069.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
+  },
+  {
+    "rule_id": 31070,
+    "source": "RFC5280",
+    "section": "4.2.1.6",
+    "title": "Subject Alternative Name",
+    "lint_name": "cicasgen_iplist_version_all_octet_count_ipaddresses_31070",
+    "filename": "lint_cicasgen_iplist_version_all_octet_count_ipaddresses_31070.go",
+    "output_path": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints/rfc/lint_cicasgen_iplist_version_all_octet_count_ipaddresses_31070.go",
+    "method": "deterministic",
+    "code_eq_ir_certified": false
   },
   {
     "rule_id": 31342,

@@ -127,6 +127,16 @@ class ExtKeyUsageHas:
 
 
 @dataclass(frozen=True)
+class ExtKeyUsageOnlyHasUsagesInSet:
+    """True iff every asserted EKU value is in the allowed usage set.
+
+    NON_GENERIC: scoped to ExtendedKeyUsage table allow-list rows such as
+    "Any other value MUST NOT". Vacuously true when the EKU extension is absent.
+    """
+    bits: tuple  # EKU_BIT names
+
+
+@dataclass(frozen=True)
 class FieldEq:
     """True iff CERT_FIELD or DN_FIELD equals literal value."""
     field: str
@@ -351,6 +361,20 @@ class BytesEq:
 class IPListAllOctetCount:
     """Every element of an ip_list field has byte length == count."""
     field: str
+    count: int
+
+
+@dataclass(frozen=True)
+class IPListVersionAllOctetCount:
+    """Every iPAddress GeneralName entry of one IP version has the canonical
+    octet length for that version.
+
+    version=4 checks only IPv4 entries and leaves IPv6 entries out of scope;
+    version=6 does the inverse. This models RFC 5280 rows that separately say
+    "For IP version 4 ... four octets" and "For IP version 6 ... sixteen
+    octets" without widening either row to all IP addresses."""
+    field: str
+    version: int
     count: int
 
 
@@ -644,6 +668,19 @@ class SubtreeIPListAnyHasOctetCount:
 
 
 @dataclass(frozen=True)
+class SubtreeIPListVersionAllOctetCount:
+    """Every NameConstraints iPAddress subtree entry of one IP version has the
+    canonical total octet length for that version.
+
+    version=4 expects 8 total octets (4 address + 4 mask); version=6 expects
+    32 total octets (16 address + 16 mask). Other versions are outside the
+    row's scope."""
+    field: str
+    version: int
+    count: int
+
+
+@dataclass(frozen=True)
 class BytesContainsOidDer:
     """True iff bytes-typed cert field contains the DER encoding of a named OID."""
     field: str
@@ -766,6 +803,18 @@ class SubtreeIPMaskValidCIDR:
 
 
 @dataclass(frozen=True)
+class SubtreeIPVersionMaskValidCIDR:
+    """Every NameConstraints iPAddress subtree entry of one IP version has a
+    CIDR-form mask: contiguous high-order 1 bits followed by zeros.
+
+    version=4 checks only IPv4 subtree entries; version=6 checks only IPv6
+    subtree entries. Used when the source row scopes the CIDR-style encoding
+    requirement to one IP version."""
+    field: str
+    version: int
+
+
+@dataclass(frozen=True)
 class NotAfterIsNoExpirySentinel:
     """True iff the certificate's notAfter is the RFC 5280 §4.1.2.5 "no
     well-defined expiration date" sentinel — the GeneralizedTime value
@@ -797,6 +846,20 @@ class SigAlgMatchesTBSSignature:
     identical to the tbsCertificate.signature field (RFC 5280 §4.1.1.2/§4.1.2.3).
     Zero-arg: the comparison re-parses the cert DER (mirrors zlint's
     e_mismatched_signature_algorithm_identifier). Unconditional / always-applies."""
+
+
+@dataclass(frozen=True)
+class SignatureAlgorithmIdentifiersEqualHex:
+    """True iff both certificate signature AlgorithmIdentifier encodings equal
+    the given DER hex: TBSCertificate.signature and outer signatureAlgorithm."""
+    hex_lit: str
+
+
+@dataclass(frozen=True)
+class SPKIAlgorithmIdentifierEqualsHex:
+    """True iff SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals
+    the given hex bytes exactly."""
+    hex_lit: str
 
 
 @dataclass(frozen=True)
@@ -1414,7 +1477,7 @@ class Or:
 Atom = Union[
     ExtPresent, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
     IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
-    KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas,
+    KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas, ExtKeyUsageOnlyHasUsagesInSet,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
     FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs, FieldContains,
@@ -1422,7 +1485,8 @@ Atom = Union[
     DateAfter, DateBefore,
     ListAllMatch, ListAnyMatch, ListUnique, WildcardFilter,
     ItemMatchesRegex, ItemInSet, ItemEq, ItemLenIn, ItemNotMatchesRegex,
-    BytesEq, IPListAllOctetCount, OidListContains, OidListCountInSet,
+    BytesEq, IPListAllOctetCount, IPListVersionAllOctetCount,
+    OidListContains, OidListCountInSet,
     BytesEqualsHex, BytesContainsHex, ExtensionURISchemeNotInSet,
     PublicKeyAlgorithmIs, DNEmpty,
     ExtRawValueEqualsHex, ExtRawValueContainsHex,
@@ -1434,7 +1498,7 @@ Atom = Union[
     ValidityDateAsn1TagInSet, CertPolicyExplicitTextHasEncodingTagInSet,
     CertPolicyExplicitTextAllHaveEncodingTagInSet,
     PolicyQualifierOIDInSet, PolicyQualifierOIDNotInSet,
-    OidEq, SubtreeIPListAnyHasOctetCount,
+    OidEq, SubtreeIPListAnyHasOctetCount, SubtreeIPListVersionAllOctetCount,
     BytesContainsOidDer,
     IPListAllOctetCountIn, SubtreeIPListAnyAllZero,
     SubtreeIPListAnyHasOctetCountAndNotAllZero,
@@ -1443,13 +1507,16 @@ Atom = Union[
     NameConstraintsExcludedSubtreesEmpty, NameConstraintsPermittedSubtreesNonEmpty,
     SubtreeStringListAllMatchOrEmpty,
     SubtreeIPListAllOctetCountIn, SubtreeIPMaskValidCIDR,
+    SubtreeIPVersionMaskValidCIDR,
     ScalarInList, ScalarInAnyOfLists, ListSubsetOfList,
     DNSNamesFQDNOrWildcardPortionMatchesRegex, IPv4Conditional,
     SubtreeIPv4Conditional,
     ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag, DomainComponentOrdered,
     DNSOnionNamesHaveValidTorV3Address, DomainNamesDoNotEndWithIPReverseZoneSuffix,
     RSAModulusBitsInRange, RSAPublicExponentInRange,
-    SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
+    SigAlgMatchesTBSSignature, SignatureAlgorithmIdentifiersEqualHex,
+    SPKIAlgorithmIdentifierEqualsHex,
+    NotAfterIsNoExpirySentinel,
     ValidityUTCTimeValuesUseZulu,
     CommonNameFromSAN, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex,
     SubjectCommonNameFQDNMatchesDNSNameSAN,
@@ -1470,7 +1537,7 @@ Compound = Union[Atom, Not, And, Or]
 ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     ExtPresent, HasAnyExtension, ExtCritical, ExtNotCritical, ExtContentNonEmpty,
     IsCA, IsRootCA, IsSubCA, PathLenConstraintPresent, IsServerCert, IsSubscriberCert, IsEndEntity,
-    KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas,
+    KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas, ExtKeyUsageOnlyHasUsagesInSet,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
     FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs, FieldContains,
@@ -1478,7 +1545,8 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     DateAfter, DateBefore,
     ListAllMatch, ListAnyMatch, ListUnique, WildcardFilter,
     ItemMatchesRegex, ItemInSet, ItemEq, ItemLenIn, ItemNotMatchesRegex,
-    BytesEq, IPListAllOctetCount, OidListContains, OidListCountInSet,
+    BytesEq, IPListAllOctetCount, IPListVersionAllOctetCount,
+    OidListContains, OidListCountInSet,
     BytesEqualsHex, BytesContainsHex, ExtensionURISchemeNotInSet,
     PublicKeyAlgorithmIs, DNEmpty,
     ExtRawValueEqualsHex, ExtRawValueContainsHex,
@@ -1490,7 +1558,7 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     ValidityDateAsn1TagInSet, CertPolicyExplicitTextHasEncodingTagInSet,
     CertPolicyExplicitTextAllHaveEncodingTagInSet,
     PolicyQualifierOIDInSet, PolicyQualifierOIDNotInSet,
-    OidEq, SubtreeIPListAnyHasOctetCount,
+    OidEq, SubtreeIPListAnyHasOctetCount, SubtreeIPListVersionAllOctetCount,
     BytesContainsOidDer,
     IPListAllOctetCountIn, SubtreeIPListAnyAllZero,
     SubtreeIPListAnyHasOctetCountAndNotAllZero,
@@ -1499,13 +1567,16 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     NameConstraintsExcludedSubtreesEmpty, NameConstraintsPermittedSubtreesNonEmpty,
     SubtreeStringListAllMatchOrEmpty,
     SubtreeIPListAllOctetCountIn, SubtreeIPMaskValidCIDR,
+    SubtreeIPVersionMaskValidCIDR,
     ScalarInList, ScalarInAnyOfLists, ListSubsetOfList,
     DNSNamesFQDNOrWildcardPortionMatchesRegex, IPv4Conditional,
     SubtreeIPv4Conditional,
     ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag, DomainComponentOrdered,
     DNSOnionNamesHaveValidTorV3Address, DomainNamesDoNotEndWithIPReverseZoneSuffix,
     RSAModulusBitsInRange, RSAPublicExponentInRange,
-    SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel,
+    SigAlgMatchesTBSSignature, SignatureAlgorithmIdentifiersEqualHex,
+    SPKIAlgorithmIdentifierEqualsHex,
+    NotAfterIsNoExpirySentinel,
     ValidityUTCTimeValuesUseZulu,
     CommonNameFromSAN, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex,
     SubjectCommonNameFQDNMatchesDNSNameSAN,
@@ -1546,9 +1617,12 @@ NON_GENERIC_ATOMS: frozenset[str] = frozenset({
     "SubjectCommonNameFQDNOrWildcardPortionMatchesRegex", # CABF CN FQDN/wildcard syntax
     "SubjectCommonNameFQDNMatchesDNSNameSAN", # CABF CN exact dNSName copy
     "SigAlgMatchesTBSSignature",         # RFC5280 sigAlg==tbsCert.signature, single structural rule
+    "SignatureAlgorithmIdentifiersEqualHex", # exact DER for cert signature AlgorithmIdentifiers
+    "SPKIAlgorithmIdentifierEqualsHex",  # exact DER for SubjectPublicKeyInfo.algorithm
     "NotAfterIsNoExpirySentinel",        # RFC5280 §4.1.2.5 99991231235959Z sentinel, single value
     "ValidityUTCTimeValuesUseZulu",      # RFC5280 UTCTime Zulu/GMT encoding form
     "KeyUsageOnlyHasBitsInSet",          # KeyUsage any-other-value rows
+    "ExtKeyUsageOnlyHasUsagesInSet",    # EKU any-other-value rows
     "DomainComponentOrdered",            # DC contiguous-ordered, single rule
     "DNDirectoryStringValuesEncodedAs",  # DirectoryString per-attr + fixed exception-OID table
     "CertPolicyExplicitTextHasEncodingTagInSet",  # certPolicies UserNotice explicitText, one construct
@@ -1725,6 +1799,12 @@ def parse(obj: Any) -> Compound:
                NameConstraintsPermittedSubtreesNonEmpty):
         _expect_args(fname, args, 0, "(no args)")
         return cls()
+    if cls is SignatureAlgorithmIdentifiersEqualHex:
+        _expect_args(fname, args, 1, "<hex_literal>")
+        return cls(hex_lit=str(args[0]))
+    if cls is SPKIAlgorithmIdentifierEqualsHex:
+        _expect_args(fname, args, 1, "<hex_literal>")
+        return cls(hex_lit=str(args[0]))
     if cls is SubjectCommonNameFQDNOrWildcardPortionMatchesRegex:
         _expect_args(fname, args, 1, "<NAMED_REGEX>")
         regex_name = str(args[0])
@@ -1749,6 +1829,11 @@ def parse(obj: Any) -> Compound:
     if cls is ExtKeyUsageHas:
         _expect_args(fname, args, 1, "<EKU_BIT>")
         return cls(bit=str(args[0]))
+    if cls is ExtKeyUsageOnlyHasUsagesInSet:
+        _expect_args(fname, args, 1, "[<EKU_BIT>,...]")
+        if not isinstance(args[0], list) or not args[0] or not all(isinstance(v, str) for v in args[0]):
+            raise DSLError(f"{fname}: arg must be non-empty list of EKU_BIT names")
+        return cls(bits=tuple(str(v) for v in args[0]))
 
     if cls is FieldEq:
         _expect_args(fname, args, 2, "<FIELD> <int|str literal>")
@@ -1844,6 +1929,9 @@ def parse(obj: Any) -> Compound:
     if cls is IPListAllOctetCount:
         _expect_args(fname, args, 2, "<ip_list field> <count:int>")
         return cls(field=str(args[0]), count=int(args[1]))
+    if cls is IPListVersionAllOctetCount:
+        _expect_args(fname, args, 3, "<ip_list field> <version:4|6> <count:int>")
+        return cls(field=str(args[0]), version=int(args[1]), count=int(args[2]))
     if cls is OidListContains:
         _expect_args(fname, args, 2, "<oid_list field> <OID_CONST>")
         field = str(args[0])
@@ -1951,6 +2039,9 @@ def parse(obj: Any) -> Compound:
     if cls is SubtreeIPListAnyHasOctetCount:
         _expect_args(fname, args, 2, "<subtree_list field> <count:int>")
         return cls(field=str(args[0]), count=int(args[1]))
+    if cls is SubtreeIPListVersionAllOctetCount:
+        _expect_args(fname, args, 3, "<subtree_ip_list field> <version:4|6> <count:int>")
+        return cls(field=str(args[0]), version=int(args[1]), count=int(args[2]))
     if cls is BytesContainsOidDer:
         _expect_args(fname, args, 2, "<bytes_field> <OID_CONST>")
         return cls(field=str(args[0]), oid=str(args[1]))
@@ -1991,6 +2082,9 @@ def parse(obj: Any) -> Compound:
     if cls is SubtreeIPMaskValidCIDR:
         _expect_args(fname, args, 1, "<subtree_ip_list field>")
         return cls(field=str(args[0]))
+    if cls is SubtreeIPVersionMaskValidCIDR:
+        _expect_args(fname, args, 2, "<subtree_ip_list field> <version:4|6>")
+        return cls(field=str(args[0]), version=int(args[1]))
 
     if cls is FieldContains:
         _expect_args(fname, args, 2, "<STRING_FIELD> <literal_char_or_string>")
@@ -2111,6 +2205,9 @@ def parse(obj: Any) -> Compound:
         if not isinstance(args[0], list) or not all(isinstance(b, str) for b in args[0]):
             raise DSLError(f"{fname}: arg must be list of KEY_USAGE_BIT names")
         return cls(bits=tuple(str(b) for b in args[0]))
+    if cls is ExtKeyUsageCountInRange:
+        _expect_args(fname, args, 2, "<lo:int> <hi:int|MAX_INT>")
+        return cls(lo=int(args[0]), hi=_int_or_maxint(args[1]))
     if cls is SerialNumberLengthInRange:
         _expect_args(fname, args, 2, "<lo:int> <hi:int|MAX_INT>")
         return cls(lo=int(args[0]), hi=_int_or_maxint(args[1]))
@@ -2185,6 +2282,13 @@ def _validate(n, errs: list[str], in_item: bool):
                       SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN,
                       SubjectCommonNameFQDNMatchesDNSNameSAN)):
         return
+    if isinstance(n, (SignatureAlgorithmIdentifiersEqualHex, SPKIAlgorithmIdentifierEqualsHex)):
+        if not re.fullmatch(r"[0-9a-fA-F]+", n.hex_lit) or len(n.hex_lit) % 2 != 0:
+            errs.append(
+                f"{type(n).__name__}: hex literal must be even-length hex chars "
+                f"(got {n.hex_lit[:30]!r})"
+            )
+        return
     if isinstance(n, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
         if n.pattern not in V.NAMED_REGEX_NAMES:
             errs.append(f"SubjectCommonNameFQDNOrWildcardPortionMatchesRegex: unknown named regex '{n.pattern}'")
@@ -2229,6 +2333,13 @@ def _validate(n, errs: list[str], in_item: bool):
     if isinstance(n, ExtKeyUsageHas):
         if n.bit not in V.EKU_BY_NAME:
             errs.append(f"unknown EKU_BIT '{n.bit}'")
+        return
+    if isinstance(n, ExtKeyUsageOnlyHasUsagesInSet):
+        if not n.bits:
+            errs.append("ExtKeyUsageOnlyHasUsagesInSet: bits cannot be empty")
+        for bit in n.bits:
+            if bit not in V.EKU_BY_NAME:
+                errs.append(f"ExtKeyUsageOnlyHasUsagesInSet: unknown EKU_BIT '{bit}'")
         return
 
     if isinstance(n, (FieldEq, FieldNonEmpty, FieldEmpty,
@@ -2373,6 +2484,18 @@ def _validate(n, errs: list[str], in_item: bool):
         if n.count not in (4, 8, 16, 32):
             errs.append(f"IPListAllOctetCount: count must be 4, 8, 16 or 32, got {n.count}")
         return
+    if isinstance(n, IPListVersionAllOctetCount):
+        f = V.lookup_anyfield(n.field)
+        if f is None:
+            errs.append(f"IPListVersionAllOctetCount: unknown field '{n.field}'")
+        elif f.semantic != "ip_list":
+            errs.append(f"IPListVersionAllOctetCount: '{n.field}' semantic={f.semantic}, must be ip_list")
+        expected = {4: 4, 6: 16}
+        if n.version not in expected:
+            errs.append(f"IPListVersionAllOctetCount: version must be 4 or 6, got {n.version}")
+        elif n.count != expected[n.version]:
+            errs.append(f"IPListVersionAllOctetCount: IPv{n.version} count must be {expected[n.version]}, got {n.count}")
+        return
     if isinstance(n, OidListContains):
         f = V.lookup_anyfield(n.field)
         if f is None:
@@ -2483,6 +2606,18 @@ def _validate(n, errs: list[str], in_item: bool):
             errs.append(f"SubtreeIPListAnyHasOctetCount: count must be 8 (IPv4 addr+mask) "
                         f"or 32 (IPv6 addr+mask), got {n.count}")
         return
+    if isinstance(n, SubtreeIPListVersionAllOctetCount):
+        f = V.lookup_anyfield(n.field)
+        if f is None:
+            errs.append(f"SubtreeIPListVersionAllOctetCount: unknown field '{n.field}'")
+        elif f.go_type != "[]GeneralSubtreeIP":
+            errs.append(f"SubtreeIPListVersionAllOctetCount: '{n.field}' go_type={f.go_type}, must be []GeneralSubtreeIP")
+        expected = {4: 8, 6: 32}
+        if n.version not in expected:
+            errs.append(f"SubtreeIPListVersionAllOctetCount: version must be 4 or 6, got {n.version}")
+        elif n.count != expected[n.version]:
+            errs.append(f"SubtreeIPListVersionAllOctetCount: IPv{n.version} subtree count must be {expected[n.version]}, got {n.count}")
+        return
     if isinstance(n, BytesContainsOidDer):
         f = V.lookup_anyfield(n.field)
         if f is None:
@@ -2576,6 +2711,15 @@ def _validate(n, errs: list[str], in_item: bool):
             errs.append(f"SubtreeIPMaskValidCIDR: unknown field '{n.field}'")
         elif f.go_type != "[]GeneralSubtreeIP":
             errs.append(f"SubtreeIPMaskValidCIDR: '{n.field}' go_type={f.go_type}, must be []GeneralSubtreeIP")
+        return
+    if isinstance(n, SubtreeIPVersionMaskValidCIDR):
+        f = V.lookup_anyfield(n.field)
+        if f is None:
+            errs.append(f"SubtreeIPVersionMaskValidCIDR: unknown field '{n.field}'")
+        elif f.go_type != "[]GeneralSubtreeIP":
+            errs.append(f"SubtreeIPVersionMaskValidCIDR: '{n.field}' go_type={f.go_type}, must be []GeneralSubtreeIP")
+        if n.version not in (4, 6):
+            errs.append(f"SubtreeIPVersionMaskValidCIDR: version must be 4 or 6, got {n.version}")
         return
 
     if isinstance(n, FieldContains):
@@ -2796,6 +2940,16 @@ def _validate(n, errs: list[str], in_item: bool):
             if bit not in valid_bits:
                 errs.append(f"ExtKeyUsageAllBitsInSet: unknown bit '{bit}'. Valid: {valid_bits}")
         return
+    if isinstance(n, ExtKeyUsageCountInRange):
+        lo = n.lo
+        hi = n.hi if isinstance(n.hi, int) else float('inf')
+        if not isinstance(lo, int) or lo < 0:
+            errs.append(f"ExtKeyUsageCountInRange: lo must be non-negative int, got {n.lo}")
+        if n.hi != "MAX_INT" and (not isinstance(n.hi, int) or n.hi < lo):
+            errs.append(f"ExtKeyUsageCountInRange: hi must be int >= lo or MAX_INT, got {n.hi}")
+        if isinstance(lo, int) and lo > hi:
+            errs.append(f"ExtKeyUsageCountInRange: lo={lo} > hi={n.hi}")
+        return
     if isinstance(n, SerialNumberDERSignBitZero):
         return
     if isinstance(n, SerialNumberLengthInRange):
@@ -2854,6 +3008,8 @@ ATOM_SIGNATURES = [
     ('IsSubscriberCert',    [],                                      'cert is non-CA'),
     ('KeyUsageHas',         ['<KEY_USAGE_BIT>'],                     'KeyUsage bitmap has bit set'),
     ('ExtKeyUsageHas',      ['<EKU_BIT>'],                           'ExtKeyUsage list contains usage'),
+    ('ExtKeyUsageOnlyHasUsagesInSet', [['<EKU_BIT>', '...']],         'every asserted ExtendedKeyUsage value is in the allowed EKU_BIT set; unknown EKU OIDs outside the set are violations; vacuously true when EKU is absent'),
+    ('ExtKeyUsageCountInRange', ['<lo>', '<hi|MAX_INT>'],             'total number of asserted ExtendedKeyUsage KeyPurposeId values, counting stdlib EKUs and unknown EKU OIDs, is in [lo, hi]'),
     ('FieldEq',             ['<FIELD>', '<int|str>'],                'field equals literal'),
     ('FieldNonEmpty',       ['<FIELD>'],                             'field is set / non-empty'),
     ('FieldEmpty',          ['<FIELD>'],                             'field is unset / empty'),
@@ -2868,6 +3024,8 @@ ATOM_SIGNATURES = [
     ('RSAModulusBitsInRange', ['<lo>', '<hi|MAX_INT>'], 'RSA modulus bit-length in [lo,hi]; vacuously true for non-RSA keys (e.g. "RSA modulus MUST be >= 2048 bits")'),
     ('RSAPublicExponentInRange', ['<lo>', '<hi|MAX_INT>'], 'RSA public exponent in [lo,hi]; vacuous for non-RSA (e.g. "exponent MUST be >= 3")'),
     ('SigAlgMatchesTBSSignature', [], 'the outer signatureAlgorithm is byte-identical to tbsCertificate.signature'),
+    ('SignatureAlgorithmIdentifiersEqualHex', ['<hex_literal>'], 'both certificate signature AlgorithmIdentifier DER encodings (outer signatureAlgorithm and TBSCertificate.signature) equal the given hex bytes exactly'),
+    ('SPKIAlgorithmIdentifierEqualsHex', ['<hex_literal>'], 'SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals the given hex bytes exactly'),
     ('NotAfterIsNoExpirySentinel', [], 'notAfter is the RFC5280 no-well-defined-expiration sentinel 99991231235959Z (GeneralizedTime)'),
     ('CommonNameFromSAN',   [], 'Subject.CommonName equals one of the SAN dNSName entries ("CN MUST be from SAN")'),
     ('IsEndEntity',         [], 'cert is an end-entity / subscriber (non-CA)'),
@@ -2887,6 +3045,7 @@ ATOM_SIGNATURES = [
     ('ItemNotMatchesRegex', ['<NAMED_REGEX>'],                       '(in WildcardFilter/ListAllMatch predicate) item does NOT match regex; use for "MUST NOT contain forbidden pattern" in list contexts (e.g. R4718: no zero-length/empty labels)'),
     ('BytesEq',             ['<BYTES_FIELD>', '<BYTES_FIELD>'],      'two []byte fields equal byte-for-byte (e.g. SubjectKeyId vs AuthorityKeyId)'),
     ('IPListAllOctetCount', ['<IP_LIST_FIELD>', '<4|8|16|32>'],      'every IP in IP_LIST_FIELD has exactly N octets'),
+    ('IPListVersionAllOctetCount', ['<IP_LIST_FIELD>', '<4|6>', '<4|16>'], 'version-scoped iPAddress length: IPv4 entries have 4 octets or IPv6 entries have 16 octets, leaving the other version out of scope'),
     ('OidListContains',     ['<OID_LIST_FIELD>', '<OID_CONST>'],     'oid_list field contains the named OID constant'),
     ('BytesEqualsHex',      ['<BYTES_FIELD>', '<hex_literal>'],      'bytes field equals the given hex literal exactly'),
     ('BytesContainsHex',    ['<BYTES_FIELD>', '<hex_literal>'],      'bytes field contains the given hex literal as a substring'),
@@ -2904,6 +3063,7 @@ ATOM_SIGNATURES = [
     ('CertPolicyExplicitTextAllHaveEncodingTagInSet', [['<ASN1_TYPE>', '...']], 'Every UserNotice explicitText in CertificatePolicies uses one of the allowed DisplayText CHOICE tags. Vacuously true if no explicitText exists. Use for "explicitText SHOULD/MUST use UTF8String" encoding rules.'),
     ('OidEq',               ['<OID_FIELD>', '<OID_CONST>'],          'single OID-typed field (e.g. PublicKeyAlgorithmOID) equals the named OID constant'),
     ('SubtreeIPListAnyHasOctetCount', ['<subtree_list>', '<8|32>'],  'a NameConstraints subtree IP list has at least one entry of count octets (IP+Mask): 8 = IPv4, 32 = IPv6'),
+    ('SubtreeIPListVersionAllOctetCount', ['<subtree_ip_list>', '<4|6>', '<8|32>'], 'version-scoped NameConstraints iPAddress subtree length: IPv4 entries have 8 total octets or IPv6 entries have 32 total octets, leaving the other version out of scope'),
     ('BytesContainsOidDer', ['<BYTES_FIELD>', '<OID_CONST>'],        'bytes field contains the DER encoding of the named OID — use for "namedCurve MUST be secp384r1" / "AlgorithmIdentifier embeds OID X" without writing hex literals'),
     ('IPListAllOctetCountIn', ['<IP_LIST_FIELD>', ['<count>','...']], 'every IP in IP_LIST_FIELD has octet count in the given set; use [4,16] for "each iPAddress must be IPv4 (4) or IPv6 (16)" mixed-version rules'),
     ('SubtreeIPListAnyAllZero', ['<subtree_list>', '<8|32>'],         'a NameConstraints subtree IP list has at least one entry of count octets (IP+Mask) where every byte is zero; use 8 for IPv4 0.0.0.0/0 marker, 32 for IPv6 ::0/0 marker'),
@@ -2914,6 +3074,7 @@ ATOM_SIGNATURES = [
     ('SubtreeStringListAllMatchOrEmpty', ['<subtree_string_list>', '<predicate>'], 'like SubtreeStringListAllMatch but vacuously TRUE on empty list. Use for "if X is constrained in permittedSubtrees/excludedSubtrees, all entries must be Y" rules where the constraint applies only to populated sides — combine with And over (permitted, excluded) so each populated side is checked but empty sides do not violate (R3995)'),
     ('SubtreeIPListAllOctetCountIn', ['<subtree_ip_list>', ['<count>','...']], 'every entry in NameConstraints subtree IP list has total bytes (IP+Mask) in given set; use [8,32] for "every iPAddress is IPv4 or IPv6", [32] for "all IPv6", [8] for "all IPv4"'),
     ('SubtreeIPMaskValidCIDR', ['<subtree_ip_list>'], 'every entry in NameConstraints subtree IP list has its mask portion (Data.Mask) in valid CIDR form: contiguous high-order 1-bits followed by zeros (per RFC 4632). IP-version agnostic — works on IPv4 (4-byte mask) and IPv6 (16-byte mask). Use for "iPAddress MUST be encoded in the style of RFC 4632 (CIDR)" rules (R4007). Empty list = vacuous true.'),
+    ('SubtreeIPVersionMaskValidCIDR', ['<subtree_ip_list>', '<4|6>'], 'version-scoped NameConstraints subtree IP mask CIDR check; only IPv4 or only IPv6 subtree entries must have contiguous CIDR masks'),
     ('CrossFieldEq',        ['<scalar_field_A>', '<scalar_field_B>'], 'two scalar fields have equal values (string-to-string or int-to-int); NOT for scalar-vs-list; use ScalarInList for CN-in-SAN'),
     ('ScalarInList',        ['<scalar_field>', '<string_list_field>'], 'true when scalar_field value appears as an element in list_field; use for "CN must be in DNSNames" (R5116) style rules where a scalar must appear in a list'),
     ('ScalarInAnyOfLists',  ['<scalar_field>', ['<list_field>','...']], 'true when scalar_field value appears in AT LEAST ONE of the named list_fields. Generalizes ScalarInList with implicit OR. Use for "CN must be derived from subjectAltName (any SAN type)" rules where the scalar must appear in DNSNames OR EmailAddresses OR URIs OR IPAddresses (R5116) — pass the full list of relevant SAN-type fields'),

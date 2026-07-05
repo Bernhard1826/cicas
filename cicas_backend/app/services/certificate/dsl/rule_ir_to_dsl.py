@@ -995,6 +995,59 @@ def _condition_to_guard(ir: dict, c: dict):
     return _precondition_guard(ir, c)
 
 
+def _is_negative_pass_atom(atom: object) -> bool:
+    """Whether ``atom`` already encodes the OK condition for a negative predicate.
+
+    Several reducer branches are predicate-aware: ``must_not_be_present`` over a
+    scalar field returns ``FieldEmpty`` directly, and nested subfield reducers
+    often return ``Not(ExtSubfieldPresent(...))``. The final polarity pass must
+    not wrap those again. For guarded rules, inspect the consequent because
+    ``When(C, FieldEmpty(X))`` is already the correct "when C, X must be absent"
+    pass condition.
+    """
+    if atom is None:
+        return False
+    name = type(atom).__name__
+    if name == "When" and hasattr(atom, "main"):
+        return _is_negative_pass_atom(atom.main)
+    if name == "And" and hasattr(atom, "parts"):
+        parts = list(getattr(atom, "parts") or [])
+        return bool(parts) and all(_is_negative_pass_atom(p) for p in parts)
+    return name in {
+        "Not",
+        "FieldEmpty",
+        "FieldCount",
+        "FieldNotInSet",
+        "FieldNotMatchesRegex",
+        "ItemNotMatchesRegex",
+        "ExtensionURISchemeNotInSet",
+        "URISchemeNotInSet",
+        "PolicyQualifierOIDNotInSet",
+        "ExtPolicyQualifierOIDNotInSet",
+        "ExtKeyUsageNotHasBit",
+        "ExtNotCritical",
+        "ExtNotPresentOrHasProperty",
+        "CertPolicyExplicitTextHasEncodingTagNotInSet",
+    }
+
+
+def _negate_pass_atom(atom: object) -> object:
+    """Negate a positive pass-condition atom for a negative obligation.
+
+    The key law is ``when C, NOT P`` => ``When(C, Not(P))``, not
+    ``Not(When(C, P))``. The latter fails outside C and inverts condition-scoped
+    absence rules.
+    """
+    name = type(atom).__name__
+    if name == "When" and hasattr(atom, "cond") and hasattr(atom, "main"):
+        return dsl.When(atom.cond, _negate_pass_atom(atom.main))
+    if name == "FieldNonEmpty" and hasattr(atom, "field"):
+        return dsl.FieldEmpty(atom.field)
+    if name == "FieldEmpty" and hasattr(atom, "field"):
+        return dsl.FieldNonEmpty(atom.field)
+    return dsl.Not(atom)
+
+
 # GeneralName CHOICE context tags (RFC 5280 §4.2.1.6). Keys are the lowercased
 # subtype tokens the IR subject path uses (extensions.subjectaltname.<subtype>).
 _GN_TAG = {
@@ -1482,21 +1535,11 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
                            "must_not_equal", "must_not_conform_to", "must_not_exceed",
                            "must_not_be_longer", "must_not_be_shorter",
                            "must_not_be_greater", "must_not_be_less")
-        # Some atoms already apply negation internally (e.g., FieldNotInSet, Not(Or(...))
-        # already carry NOT semantics). Skip wrapping those.
-        already_negative = isinstance(atom, dsl.Not) or type(atom).__name__ in {
-            "FieldNotInSet",
-            "FieldNotMatchesRegex",
-            "ItemNotMatchesRegex",
-            "ExtensionURISchemeNotInSet",
-            "URISchemeNotInSet",
-            "PolicyQualifierOIDNotInSet",
-            "ExtPolicyQualifierOIDNotInSet",
-            "ExtKeyUsageNotHasBit",
-            "ExtNotCritical",
-            "ExtNotPresentOrHasProperty",
-            "CertPolicyExplicitTextHasEncodingTagNotInSet",
-        }
+        # Some reducers already return the negative predicate's PASS condition
+        # directly, e.g. must_not_be_present -> FieldEmpty or Not(ExtPresent).
+        # Do not wrap those again. If negation is still needed and the atom is a
+        # When(C, P), negate only P so the rule remains scoped to C.
+        already_negative = _is_negative_pass_atom(atom)
         if neg and not already_negative:
             # Special case: FieldNumericInRange with must_not_exceed means "value > hi".
             # Wrapping Not() gives !(lo <= x <= hi) = x < lo OR x > hi, which is too broad
@@ -1514,7 +1557,7 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
             elif isinstance(atom, dsl.FieldNumericInRange) and pred_raw == "must_not_be_less":
                 atom = dsl.FieldNumericInRange(atom.field, atom.hi + 1, "MAX_INT")
             else:
-                atom = dsl.Not(atom)
+                atom = _negate_pass_atom(atom)
 
     # Soundness gate for profile-conditional "pathLenConstraint MUST NOT be present":
     # the absent-check FieldEq(MaxPathLen,-1) over-flags legitimate CA certs (which

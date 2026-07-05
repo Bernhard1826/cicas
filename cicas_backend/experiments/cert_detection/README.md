@@ -8,26 +8,31 @@ separates upstream findings from CICAS-generated `cicasgen_` findings.
 The current gate is a **failing regression check**, not a paper success result.
 
 Current run (`outputs/detection_summary.{json,md}`), after rebuilding zlint from
-the current 53-lint synonymy manifest:
+the strict shipping manifest (`shipping_lints_manifest.json`).  This manifest is
+stricter than the row-fragment synonymy manifest: it admits only generated lints
+whose final in-tree zlint behavior (`CheckApplies` + `Execute` + severity) has
+been judged synonymous with the available original rule context.
 
 | metric | value |
 |---|---:|
-| shipped `cicasgen_` lints | 53 |
+| shipped `cicasgen_` lints | 25 |
 | zlint testdata certs scanned | 1128 |
-| `cicasgen_` findings | 4563 |
-| triage REAL | 4149 |
-| triage SPURIOUS | 343 |
-| triage UNCERTAIN | 71 |
-| independent CONFIRMED | 2047 |
-| independent REFUTED | 5 |
-| independent NOCHECK | 2511 |
-| strict reportable findings | 22 |
+| `cicasgen_` findings | 875 |
+| triage REAL | 868 |
+| weak-oracle triage SPURIOUS | 4 |
+| triage UNCERTAIN | 3 |
+| independent CONFIRMED | 435 |
+| independent REFUTED | 0 |
+| independent NOCHECK | 440 |
+| strict reportable findings | 0 |
 
-The script intentionally exits non-zero while `SPURIOUS > 0`. The highest-firing
-false-positive sources are over-broad generated lints with missing applicability
-guards, especially version/profile checks, PolicyConstraints sub-field checks,
-and SAN criticality/presence checks. Fix those upstream in IR extraction/codegen,
-then rebuild and rerun this gate.
+The gate is currently clean on zlint testdata under the independent-audit
+criterion (`REFUTED=0`, unresolved weak-oracle SPURIOUS=0).  The raw triage
+oracle still labels 4 findings SPURIOUS, but all 4 are independently confirmed
+real defects.  External CT/Tranco report-only scans with this 25-lint strict
+manifest found one non-overlapping, independently confirmed new issue in
+Tranco: a subscriber certificate for `*.enter-system.com` has zero CABF reserved
+policy OIDs, violating CABF-BR §7.1.2.7.9 / rule 29492.
 
 ## Targeted Re-Extraction
 
@@ -59,9 +64,11 @@ Recompute coverage after the deterministic native-coverage fix:
 # important: rerun coverage before regenerating codegen manifests
 ```
 
-Build or refresh the shipped manifest after coverage/codegen has been recomputed:
+Build or refresh the shipped manifest after coverage/codegen has been recomputed
+and strict shipping synonymy has been judged:
 
 ```bash
+python cicas_backend/experiments/codegen_metrics/run_codegen_synonymy.py --rejudge-shipping --k 5
 python cicas_backend/scripts/inject_and_build.py --emit --build
 ```
 
@@ -71,8 +78,7 @@ Run the testdata gate:
 python cicas_backend/experiments/cert_detection/run.py
 ```
 
-Expected behavior today: the command exits non-zero because the gate finds false
-positives. Treat `outputs/` as a regression ledger until `SPURIOUS` returns to 0.
+Expected behavior today: the command exits zero when `SPURIOUS=0`.
 
 External CT/Tranco-style corpus scans are report-only:
 

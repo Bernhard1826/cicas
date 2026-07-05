@@ -17,7 +17,9 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 ZLINT = _ROOT / "cicas_backend" / "zlint" / "v3"
-MANIFEST_SRC = _ROOT / "cicas_backend" / "experiments" / "codegen_metrics" / "outputs" / "full_current_db" / "synonymous_lints_manifest.json"
+MANIFEST_DIR = _ROOT / "cicas_backend" / "experiments" / "codegen_metrics" / "outputs" / "full_current_db"
+SHIPPING_MANIFEST_SRC = MANIFEST_DIR / "shipping_lints_manifest.json"
+ROW_FRAGMENT_MANIFEST_SRC = MANIFEST_DIR / "synonymous_lints_manifest.json"
 MANIFEST_DST = _ROOT / "cicas_backend" / "experiments" / "cert_detection" / "inputs" / "cicasgen_manifest.json"
 
 
@@ -26,18 +28,34 @@ def main():
     ap.add_argument("--emit", action="store_true", help="inject lint Go files into zlint tree")
     ap.add_argument("--build", action="store_true", help="run go build after injection")
     ap.add_argument("--manifest-only", action="store_true", help="only write manifest JSON")
+    ap.add_argument(
+        "--manifest-source",
+        choices=("shipping", "row-fragment"),
+        default="shipping",
+        help="shipping uses strict final-zlint synonymy; row-fragment is diagnostic only",
+    )
     args = ap.parse_args()
 
     if not args.emit and not args.build and not args.manifest_only:
         ap.error("need at least one of --emit, --build, --manifest-only")
 
     zlint_entries = []
+    manifest_src = (
+        SHIPPING_MANIFEST_SRC
+        if args.manifest_source == "shipping"
+        else ROW_FRAGMENT_MANIFEST_SRC
+    )
 
     # --- manifest ---
     if args.emit or args.manifest_only:
-        if not MANIFEST_SRC.exists():
-            sys.exit(f"[error] manifest not found: {MANIFEST_SRC}")
-        manifest = json.loads(MANIFEST_SRC.read_text())
+        if not manifest_src.exists():
+            hint = ""
+            if args.manifest_source == "shipping":
+                hint = " Run run_codegen_synonymy.py --rejudge-shipping first."
+            sys.exit(f"[error] manifest not found: {manifest_src}.{hint}")
+        if args.manifest_source == "row-fragment":
+            print("[warn] using row-fragment synonymy manifest; do not use this for certificate scans")
+        manifest = json.loads(manifest_src.read_text())
         # Transform into the format cert_detection expects
         for item in manifest:
             output_path = item.get("output_path", "")
@@ -51,12 +69,18 @@ def main():
                 "rule_text": "",  # will be filled from DB if needed
                 "method": item["method"],
                 "severity": "lint.Error",
-                "synonymy_verdict": "EXPRESSES",
+                "synonymy_verdict": item.get("shipping_synonymy_verdict")
+                                    or item.get("row_synonymy_verdict")
+                                    or "EXPRESSES",
+                "shipping_gate_verdict": item.get("shipping_gate_verdict"),
+                "manifest_source": args.manifest_source,
                 "pkg": Path(output_path).parts[-2],
                 "file": "lints/" + output_path.split("/")[-2] + "/" + Path(output_path).name,
             })
         full_manifest = {
             "zlint_v3": str(ZLINT),
+            "source_manifest": str(manifest_src),
+            "manifest_source": args.manifest_source,
             "count": len(zlint_entries),
             "lints": zlint_entries,
         }
@@ -69,7 +93,7 @@ def main():
 
     # --- inject lint files ---
     if args.emit:
-        src_dir = MANIFEST_SRC.parent / "synonymous_lints"
+        src_dir = manifest_src.parent / "synonymous_lints"
         if not src_dir.exists():
             sys.exit(f"[error] lint source dir not found: {src_dir}")
 

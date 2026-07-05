@@ -32,6 +32,9 @@ Modes
                 re-run the synonymy judge (with rule context). Cheap: no
                 recompile, no regeneration. Used to re-measure the judge after
                 a judge/context change without paying the codegen cost.
+  --rejudge-shipping
+                reuse cached trees and re-run the strict shipped-lint judge:
+                σ(final in-tree zlint lint) vs full available original context.
   --summary-only  recompute summary + manifests from the existing ledger
   --compact-ledger prune stale/duplicate ledger rows after targeted retries
 """
@@ -40,6 +43,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -57,7 +61,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.services.certificate.codegen import cascade, runner  # noqa: E402
-from app.services.certificate.codegen import det_codegen, intree_emitter, synonym_judge  # noqa: E402
+from app.services.certificate.codegen import det_codegen, dsl, intree_emitter, synonym_judge  # noqa: E402
 from app.services.certificate.codegen.tree_to_natural import obligation_aware_summary  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -85,6 +89,45 @@ def _load_section_titles() -> dict[str, str]:
             if section and title and section not in sec2title:
                 sec2title[section] = title
     return sec2title
+
+
+def _load_nearby_section_rows(selected: list[int], window: int = 4) -> dict[int, str]:
+    """Nearby source rows from the same standard section/table.
+
+    Extracted CABF/RFC rows can be terse table fragments.  A local same-section
+    window gives the strict judge table-neighbor context such as paired
+    stateOrProvinceName/localityName alternatives without special-casing any
+    rule id or certificate profile.
+    """
+    with psycopg2.connect(DB_URL, connect_timeout=3) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            select id, standard_id, section, title, text
+            from rules
+            where standard_id = any(%s)
+              and section is not null
+            order by standard_id, section, id
+            """,
+            (selected,),
+        )
+        groups: dict[tuple[int, str], list[tuple[int, str, str]]] = {}
+        for rid, standard_id, section, title, text in cur.fetchall():
+            groups.setdefault((int(standard_id), section or ""), []).append(
+                (int(rid), title or "", text or "")
+            )
+    out: dict[int, str] = {}
+    for rows in groups.values():
+        for idx, (rid, _title, _text) in enumerate(rows):
+            start = max(0, idx - window)
+            end = min(len(rows), idx + window + 1)
+            lines = []
+            for nrid, title, text in rows[start:end]:
+                mark = ">>" if nrid == rid else "  "
+                title_part = f" [{title}]" if title else ""
+                lines.append(f"{mark} R{nrid}{title_part}: {text}")
+            out[rid] = "\n".join(lines)
+    return out
 
 
 def profile_scope_for(section: Optional[str], sec2title: dict[str, str]) -> Optional[str]:
@@ -149,7 +192,10 @@ def rule_context_for(source: str, section: Optional[str], title: Optional[str],
 # ---------------------------------------------------------------------------
 def _json_default(obj):
     if dataclasses.is_dataclass(obj):
-        return {"op": type(obj).__name__, **dataclasses.asdict(obj)}
+        try:
+            return dsl.compound_to_dict(obj)
+        except Exception:
+            return {"op": type(obj).__name__, **dataclasses.asdict(obj)}
     if isinstance(obj, Path):
         return str(obj)
     if isinstance(obj, set):
@@ -191,11 +237,12 @@ def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
     selected = [STANDARDS[s]["id"] for s in standards]
     source_by_id = {v["id"]: v["source"] for v in STANDARDS.values()}
     sec2title = _load_section_titles()
+    nearby_rows = _load_nearby_section_rows(selected)
     with psycopg2.connect(DB_URL, connect_timeout=3) as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            select id, standard_id, section, title, text, ir_data, obligation
+            select id, standard_id, section, title, text, ir_data, obligation, context
             from rules
             where standard_id = any(%s)
               and lintable
@@ -206,7 +253,7 @@ def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
             (selected,),
         )
         rows = []
-        for rid, standard_id, section, title, text, raw_ir, obligation in cur.fetchall():
+        for rid, standard_id, section, title, text, raw_ir, obligation, context in cur.fetchall():
             ir = _parse_ir(raw_ir)
             if obligation and not ir.get("obligation"):
                 ir = dict(ir)
@@ -225,11 +272,43 @@ def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
                     "section": section or "",
                     "title": title or "",
                     "text": text or "",
+                    "context": context or "",
+                    "nearby_section_rows": nearby_rows.get(int(rid), ""),
                     "ir": ir,
                     "obligation": obligation or ir.get("obligation") or "",
                     "profile_scope": context_scope,
                 }
             )
+    if limit is not None:
+        rows = rows[:limit]
+    return rows
+
+
+def domain_from_ledger(ledger_path: Path, limit: int | None = None) -> list[dict]:
+    """Fallback domain reconstructed from the current ledger.
+
+    This does not change the denominator in normal runs.  It only keeps cached
+    rejudging usable when the local DB is temporarily unavailable; the canonical
+    domain is still ``load_domain`` from the DB.
+    """
+    latest = load_done(ledger_path)
+    rows = []
+    for rid in sorted(latest):
+        rec = latest[rid]
+        rows.append(
+            {
+                "id": int(rec.get("rule_id") or rid),
+                "standard_id": rec.get("standard_id"),
+                "source": rec.get("source") or "",
+                "section": rec.get("section") or "",
+                "title": rec.get("title") or "",
+                "text": rec.get("text") or "",
+                "context": rec.get("context") or "",
+                "ir": rec.get("ir") or {},
+                "obligation": rec.get("obligation") or (rec.get("ir") or {}).get("obligation") or "",
+                "profile_scope": rec.get("profile_scope"),
+            }
+        )
     if limit is not None:
         rows = rows[:limit]
     return rows
@@ -269,6 +348,21 @@ def _rate(n: int, d: int) -> float | None:
     return (n / d) if d else None
 
 
+_DECIDED_SYNONYMY = {"EXPRESSES", "DOES_NOT_EXPRESS"}
+
+
+def _shipping_gate(row: dict) -> str | None:
+    syn = row.get("ship_synonymy") or {}
+    verdict = syn.get("verdict")
+    if verdict not in _DECIDED_SYNONYMY:
+        return None
+    if verdict != "EXPRESSES":
+        return "DOES_NOT_EXPRESS"
+    k = int(syn.get("k") or 1)
+    min_expresses = max(1, math.ceil(k * 0.8))
+    return "EXPRESSES" if int(syn.get("n_expresses") or 0) >= min_expresses else "UNCERTAIN"
+
+
 # ---------------------------------------------------------------------------
 # summary
 # ---------------------------------------------------------------------------
@@ -281,9 +375,28 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
     }
     generated = [r for r in scoped_latest.values() if r.get("generation_success")]
     generated_count = len(generated)
-    judged = [r for r in generated if r.get("synonymy", {}).get("verdict")]
+    judged = [
+        r for r in generated
+        if r.get("synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
+    ]
     expresses = [r for r in judged if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
     dne = [r for r in judged if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
+    ship_judged = [
+        r for r in expresses
+        if r.get("ship_synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
+    ]
+    ship_expresses = [
+        r for r in ship_judged
+        if _shipping_gate(r) == "EXPRESSES"
+    ]
+    ship_dne = [
+        r for r in ship_judged
+        if _shipping_gate(r) == "DOES_NOT_EXPRESS"
+    ]
+    ship_uncertain = [
+        r for r in ship_judged
+        if _shipping_gate(r) == "UNCERTAIN"
+    ]
     errors = [r for r in scoped_latest.values() if r.get("error")]
 
     by_source = {}
@@ -291,9 +404,21 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         ids = {int(r["id"]) for r in domain if r["source"] == source}
         src_rows = [scoped_latest[i] for i in ids if i in scoped_latest]
         src_gen = [r for r in src_rows if r.get("generation_success")]
-        src_judged = [r for r in src_gen if r.get("synonymy", {}).get("verdict")]
+        src_judged = [
+            r for r in src_gen
+            if r.get("synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
+        ]
         src_exp = [r for r in src_judged if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
         src_dne = [r for r in src_judged if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
+        src_ship_judged = [
+            r for r in src_exp
+            if r.get("ship_synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
+        ]
+        src_ship_exp = [
+            r for r in src_ship_judged
+            if _shipping_gate(r) == "EXPRESSES"
+        ]
+        src_ship_uncertain = [r for r in src_ship_judged if _shipping_gate(r) == "UNCERTAIN"]
         by_source[source] = {
             "domain_total": len(ids),
             "completed": len(src_rows),
@@ -305,6 +430,11 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             "synonymy_does_not_express": len(src_dne),
             "synonymy_rate_over_generated": _rate(len(src_exp), len(src_judged)),
             "end_to_end_expresses_rate_over_domain": _rate(len(src_exp), len(ids)),
+            "shipping_synonymy_judged": len(src_ship_judged),
+            "shipping_synonymy_expresses": len(src_ship_exp),
+            "shipping_synonymy_uncertain": len(src_ship_uncertain),
+            "shipping_synonymy_rate_over_row_expresses": _rate(len(src_ship_exp), len(src_exp)),
+            "shipping_end_to_end_expresses_rate_over_domain": _rate(len(src_ship_exp), len(ids)),
             "code_eq_ir_certified": sum(1 for r in src_gen if r.get("code_eq_ir_certified")),
         }
 
@@ -342,13 +472,20 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         "synonymy_does_not_express": len(dne),
         "synonymy_rate_over_generated": _rate(len(expresses), len(judged)),
         "end_to_end_expresses_rate_over_domain": _rate(len(expresses), total),
+        "shipping_synonymy_judged": len(ship_judged),
+        "shipping_synonymy_not_judged": len(expresses) - len(ship_judged),
+        "shipping_synonymy_expresses": len(ship_expresses),
+        "shipping_synonymy_does_not_express": len(ship_dne),
+        "shipping_synonymy_uncertain": len(ship_uncertain),
+        "shipping_synonymy_rate_over_row_expresses": _rate(len(ship_expresses), len(expresses)),
+        "shipping_end_to_end_expresses_rate_over_domain": _rate(len(ship_expresses), total),
         "synonymy_by_method": {
             method: {
                 "generated": count,
                 "judged": sum(
                     1 for r in generated
                     if (r.get("generation", {}).get("method") or "unknown") == method
-                    and r.get("synonymy", {}).get("verdict")
+                    and r.get("synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
                 ),
                 "expresses": by_method_expresses.get(method, 0),
                 "rate_over_generated": _rate(
@@ -356,7 +493,7 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
                     sum(
                         1 for r in generated
                         if (r.get("generation", {}).get("method") or "unknown") == method
-                        and r.get("synonymy", {}).get("verdict")
+                        and r.get("synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
                     ),
                 ),
             }
@@ -441,12 +578,63 @@ def _write_expresses_index(run_dir: Path, latest: dict[int, dict],
     return rows
 
 
+def _write_shipping_index(run_dir: Path, latest: dict[int, dict],
+                          domain_ids: set[int] | None = None) -> list[dict]:
+    """Strict shipped-lint manifest.
+
+    Only rows whose final in-tree zlint semantics have been separately judged
+    synonymous with the available original rule context may appear here.  The
+    older ``synonymous_lints_manifest`` is intentionally left as a row-fragment
+    diagnostic artifact and must not drive real-corpus scans.
+    """
+    rows = []
+    for row in latest.values():
+        rid = row.get("rule_id")
+        if domain_ids is not None and int(rid or 0) not in domain_ids:
+            continue
+        if row.get("synonymy", {}).get("verdict") != "EXPRESSES":
+            continue
+        if _shipping_gate(row) != "EXPRESSES":
+            continue
+        rendered = row.get("rendered_lint") or {}
+        output_path = rendered.get("output_path")
+        if not output_path or not Path(output_path).exists():
+            continue
+        rows.append(
+            {
+                "rule_id": row.get("rule_id"),
+                "source": row.get("source"),
+                "section": row.get("section"),
+                "title": row.get("title"),
+                "lint_name": rendered.get("lint_name"),
+                "filename": rendered.get("filename"),
+                "output_path": output_path,
+                "method": row.get("generation", {}).get("method"),
+                "code_eq_ir_certified": row.get("code_eq_ir_certified"),
+                "row_synonymy_verdict": row.get("synonymy", {}).get("verdict"),
+                "shipping_synonymy_verdict": row.get("ship_synonymy", {}).get("verdict"),
+                "shipping_gate_verdict": _shipping_gate(row),
+                "shipping_n_expresses": row.get("ship_synonymy", {}).get("n_expresses"),
+                "shipping_k": row.get("ship_synonymy", {}).get("k"),
+            }
+        )
+    rows.sort(key=lambda r: (str(r.get("source")), str(r.get("section")), int(r.get("rule_id") or 0)))
+    (run_dir / "shipping_lints_manifest.json").write_text(
+        json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    with (run_dir / "shipping_lints_manifest.jsonl").open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return rows
+
+
 def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = None) -> None:
     ledger = run_dir / "codegen_synonymy.jsonl"
     summary_path = run_dir / "codegen_synonymy_summary.json"
     latest = load_done(ledger)
     domain_ids = {int(r["id"]) for r in domain} if domain is not None else None
     rows = _write_expresses_index(run_dir, latest, domain_ids)
+    ship_rows = _write_shipping_index(run_dir, latest, domain_ids)
     expected_files = {r.get("filename") for r in rows if r.get("filename")}
     rendered_root = run_dir / "synonymous_lints"
     if rendered_root.exists():
@@ -459,6 +647,8 @@ def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = Non
         except Exception:
             summary = {}
         summary["synonymous_lints_manifest"] = str(run_dir / "synonymous_lints_manifest.json")
+        summary["shipping_lints_manifest"] = str(run_dir / "shipping_lints_manifest.json")
+        summary["shipping_lints_manifest_count"] = len(ship_rows)
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -496,6 +686,183 @@ def _judge(rule: dict, tree, precondition, code_semantics: str, k: int) -> dict:
     )
 
 
+def _full_rule_context(rule: dict) -> str:
+    """Original-side text for the strict shipping synonymy judge.
+
+    The row text is the verbatim extracted normative row, but many rows are
+    terse table cells.  Include all spec-owned context currently available to
+    the experiment so the judge compares the final lint against the rule in its
+    section/profile setting, not against an isolated keyword cell.
+
+    Do not include extracted IR subject/predicate/constraint metadata here.
+    Strict synonymy is code-semantics-vs-original-text/context; IR fields are
+    an intermediate representation and can be wrong or lossy. Feeding them to
+    the judge lets an extraction artifact override the source text.
+    """
+    ir = rule.get("ir") or {}
+    pieces = [
+        f"Source: {rule.get('source') or ''}",
+        f"Section: {rule.get('section') or ''}",
+        f"Section/title context: {rule.get('title') or ''}",
+        f"Original extracted rule text: {rule.get('text') or ''}",
+    ]
+    if rule.get("profile_scope"):
+        pieces.append(f"Profile/table context: {rule.get('profile_scope')}")
+    if rule.get("nearby_section_rows"):
+        pieces.append(f"Nearby rows from the same source section/table:\n{rule.get('nearby_section_rows')}")
+    if rule.get("context"):
+        pieces.append(f"Surrounding source context: {rule.get('context')}")
+    if ir.get("effective_date"):
+        pieces.append(f"Rule effective date: {ir.get('effective_date')}")
+    return "\n".join(p for p in pieces if p and not p.endswith(": "))
+
+
+def _severity_for_rule(rule: dict) -> str:
+    return det_codegen.severity_from_obligation(
+        rule.get("obligation") or (rule.get("ir") or {}).get("obligation")
+    )
+
+
+def _shipping_code_semantics(rule: dict, tree=None, precondition=None,
+                             pass_condition_text: str | None = None) -> str:
+    """Mechanical σ(final in-tree zlint lint), including CheckApplies."""
+    return intree_emitter.intree_semantics_summary(
+        str(rule.get("section") or ""),
+        rule.get("title") or "",
+        tree,
+        precondition=precondition,
+        severity=_severity_for_rule(rule),
+        ir=rule.get("ir") or {},
+        pass_condition_text=pass_condition_text,
+    )
+
+
+def _judge_shipping(rule: dict, tree, precondition, k: int,
+                    inner_workers: int = 1,
+                    pass_condition_text: str | None = None) -> tuple[str, dict]:
+    """Strict ship gate: final zlint semantics vs full available source context."""
+    ship_sem = _shipping_code_semantics(
+        rule,
+        tree,
+        precondition,
+        pass_condition_text=pass_condition_text,
+    )
+    res = synonym_judge.judge_vote(
+        _full_rule_context(rule),
+        ship_sem,
+        k=k,
+        profile_scope=None,
+        inner_workers=inner_workers,
+    )
+    res["path"] = "shipping_judge"
+    res.setdefault("judge_raw", res.get("sample_why", ""))
+    return ship_sem, res
+
+
+def _cached_node_to_parse_json(obj, *, role: str = "predicate"):
+    """Convert legacy ledger dataclass JSON into the DSL parser's args form."""
+    if obj is None:
+        return None
+    if not isinstance(obj, dict):
+        return obj
+    op = obj.get("op")
+    if not isinstance(op, str):
+        # Legacy ledgers sometimes stored dataclass fields without the class/op
+        # name for nested nodes. Infer only unambiguous shapes; ambiguous
+        # predicate nodes intentionally remain unparsed so we can fall back to
+        # cached code_semantics rather than inventing a different predicate.
+        if "parts" in obj:
+            return {
+                "op": "And",
+                "args": [_cached_node_to_parse_json(arg, role=role)
+                         for arg in (obj.get("parts") or [])],
+            }
+        if "inner" in obj:
+            return {
+                "op": "Not",
+                "args": [_cached_node_to_parse_json(obj.get("inner"), role=role)],
+            }
+        if "holder" in obj:
+            return {"op": "DNEmpty", "args": [obj.get("holder")]}
+        if "algorithm" in obj:
+            return {"op": "PublicKeyAlgorithmIs", "args": [obj.get("algorithm")]}
+        if "field" in obj and "value" in obj:
+            return {"op": "FieldEq", "args": [obj.get("field"), obj.get("value")]}
+        if "field" in obj and "values" in obj:
+            return {"op": "FieldInSet", "args": [obj.get("field"), obj.get("values")]}
+        if "field" in obj and "oid" in obj:
+            field = str(obj.get("field") or "")
+            op_name = "OidListContains" if field == "PolicyIdentifiers" else "OidEq"
+            return {"op": op_name, "args": [field, obj.get("oid")]}
+        if role == "condition" and "field" in obj:
+            return {"op": "FieldNonEmpty", "args": [obj.get("field")]}
+        if "bit" in obj:
+            return {"op": "KeyUsageHas", "args": [obj.get("bit")]}
+        if role == "condition" and "oid" in obj:
+            return {"op": "ExtPresent", "args": [obj.get("oid")]}
+        return obj
+    if "args" in obj:
+        return {
+            "op": op,
+            "args": [_cached_node_to_parse_json(arg, role=role)
+                     for arg in obj.get("args", [])],
+        }
+    if op == "Not":
+        return {
+            "op": "Not",
+            "args": [_cached_node_to_parse_json(obj.get("inner"), role=role)],
+        }
+    if op == "When":
+        return {
+            "op": "When",
+            "args": [
+                _cached_node_to_parse_json(obj.get("cond"), role="condition"),
+                _cached_node_to_parse_json(obj.get("main"), role="predicate"),
+            ],
+        }
+    if op in ("And", "Or"):
+        return {
+            "op": op,
+            "args": [_cached_node_to_parse_json(arg, role=role)
+                     for arg in (obj.get("parts") or [])],
+        }
+    cls = dsl.ATOM_CLASSES.get(op)
+    if cls is None:
+        raise dsl.DSLError(f"unknown cached DSL op {op!r}")
+    args = []
+    for field in dataclasses.fields(cls):
+        if field.name in obj:
+            args.append(_cached_node_to_parse_json(obj[field.name], role=role))
+    return {"op": op, "args": args}
+
+
+def _parse_cached_node(obj):
+    if obj is None:
+        return None
+    return dsl.parse(_cached_node_to_parse_json(obj))
+
+
+def _parse_cached_applicability_condition(obj):
+    """Best-effort parse of a legacy top-level When condition only.
+
+    Some old ledger rows cannot safely reconstruct the full predicate because
+    nested main nodes lost their op names.  For strict shipping rejudge we can
+    still recover the applicability part and combine it with the cached
+    code_semantics text, avoiding both data loss and predicate invention.
+    """
+    if not isinstance(obj, dict):
+        return None
+    if obj.get("op") != "When":
+        return None
+    cond = obj.get("cond")
+    if cond is None:
+        args = obj.get("args") if isinstance(obj.get("args"), list) else []
+        cond = args[0] if args else None
+    if cond is None:
+        return None
+    return dsl.parse(_cached_node_to_parse_json(cond, role="condition"))
+
+
 def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
                  allow_llm: bool, skip_synonymy: bool) -> dict:
     rid = int(rule["id"])
@@ -507,6 +874,7 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
         "section": rule.get("section"),
         "title": rule.get("title"),
         "text": rule.get("text"),
+        "context": rule.get("context"),
         "profile_scope": rule.get("profile_scope"),
         "ir": rule.get("ir"),
     }
@@ -522,8 +890,8 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
         if ok:
             tree = gen["tree"]
             precondition = gen.get("precondition")
-            rec["tree"] = tree
-            rec["precondition"] = precondition
+            rec["tree"] = dsl.compound_to_dict(tree)
+            rec["precondition"] = dsl.compound_to_dict(precondition) if precondition else None
             rec["code_semantics"] = obligation_aware_summary(
                 tree,
                 precondition,
@@ -549,6 +917,10 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
                         rendered["output_path"] = output_path
                         rendered.pop("file_content", None)
                 rec["rendered_lint"] = rendered
+                if rendered and not rendered.get("render_error") and not skip_synonymy:
+                    ship_sem, ship_syn = _judge_shipping(rule, tree, precondition, k)
+                    rec["ship_code_semantics"] = ship_sem
+                    rec["ship_synonymy"] = ship_syn
         rec["complete"] = True
     except Exception as e:
         rec["generation_success"] = False
@@ -619,6 +991,112 @@ def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# --rejudge-shipping : final emitted zlint semantics vs original rule context
+# ---------------------------------------------------------------------------
+def rejudge_shipping(domain: list[dict], run_dir: Path, k: int,
+                     only_missing: bool, inner_workers: int) -> dict:
+    ledger = run_dir / "codegen_synonymy.jsonl"
+    summary_path = run_dir / "codegen_synonymy_summary.json"
+    rendered_root = run_dir / "synonymous_lints"
+    if not ledger.exists():
+        raise SystemExit(f"ledger not found: {ledger}")
+    domain_by_id = {int(r["id"]): r for r in domain}
+    records = [json.loads(l) for l in ledger.read_text(encoding="utf-8").splitlines() if l.strip()]
+    n_rejudged = 0
+    n_skipped = 0
+    for rec in records:
+        rid = int(rec.get("rule_id") or 0)
+        if not rid or not rec.get("generation_success"):
+            n_skipped += 1
+            continue
+        if rec.get("synonymy", {}).get("verdict") != "EXPRESSES":
+            n_skipped += 1
+            continue
+        cur = rec.get("ship_synonymy", {}).get("verdict")
+        if only_missing and cur in _DECIDED_SYNONYMY:
+            n_skipped += 1
+            continue
+        try:
+            parse_error = None
+            try:
+                tree = _parse_cached_node(rec.get("tree"))
+                precondition = _parse_cached_node(rec.get("precondition"))
+            except Exception as e:
+                tree = None
+                try:
+                    precondition = _parse_cached_node(rec.get("precondition"))
+                except Exception:
+                    precondition = None
+                if precondition is None:
+                    try:
+                        precondition = _parse_cached_applicability_condition(rec.get("tree"))
+                    except Exception:
+                        precondition = None
+                parse_error = str(e)[:1000]
+            pass_condition_text = rec.get("code_semantics") if parse_error else None
+            rule = {**rec, **domain_by_id.get(rid, {})}
+            rule["id"] = rid
+            if not rule.get("obligation"):
+                rule["obligation"] = (rule.get("ir") or {}).get("obligation") or ""
+
+            rendered = rec.get("rendered_lint") or {}
+            output_path = rendered.get("output_path")
+            rendered_exists = bool(output_path and Path(output_path).exists())
+            if (not rendered_exists or rendered.get("render_error")) and tree is not None:
+                rendered = _render_synonymous_lint(rule, tree, precondition) or {}
+                output_path = _write_rendered(rendered, rendered_root)
+                if output_path:
+                    rendered = dict(rendered)
+                    rendered["output_path"] = output_path
+                    rendered.pop("file_content", None)
+                rec["rendered_lint"] = rendered
+                rendered_exists = bool(output_path and Path(output_path).exists())
+            if rendered.get("render_error") or not rendered_exists:
+                reason = rendered.get("render_error") or parse_error or "rendered lint output_path is missing"
+                rec["ship_synonymy"] = {
+                    "verdict": None,
+                    "path": "shipping_rejudge_error",
+                    "reason": reason,
+                }
+                n_skipped += 1
+                continue
+
+            ship_sem, ship_syn = _judge_shipping(
+                rule,
+                tree,
+                precondition,
+                k,
+                inner_workers=inner_workers,
+                pass_condition_text=pass_condition_text,
+            )
+            if parse_error:
+                ship_syn["cached_tree_parse_error"] = parse_error
+                ship_syn["execute_semantics_source"] = "cached_code_semantics"
+            rec["ship_code_semantics"] = ship_sem
+            rec["ship_synonymy"] = ship_syn
+            n_rejudged += 1
+            print(
+                f"  shipping R{rid}: {cur or 'UNJUDGED'} -> {ship_syn['verdict']} "
+                f"({ship_syn['n_expresses']}E/{ship_syn['n_dne']}D/"
+                f"{ship_syn.get('n_err', 0)}X)",
+                flush=True,
+            )
+        except Exception as e:
+            rec["ship_synonymy"] = {
+                "verdict": None,
+                "path": "shipping_rejudge_error",
+                "reason": str(e)[:1000],
+            }
+            n_skipped += 1
+            print(f"  shipping R{rid}: ERROR {str(e)[:200]}", flush=True)
+    rewrite_ledger(ledger, records)
+    summary = summarize(domain, ledger, summary_path)
+    export_synonymous_from_ledger(run_dir, domain)
+    print(f"[rejudge-shipping] re-judged {n_rejudged} rows; skipped {n_skipped}", flush=True)
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 def main() -> int:
@@ -643,6 +1121,12 @@ def main() -> int:
                     help="reuse cached generation; re-run only the judge with rule context")
     ap.add_argument("--rejudge-all", action="store_true",
                     help="with --rejudge, re-judge every profile-scoped row (not just DNE)")
+    ap.add_argument("--rejudge-shipping", action="store_true",
+                    help="reuse cached generation; judge final emitted zlint semantics against original context")
+    ap.add_argument("--rejudge-shipping-all", action="store_true",
+                    help="with --rejudge-shipping, re-judge rows even if shipping verdict is already cached")
+    ap.add_argument("--shipping-inner-workers", type=int, default=1,
+                    help="parallel votes per shipping judge row; default 1 avoids LLM gateway concurrency errors")
     ap.add_argument("--summary-only", action="store_true")
     ap.add_argument("--compact-ledger", action="store_true",
                     help="rewrite ledger to latest rows for the current domain and prune stale rendered lints")
@@ -659,13 +1143,25 @@ def main() -> int:
 
     if args.overwrite:
         for path in (ledger, summary_path, run_dir / "synonymous_lints_manifest.json",
-                     run_dir / "synonymous_lints_manifest.jsonl"):
+                     run_dir / "synonymous_lints_manifest.jsonl",
+                     run_dir / "shipping_lints_manifest.json",
+                     run_dir / "shipping_lints_manifest.jsonl"):
             if path.exists():
                 path.unlink()
         if rendered_root.exists():
             shutil.rmtree(rendered_root)
 
-    domain = load_domain(standards, limit=args.limit)
+    try:
+        domain = load_domain(standards, limit=args.limit)
+    except Exception as e:
+        can_fallback = (
+            ledger.exists()
+            and (args.summary_only or args.rejudge or args.rejudge_shipping or args.compact_ledger)
+        )
+        if not can_fallback:
+            raise
+        print(f"[warn] DB domain load failed; using current ledger fallback: {e}", flush=True)
+        domain = domain_from_ledger(ledger, limit=args.limit)
 
     if args.compact_ledger:
         summary = compact_ledger(domain, run_dir)
@@ -680,6 +1176,17 @@ def main() -> int:
 
     if args.rejudge:
         summary = rejudge(domain, run_dir, k=args.k, only_dne=not args.rejudge_all)
+        print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
+        return 0
+
+    if args.rejudge_shipping:
+        summary = rejudge_shipping(
+            domain,
+            run_dir,
+            k=args.k,
+            only_missing=not args.rejudge_shipping_all,
+            inner_workers=max(1, args.shipping_inner_workers),
+        )
         print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
         return 0
 

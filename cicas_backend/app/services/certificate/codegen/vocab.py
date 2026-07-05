@@ -246,6 +246,7 @@ EKU_BITS: list[FieldDef] = [
     # These are RFC 5280 Extended Key Usage OIDs not in stdlib x509.ExtKeyUsage.
     # Renderer emits util.<Name> references (verified against zlint util whitelist).
     FieldDef("TechnicallyConstrainedCA", "util.TechnicallyConstrainedCAEKU", "asn1.ObjectIdentifier", "eku_oid"),
+    FieldDef("PreCertificateSigningCertificate", "util.PreCertificateSigningCertificateEKU", "asn1.ObjectIdentifier", "eku_oid"),
 ]
 
 # ---------------------------------------------------------------------
