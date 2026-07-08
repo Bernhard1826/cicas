@@ -5,9 +5,10 @@ samples or Tranco-derived TLS certificates. This directory is intentionally
 separate from `experiments/cert_detection/`, which is the SAIV gate over zlint
 testdata.
 
-These outputs are **not** paper figures of record. Use them for follow-up
-inspection only, and rerun after rebuilding zlint from the current
-`codegen_metrics/outputs/full_current_db/shipping_lints_manifest.json`.
+The retained `ct_recent` and `tranco_1m` outputs are used by Paper §8.4 as
+external-corpus evidence. Raw `cicasgen_` hits are still inspection candidates
+only; paper-facing issue counts come from `strict_reportable_findings.jsonl`
+after the no-upstream independent structural audit.
 
 The report answers: which findings came from CICAS-added zlint lints
 (`cicasgen_`), and which came from upstream zlint?
@@ -34,6 +35,9 @@ Key files:
 - `upstream_findings.jsonl` — upstream zlint findings kept separate.
 - `new_lint_by_lint.json` — per-`cicasgen_` lint rollup.
 - `detection_summary.json` — corpus-level counts.
+- `strict_reportable_findings.jsonl` — paper-facing strict confirmed findings.
+- `no_upstream_independent_audit*.json*` — independent audit ledger/summary for
+  CICAS findings on certificates with no upstream zlint finding.
 
 Input corpus convention: a flat directory of `*.pem` certificates. For CT or
 Tranco collection, keep acquisition metadata outside this directory or in a

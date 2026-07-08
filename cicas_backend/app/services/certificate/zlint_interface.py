@@ -57,7 +57,8 @@ class ZLintInterface:
         self.zlint_metadata_dict: Dict[str, ZLintMetadata] = {}
 
         # zlint 反向 IR（subject/obligation/predicate/constraint/applies_to/summary，
-        # 从 zlint 源码反抽取，results/lint_ir_summaries.json）。覆盖判别按 source 缩小
+        # 从 zlint 源码反抽取，coverage_analysis/inputs/lint_ir_summaries.json）。
+        # 覆盖判别按 source 缩小
         # 候选：RFC 规则↔RFC lint 按章节匹配；CABF-BR 规则↔全部 CABF-BR lint（章节会漂移）。
         # 不用 embedding —— 收窄到 zlint 单工具后按 source 结构分区即可。
         self.zlint_ir_rfc: List[Dict] = []
@@ -120,9 +121,10 @@ class ZLintInterface:
     def _load_zlint_irs(self):
         """加载 zlint 反向 IR（subject/obligation/predicate/constraint/applies_to/summary），
         按 source 分到 RFC / CABF-BR 两组，并预解析每条 lint 的 citation 章节号。"""
+        backend_root = Path(__file__).resolve().parents[3]
         candidates = [
-            Path(__file__).resolve().parents[2] / "experiments" / "results" / "lint_ir_summaries.json",
-            Path(__file__).resolve().parents[3] / "experiments" / "results" / "lint_ir_summaries.json",
+            backend_root / "experiments" / "coverage_analysis" / "inputs" / "lint_ir_summaries.json",
+            backend_root / "experiments" / "results" / "lint_ir_summaries.json",
         ]
         path = next((p for p in candidates if p.exists()), None)
         if not path:

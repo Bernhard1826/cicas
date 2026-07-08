@@ -1,4 +1,4 @@
-# Experiment: lintability external validation  →  Paper §8.4 (TABLE III)
+# Experiment: lintability external validation  ->  Paper §8.3 (TABLE III)
 
 **Question.** Do CICAS's lint-ability verdicts agree with an *independent* third-party
 gold standard — the zlint maintainers' public CABF BR mapping sheets — across two BR

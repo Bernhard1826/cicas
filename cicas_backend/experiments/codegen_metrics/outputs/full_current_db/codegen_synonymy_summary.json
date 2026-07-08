@@ -1,0 +1,98 @@
+{
+  "generated_at": "2026-07-08T05:32:01.853015+00:00",
+  "db_url": "postgresql://postgres:123456@localhost:15432/cicas",
+  "standards": [
+    "CABF-BR",
+    "RFC5280"
+  ],
+  "domain_definition": "standard_id IN selected AND lintable AND lint_coverage IS NOT NULL AND lint_covered=false",
+  "profile_scope": "Rule context derived from CABF §7.1.2.N profile or row section/table title",
+  "domain_total": 91,
+  "completed": 91,
+  "generation_success": 91,
+  "generation_rate": 1.0,
+  "generation_by_method": {
+    "deterministic": 87,
+    "llm": 4
+  },
+  "generation_failure_by_reason": {},
+  "final_shipping_strict_definition": "final emitted in-tree zlint lint semantics vs original rule text/context; row-fragment synonymy is diagnostic only",
+  "final_shipping_strict_judged": 91,
+  "final_shipping_strict_not_judged": 0,
+  "final_shipping_strict_expresses": 91,
+  "final_shipping_strict_does_not_express": 0,
+  "final_shipping_strict_uncertain": 0,
+  "final_shipping_strict_rate_over_generated": 1.0,
+  "final_shipping_strict_rate_over_domain": 1.0,
+  "diagnostic_row_level": {
+    "judged": 91,
+    "not_judged": 0,
+    "expresses": 88,
+    "does_not_express": 3,
+    "rate_over_generated": 0.967032967032967,
+    "end_to_end_rate_over_domain": 0.967032967032967
+  },
+  "diagnostic_row_level_by_method": {
+    "deterministic": {
+      "generated": 87,
+      "judged": 87,
+      "expresses": 84,
+      "rate_over_generated": 0.9655172413793104
+    },
+    "llm": {
+      "generated": 4,
+      "judged": 4,
+      "expresses": 4,
+      "rate_over_generated": 1.0
+    }
+  },
+  "code_eq_ir_certified": 37,
+  "rule_errors": 0,
+  "pending": 0,
+  "by_source": {
+    "CABF-BR": {
+      "domain_total": 64,
+      "completed": 64,
+      "generation_success": 64,
+      "generation_rate": 1.0,
+      "final_shipping_strict_judged": 64,
+      "final_shipping_strict_expresses": 64,
+      "final_shipping_strict_uncertain": 0,
+      "final_shipping_strict_rate_over_generated": 1.0,
+      "final_shipping_strict_rate_over_domain": 1.0,
+      "diagnostic_row_level": {
+        "judged": 64,
+        "not_judged": 0,
+        "expresses": 63,
+        "does_not_express": 1,
+        "rate_over_generated": 0.984375,
+        "end_to_end_rate_over_domain": 0.984375
+      },
+      "code_eq_ir_certified": 26
+    },
+    "RFC5280": {
+      "domain_total": 27,
+      "completed": 27,
+      "generation_success": 27,
+      "generation_rate": 1.0,
+      "final_shipping_strict_judged": 27,
+      "final_shipping_strict_expresses": 27,
+      "final_shipping_strict_uncertain": 0,
+      "final_shipping_strict_rate_over_generated": 1.0,
+      "final_shipping_strict_rate_over_domain": 1.0,
+      "diagnostic_row_level": {
+        "judged": 27,
+        "not_judged": 0,
+        "expresses": 25,
+        "does_not_express": 2,
+        "rate_over_generated": 0.9259259259259259,
+        "end_to_end_rate_over_domain": 0.9259259259259259
+      },
+      "code_eq_ir_certified": 11
+    }
+  },
+  "ledger": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/codegen_synonymy.jsonl",
+  "synonymous_lints_manifest": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/synonymous_lints_manifest.json",
+  "shipping_lints_manifest": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/shipping_lints_manifest.json",
+  "shipping_lints_manifest_count": 91
+}

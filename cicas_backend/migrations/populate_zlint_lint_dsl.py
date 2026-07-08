@@ -851,6 +851,8 @@ def populate(dry_run: bool = False, repopulate: bool = False):
 
     # Load lint_ir_summaries.json
     json_paths = [
+        _backend / "experiments" / "coverage_analysis" / "inputs" / "lint_ir_summaries.json",
+        _root / "cicas_backend" / "experiments" / "coverage_analysis" / "inputs" / "lint_ir_summaries.json",
         _backend / "experiments" / "results" / "lint_ir_summaries.json",
         _root / "experiments" / "results" / "lint_ir_summaries.json",
     ]

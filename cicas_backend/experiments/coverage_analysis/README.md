@@ -40,6 +40,8 @@ Locally generated `cicasgen_*` lints are excluded from the native zlint referenc
 ## Inputs (`inputs/`)
 - `lintable_rules.jsonl` — lint-able rules with their stored verdict (DB snapshot).
 - `zlint_lint_catalog.json` — zlint v3 lint counts by Source (reference row).
+- `lint_ir_summaries.json` — reverse-IR summaries of upstream zlint certificate
+  lints, used by the backend coverage judge and the `zlint_lint_dsl` migration.
 
 ## Outputs (`outputs/`)
 - `coverage_table.{json,md}` — Table 2.

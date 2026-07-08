@@ -80,7 +80,9 @@ from strict paper-facing claims.
 External CT/Tranco-style corpus scans are report-only:
 
 ```bash
-python cicas_backend/experiments/cert_detection/run.py --certs /path/to/flat-pem-corpus
+python cicas_backend/experiments/cert_detection/run.py \
+  --certs /path/to/flat-pem-corpus \
+  --independent-audit-scope no-upstream
 ```
 
 ## Outputs
