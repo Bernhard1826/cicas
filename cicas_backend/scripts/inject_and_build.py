@@ -23,6 +23,34 @@ ROW_FRAGMENT_MANIFEST_SRC = MANIFEST_DIR / "synonymous_lints_manifest.json"
 MANIFEST_DST = _ROOT / "cicas_backend" / "experiments" / "cert_detection" / "inputs" / "cicasgen_manifest.json"
 
 
+def _rule_text_by_id(path: Path) -> dict[int, str]:
+    out: dict[int, str] = {}
+    if not path.exists():
+        return out
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        rid = rec.get("rule_id")
+        text = (rec.get("text") or rec.get("rule_text") or "").strip()
+        if rid is not None and text:
+            out[int(rid)] = text
+    return out
+
+
+def _non_pass_status_from_go(path: Path) -> str:
+    if not path.exists():
+        return "lint.Error"
+    text = path.read_text(errors="replace")
+    for status in ("Fatal", "Error", "Warn", "Notice", "Info"):
+        if f"Status: lint.{status}" in text:
+            return f"lint.{status}"
+    return "lint.Error"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--emit", action="store_true", help="inject lint Go files into zlint tree")
@@ -56,19 +84,21 @@ def main():
         if args.manifest_source == "row-fragment":
             print("[warn] using row-fragment synonymy manifest; do not use this for certificate scans")
         manifest = json.loads(manifest_src.read_text())
+        fallback_text = _rule_text_by_id(manifest_src.parent / "codegen_synonymy.jsonl")
         # Transform into the format cert_detection expects
         for item in manifest:
             output_path = item.get("output_path", "")
             if not output_path:
                 continue
+            rid = int(item["rule_id"])
             zlint_entries.append({
                 "lint_name": item["lint_name"],
-                "rule_id": item["rule_id"],
+                "rule_id": rid,
                 "source": item["source"],
                 "section": item["section"],
-                "rule_text": "",  # will be filled from DB if needed
+                "rule_text": item.get("rule_text") or fallback_text.get(rid, ""),
                 "method": item["method"],
-                "severity": "lint.Error",
+                "severity": item.get("severity") or _non_pass_status_from_go(Path(output_path)),
                 "synonymy_verdict": item.get("shipping_synonymy_verdict")
                                     or item.get("row_synonymy_verdict")
                                     or "EXPRESSES",

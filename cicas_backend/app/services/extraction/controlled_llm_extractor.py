@@ -193,6 +193,8 @@ Before extracting any IR fields, you MUST classify the rule into one of these ca
    Examples:
    - "serialNumber MUST be byte-for-byte identical to the serialNumber of the Precertificate"
    - "the contents MUST match the issuer's certificate subject"
+   - "a field in this certificate MUST be the value placed in certificates issued
+      by the subject of this certificate"
    NOTE: a comparison BETWEEN TWO FIELDS OF THE SAME CERTIFICATE is still observable
    (e.g. "signatureAlgorithm MUST equal tbsCertificate.signature", "issuer MUST equal
    subject" for a self-signed cert) → ENCODING_CONSTRAINT, verifiability = "observable".
@@ -322,6 +324,14 @@ CRITICAL FIELD RULES:
        - version (a set):   "if the version is 2 or 3, ..."                     → type="version_is", values=["2","3"]  (X.509 version; a single value is fine too)
        - field equals one-of:"if the signing key is ECDSA / RSA, ..."           → type="field_equals", field="<field>", values=["<v1>","<v2>"]
        - address family:    "For IPv6 addresses, ..."                           → type="address_family", field="<ip-list field>", family="ipv6"  (also: ipv4)
+       - GeneralName allowed set:
+                             "if subject naming information is present only in subjectAltName
+                              as email address or URI"                           → type="general_name_allowed_set",
+                                                                                     ext="subjectAltName",
+                                                                                     values=["rfc822Name","uniformResourceIdentifier"]
+                             (use RFC 5280 GeneralName subtype names; only use this
+                              when the antecedent defines a closed set of allowed
+                              GeneralName CHOICE types in one extension)
        - conjunction / disjunction: "if A and B, ..." → type="all_of", conditions=[<guard A>,<guard B>]; "if A or B, ..." → type="any_of", conditions=[...]
          (each sub-condition is itself a structured guard of the kinds above; e.g. "if only basic fields are present" = all_of of three field_absent guards over extensions + the two uniqueIDs)
        - If the antecedent is real but NONE of the kinds above fit, emit prose only (type=null) — do NOT invent a structure.
@@ -1548,6 +1558,34 @@ def _precondition_from_prose_field(precond, subject_raw):
     if not prose:
         return None
 
+    # GeneralName allowed-set antecedent ("subject naming information is present
+    # only in subjectAltName ... email address or URI"). This is a closed,
+    # certificate-observable guard over the GeneralName CHOICE tags in one
+    # extension; downstream maps it to raw-DER tag checks. GENERAL: values are
+    # RFC 5280 GeneralName subtype names, not rule ids.
+    if (
+        re.search(r"\b(subjectaltname|subject alternative name|san)\b", prose)
+        and re.search(r"\bonly\b", prose)
+    ):
+        values = []
+        if re.search(r"\b(email|e-?mail|rfc822)\b", prose):
+            values.append("rfc822Name")
+        if re.search(r"\b(uri|uniformresourceidentifier|uniform resource identifier)\b", prose):
+            values.append("uniformResourceIdentifier")
+        if re.search(r"\bdns(name)?\b", prose):
+            values.append("dNSName")
+        if re.search(r"\bip(address)?\b", prose):
+            values.append("iPAddress")
+        if values:
+            return {
+                "type": "general_name_allowed_set",
+                "ext": "subjectAltName",
+                "values": list(dict.fromkeys(values)),
+                "negate": False,
+                "description": precond.get("description") or "subjectAltName GeneralName allowed set",
+                "trigger": precond.get("trigger") or "subjectAltName GeneralName allowed set",
+            }
+
     # Extension-presence antecedent ("when extensions are used/present", "if extensions exist").
     # Maps to extension_present guard (any extension present → version must be v3).
     # Structuring the LLM's prose describing the standard X.509 rule, not per-rule matching.
@@ -2129,7 +2167,19 @@ class ControlledLLMExtractor:
             constraint_data = normalized.get("constraint", {})
             source_id = provenance.get("source_id", "") if provenance else ""
             section_id = provenance.get("section") if provenance else None
-            section_title = provenance.get("title") if provenance else None
+            section_title = (
+                provenance.get("title") or provenance.get("section_title")
+                if provenance else None
+            )
+            from app.services.extraction.lintability_guard import (
+                context_lintability_assertion_subject,
+                non_single_artifact_context_lintability_reason,
+            )
+            profile_non_lintable_reason = (
+                non_single_artifact_context_lintability_reason(
+                    section_title, original_text
+                )
+            )
 
             # 验证必填字段
             if not subject_raw or not predicate_str:
@@ -2416,12 +2466,18 @@ class ControlledLLMExtractor:
                 rule_category, assertion_subject, enforcement_phase,
                 predicate, normalized_subject, cleaned_text
             )
+            if self._has_cross_artifact_relationship(
+                cleaned_text,
+                getattr(constraint, "raw_text", "") if constraint is not None else "",
+                str(getattr(constraint, "value", "") if constraint is not None else ""),
+            ):
+                assertion_subject = AssertionSubject.CROSS_ARTIFACT
 
             # Sound forward guard for the single-artifact lintability axes: rescue
             # constraints the LLM mislabeled as not_a_constraint / Validation /
             # clarification despite being complete, normative, single-artifact
             # observable field constraints (audited false negatives).
-            rule_category, enforcement_phase = self._enforce_single_artifact_lintability(
+            rule_category, assertion_subject, enforcement_phase = self._enforce_single_artifact_lintability(
                 rule_category, assertion_subject, enforcement_phase,
                 predicate, normalized_subject, obligation, cleaned_text,
                 getattr(constraint, "raw_text", "") if constraint is not None else "",
@@ -2503,8 +2559,13 @@ class ControlledLLMExtractor:
             # (profile applicability). Both structure the LLM's own output into the
             # schema the reducer guards on; neither narrows below the rule's scope.
             _precond = normalized.get("precondition")
-            if not (isinstance(_precond, dict) and _precond.get("type")):
-                _pf = _precondition_from_prose_field(_precond, subject)
+            _pf = _precondition_from_prose_field(_precond, subject)
+            if isinstance(_pf, dict) and _pf.get("type") == "general_name_allowed_set":
+                # This is strictly more specific than weak field_present/email
+                # guards and preserves the source antecedent as a closed
+                # GeneralName CHOICE set.
+                _precond = _pf
+            elif not (isinstance(_precond, dict) and _precond.get("type")):
                 if _pf:
                     _precond = _pf
                 else:
@@ -2570,6 +2631,18 @@ class ControlledLLMExtractor:
                 scope_block_id=scope_block_id,
                 section_scope=section_scope,
             )
+            if profile_non_lintable_reason:
+                context_subject = context_lintability_assertion_subject(
+                    profile_non_lintable_reason
+                )
+                try:
+                    ir.assertion_subject = AssertionSubject(context_subject)
+                except ValueError:
+                    ir.assertion_subject = AssertionSubject.CROSS_ARTIFACT
+                ir.verifiability = Verifiability.CONTEXT_DEPENDENT
+                ir.rule_category = RuleCategory.ENCODING_CONSTRAINT
+                ir.lintable = False
+                ir.non_lintable_reason = profile_non_lintable_reason
 
             return ir
 
@@ -2804,6 +2877,18 @@ class ControlledLLMExtractor:
             r'replace\s+all',
             r'normalize\s+all',
         ]
+
+        if ControlledLLMExtractor._has_cross_artifact_relationship(text_lower):
+            if as_str.lower() != 'crossartifact':
+                app_logger.debug(
+                    "[_enforce_rule_category] cross-artifact certificate relationship "
+                    "→ assertion_subject = CrossArtifact"
+                )
+                assertion_subject = AssertionSubject.CROSS_ARTIFACT
+                as_str = 'CrossArtifact'
+            # CrossArtifact is decisive for C2.  Do not let certificate-field
+            # consistency repairs below rewrite it back to Certificate.
+            return rule_category, assertion_subject
 
         # RC-1: algorithm_ref + encoding predicate + observable result → encoding_constraint
         if rc_lower == 'algorithm_ref':
@@ -3079,6 +3164,13 @@ class ControlledLLMExtractor:
 
         return rule_category, assertion_subject
 
+    @staticmethod
+    def _has_cross_artifact_relationship(*texts: str) -> bool:
+        from app.services.extraction.lintability_guard import (
+            has_cross_artifact_relationship,
+        )
+        return has_cross_artifact_relationship(*texts)
+
     # Predicates whose use on a certificate/CRL field is DECIDABLE from that one
     # artifact's own bytes — see lintability_guard.is_single_artifact_observable,
     # the SHARED decision predicate this guard and the structural analyzer both call.
@@ -3095,7 +3187,7 @@ class ControlledLLMExtractor:
         and table-fragment rejection that keep CABF operational rules out) lives in
         the shared `lintability_guard.is_single_artifact_observable` so this guard and
         the structural-analyzer rescue can never diverge. Returns
-        (rule_category, enforcement_phase).
+        (rule_category, assertion_subject, enforcement_phase).
         """
         from app.services.extraction.lintability_guard import is_single_artifact_observable
 
@@ -3104,7 +3196,7 @@ class ControlledLLMExtractor:
 
         if not is_single_artifact_observable(predicate, assertion_subject,
                                              subject_path, obligation, rule_text):
-            return rule_category, enforcement_phase
+            return rule_category, assertion_subject, enforcement_phase
 
         def _mk(enum_cls, val):
             try:
@@ -3112,15 +3204,17 @@ class ControlledLLMExtractor:
             except (ValueError, KeyError):
                 return val
 
+        if _v(assertion_subject).lower() == 'ca':
+            assertion_subject = AssertionSubject.CERTIFICATE
         if _v(enforcement_phase).lower() in ('validation', 'processing'):
             enforcement_phase = _mk(EnforcementPhase, 'Encoding')
         if _v(rule_category).lower() in ('clarification', 'definition'):
             rule_category = _mk(RuleCategory, 'encoding_constraint')
         app_logger.debug(
             f"[_enforce_single_artifact] rescued: pred={_v(predicate)} subj={_v(subject_path)} "
-            f"phase={_v(enforcement_phase)} cat={_v(rule_category)}"
+            f"actor={_v(assertion_subject)} phase={_v(enforcement_phase)} cat={_v(rule_category)}"
         )
-        return rule_category, enforcement_phase
+        return rule_category, assertion_subject, enforcement_phase
 
     def extract_batch(
         self,

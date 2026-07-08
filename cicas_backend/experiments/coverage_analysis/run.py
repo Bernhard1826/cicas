@@ -34,9 +34,9 @@ Run:
   python3 cicas_backend/experiments/coverage_analysis/run.py --snapshot # also refresh inputs/
 
 Expected (current refreshed snapshot):
-  lint-able 317 = CABF 224 + RFC5280  93
-  full      154 = CABF 102 + RFC5280  52
-  uncovered 163 = CABF 122 + RFC5280  41   (= judged code-generation domain phi_G)
+  lint-able 249 = CABF 170 + RFC5280  79
+  full      158 = CABF 106 + RFC5280  52
+  uncovered  91 = CABF  64 + RFC5280  27   (= judged code-generation domain phi_G)
   pending     0 = CABF   0 + RFC5280   0
   native zlint cert reference: CABF 164 lints, RFC5280 115 lints
 

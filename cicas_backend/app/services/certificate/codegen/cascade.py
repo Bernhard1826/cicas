@@ -148,6 +148,19 @@ def generate_tree(rule: dict, *, workspace=None, allow_llm: bool = True) -> dict
     """
     rid = int(rule.get("id") or 0)
     ir = _neutralize_unmappable_profile_scope(rule.get("ir") or {})
+    obligation = (
+        rule.get("obligation")
+        or (ir.get("obligation") if isinstance(ir, dict) else "")
+        or ""
+    )
+    if str(obligation).strip().upper().replace("_", " ") in {"MAY", "OPTIONAL"}:
+        return {
+            "tree": None,
+            "precondition": None,
+            "method": None,
+            "reason": "non_code_obligation: MAY/OPTIONAL is permissive and has no violation lint",
+            "llm_raw": "",
+        }
     if ir is not (rule.get("ir") or {}):
         rule = {**rule, "ir": ir}  # so the LLM prompt sees the neutralized IR too
     section = rule.get("section")

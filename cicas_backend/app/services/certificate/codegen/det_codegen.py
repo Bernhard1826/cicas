@@ -37,13 +37,17 @@ _OBLIG_SEVERITY = {
     "MUST": "lint.Error", "MUST NOT": "lint.Error", "REQUIRED": "lint.Error",
     "SHALL": "lint.Error", "SHALL NOT": "lint.Error", "PROHIBITED": "lint.Error",
     "SHOULD": "lint.Warn", "SHOULD NOT": "lint.Warn", "RECOMMENDED": "lint.Warn",
-    "MAY": "lint.Notice", "OPTIONAL": "lint.Notice",
+    "NOT RECOMMENDED": "lint.Warn", "NOT_RECOMMENDED": "lint.Warn",
 }
+_NON_CODE_OBLIGATIONS = {"MAY", "OPTIONAL"}
 
 
 def severity_from_obligation(obligation: Optional[str]) -> str:
     """Map an IR obligation to a zlint severity (defaults to Error)."""
-    return _OBLIG_SEVERITY.get((obligation or "").strip().upper(), "lint.Error")
+    key = (obligation or "").strip().upper().replace("_", " ")
+    if key in _NON_CODE_OBLIGATIONS:
+        raise ValueError(f"{key} is permissive/optional and does not define a violation lint")
+    return _OBLIG_SEVERITY.get(key, "lint.Error")
 
 
 # --- anaphora criticality rescue (ported from det_coverage.py; sound-by-standard) ---
@@ -204,6 +208,7 @@ def deterministic_tree(rule_id: int, ir: dict, section: Optional[str] = None) ->
     if not isinstance(ir, dict):
         return None
     ir = _anaphora_enrich(ir, section)
+    ir = _cabf_profile_precondition_enrich(ir, section)
     try:
         atom = ir_to_dsl(rule_id, ir)
     except Exception:
@@ -244,8 +249,16 @@ def deterministic_tree(rule_id: int, ir: dict, section: Optional[str] = None) ->
     if cond_atom is not None:
         try:
             from app.services.certificate.dsl import dsl as _app_dsl
-            main = atom.main if type(atom).__name__ == "When" and hasattr(atom, "main") else atom
-            atom = _app_dsl.When(cond=cond_atom, main=main)
+            if type(atom).__name__ == "When" and hasattr(atom, "main"):
+                if getattr(atom, "cond", None) == cond_atom:
+                    atom = _app_dsl.When(cond=atom.cond, main=atom.main)
+                else:
+                    atom = _app_dsl.When(
+                        cond=_app_dsl.And(parts=(atom.cond, cond_atom)),
+                        main=atom.main,
+                    )
+            else:
+                atom = _app_dsl.When(cond=cond_atom, main=atom)
         except Exception:
             pass  # fall through without wrapping
     try:
@@ -304,6 +317,37 @@ def _replacement_drops_existing_guard(current: object, replacement: object) -> b
     if type(current.main).__name__ == type(replacement).__name__ == "SigAlgMatchesTBSSignature":
         return True
     return type(replacement).__name__ == "BasicConstraintsCAFalseEncodedAsEmptySequence"
+
+
+def _cabf_profile_precondition_enrich(ir: dict, section: Optional[str]) -> dict:
+    """Correct extractor drift where a CABF table row inherits the wrong profile.
+
+    CABF BR §7.1.2.N is the authoritative certificate-profile partition. If a
+    row is physically under a non-subscriber §7.1.2 profile but the extracted IR
+    carries a subscriber precondition copied from another table, that guard is
+    contradictory. Drop only that contradictory guard; the final in-tree scope is
+    still applied from the section by intree_emitter.
+    """
+    if not isinstance(ir, dict) or not section:
+        return ir
+    parts = str(section).split(".")
+    if len(parts) < 4 or parts[:3] != ["7", "1", "2"]:
+        return ir
+    try:
+        profile = int(parts[3])
+    except ValueError:
+        return ir
+    if profile == 7:
+        return ir
+    pre = ir.get("precondition")
+    if not isinstance(pre, dict):
+        return ir
+    text = " ".join(str(pre.get(k) or "") for k in ("kind", "type", "value", "description", "trigger")).lower()
+    if "subscriber" not in text:
+        return ir
+    new = dict(ir)
+    new.pop("precondition", None)
+    return new
 
 
 # --- condition extraction ---
@@ -479,18 +523,27 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
     RDN/AVA structure, etc.). They are intentionally not rule-id switches.
     """
     for fn in (
+        _extract_extension_criticality_atom,
         _extract_subject_email_rfc822name_atom,
         _extract_unique_identifier_version_gate_atom,
+        _extract_reserved_policy_count_atom,
+        _extract_single_anypolicy_policyinformation_atom,
         _extract_directorystring_atom,
         _extract_utctime_zulu_atom,
         _extract_basic_constraints_default_false_atom,
+        _extract_basic_constraints_keycertsign_presence_atom,
+        _extract_basic_constraints_pathlen_absent_atom,
+        _extract_asn1_module_version_comment_atom,
         _extract_serial_der_sign_bit_atom,
         _extract_name_constraints_fallback_marker_atom,
+        _extract_common_name_ipv4_text_atom,
         _extract_ip_version_octet_atom,
         _extract_ip_reverse_zone_suffix_atom,
+        _extract_dns_no_trailing_root_dot_atom,
         _extract_dns_fqdn_wildcard_portion_atom,
         _extract_aia_access_description_count_atom,
         _extract_aia_unique_location_per_method_atom,
+        _extract_aia_access_location_type_atom,
         _extract_aia_permitted_access_methods_atom,
         _extract_unrestricted_anyeku_only_atom,
         _extract_extkeyusage_only_allowed_usages_atom,
@@ -500,13 +553,17 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
         _extract_permitted_subtrees_nonempty_atom,
         _extract_common_name_domain_label_atom,
         _extract_common_name_dnsname_copy_atom,
+        _extract_domaincomponent_domain_name_labels_atom,
         _extract_tor_v3_onion_dns_atom,
+        _extract_ecdsa_namedcurve_algid_atom,
         _extract_spki_algid_exact_hex_atom,
+        _extract_rsa_spki_algid_atom,
         _extract_signature_algid_exact_hex_atom,
         _extract_sigalg_match_atom,
         _extract_rsa_public_key_not_pss_atom,
         _extract_name_constraints_directoryname_not_recommended_atom,
         _extract_keyusage_not_recommended_bit_atom,
+        _extract_subject_attr_must_not_present_atom,
         _extract_subject_attr_not_recommended_atom,
         _extract_keyusage_bit_atom,
         _extract_reserved_policy_identifier_atom,
@@ -514,11 +571,45 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
         _extract_policy_qualifier_mixed_atom,
         _extract_policy_qualifiers_not_recommended_atom,
         _extract_policy_qualifier_allowlist_atom,
+        _extract_excluded_or_permitted_dns_ip_nameconstraints_atom,
         _extract_rdn_structure_atom,
     ):
         atom = fn(ir)
         if atom is not None:
             return atom
+    return None
+
+
+def _extract_extension_criticality_atom(ir: dict) -> Optional[object]:
+    text = _full_ir_text(ir)
+    norm = re.sub(r"[^a-z0-9]", "", text.lower())
+    pred = str(ir.get("predicate") or "").lower()
+    if "critical" not in norm:
+        return None
+    oid = None
+    if "subjectaltname" in norm:
+        oid = "SubjectAlternateNameOID"
+    elif "authoritykeyidentifier" in norm:
+        oid = "AuthorityKeyIdOID"
+    elif "subjectkeyidentifier" in norm:
+        oid = "SubjectKeyIdOID"
+    elif "certificatepolicies" in norm:
+        oid = "CertPolicyOID"
+    elif "basicconstraints" in norm:
+        oid = "BasicConstOID"
+    elif "nameconstraints" in norm:
+        oid = "NameConstOID"
+    elif "keyusage" in norm:
+        oid = "KeyUsageOID"
+    elif "extendedkeyusage" in norm:
+        oid = "ExtKeyUsageOID"
+    if not oid:
+        return None
+    from app.services.certificate.dsl import dsl as _app_dsl
+    if pred in {"must_not_be_critical", "should_not_be_critical"} or "mustnotbecritical" in norm:
+        return _app_dsl.ExtNotCritical(oid)
+    if pred in {"must_be_critical", "should_be_critical"} or "mustbecritical" in norm:
+        return _app_dsl.ExtCritical(oid)
     return None
 
 
@@ -537,6 +628,45 @@ def _full_ir_text(ir: dict) -> str:
         str(c.get("value") or ""),
     ]
     return " ".join(p for p in parts if p).strip()
+
+
+def _constraint_hex_literals(ir: dict, min_len: int = 12) -> list[str]:
+    """Extract DER-like hex literals from prose plus structured constraints."""
+    if not isinstance(ir, dict):
+        return []
+    c = ir.get("constraint") or {}
+    structured_parts: list[str] = []
+    for key in ("allowed_values", "values"):
+        vals = c.get(key)
+        if isinstance(vals, (list, tuple)):
+            structured_parts.extend(str(v) for v in vals)
+    structured = _extract_hex_literals_from_parts(structured_parts, min_len)
+    if structured:
+        return structured
+
+    parts = [str(c.get("raw_text") or "")]
+    if c.get("value") is not None:
+        parts.append(str(c.get("value")))
+    from_constraint = _extract_hex_literals_from_parts(parts, min_len)
+    if from_constraint:
+        return from_constraint
+    return _extract_hex_literals_from_parts([_full_ir_text(ir)], min_len)
+
+
+def _extract_hex_literals_from_parts(parts: list[str], min_len: int) -> list[str]:
+    out: list[str] = []
+    for part in parts:
+        masked = part or ""
+        for m in re.finditer(r"hexdump\s+((?:[0-9a-fA-F]{%d,}\s*){2,})" % min_len, masked, flags=re.I):
+            lit = re.sub(r"\s+", "", m.group(1)).lower()
+            if len(lit) % 2 == 0 and lit not in out:
+                out.append(lit)
+            masked = masked[:m.start()] + (" " * (m.end() - m.start())) + masked[m.end():]
+        for m in re.finditer(r"`?([0-9a-fA-F]{%d,})`?" % min_len, masked):
+            lit = m.group(1).lower()
+            if len(lit) % 2 == 0 and lit not in out:
+                out.append(lit)
+    return out
 
 
 def _compact_text(s: str) -> str:
@@ -575,6 +705,51 @@ def _extract_unique_identifier_version_gate_atom(ir: dict) -> Optional[object]:
         _app_dsl.FieldNonEmpty("SubjectUniqueId"),
     ))
     return _app_dsl.When(cond=present, main=_app_dsl.FieldInSet("Version", (2, 3)))
+
+
+def _extract_reserved_policy_count_atom(ir: dict) -> Optional[object]:
+    """CABF BR Reserved Certificate Policy Identifier cardinality.
+
+    In CABF BR certificateProfiles, "Reserved Certificate Policy Identifier"
+    refers to the BR server-certificate reserved OID set only: DV, OV, IV, EV.
+    It does not include S/MIME BR reserved policy OIDs. This reducer is driven
+    by the standard phrase plus an exact cardinality clause, not by rule id.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    if "reservedcertificatepolicyidentifier" not in key:
+        return None
+    if "exactlyone" not in key and not ("single" in key and "policyidentifier" in key):
+        return None
+    if "certificatepolicies" not in key and "certificatepolicies" not in str(ir.get("subject") or "").lower():
+        return None
+    return tv_dsl.OidListCountInSet(
+        "PolicyIdentifiers",
+        (
+            "OidPolicyDomainValidated",
+            "OidPolicyOrganizationValidated",
+            "OidPolicyIndividualValidated",
+            "OidPolicyExtendedValidation",
+        ),
+        1,
+        1,
+    )
+
+
+def _extract_single_anypolicy_policyinformation_atom(ir: dict) -> Optional[object]:
+    """CertificatePolicies contains exactly one PolicyInformation: anyPolicy."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    if "certificatepolicies" not in key and "certificatepolicies" not in str(ir.get("subject") or "").lower():
+        return None
+    if "policyinformation" not in key or "anypolicy" not in key:
+        return None
+    if "single" not in key and "exactlyone" not in key and "onlyasingle" not in key:
+        return None
+    return tv_dsl.And(parts=(
+        tv_dsl.FieldCount("PolicyIdentifiers", 1, 1),
+        tv_dsl.OidListContains("PolicyIdentifiers", "AnyPolicyOID"),
+    ))
 
 
 def _extract_directorystring_atom(ir: dict) -> Optional[object]:
@@ -618,6 +793,67 @@ def _extract_basic_constraints_default_false_atom(ir: dict) -> Optional[object]:
     if ("cabooleantofalse" in key or "cabooleanisfalse" in key or "cabooleanfalse" in key) \
             and "extnvalueoctetstring" in key and "3000" in key:
         return tv_dsl.BasicConstraintsCAFalseEncodedAsEmptySequence()
+    return None
+
+
+def _extract_basic_constraints_keycertsign_presence_atom(ir: dict) -> Optional[object]:
+    """basicConstraints presence for keys used to validate cert signatures."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    if "basicconstraints" not in key:
+        return None
+    if "cacertificates" not in key:
+        return None
+    if "validat" not in key or "signature" not in key or "certificates" not in key:
+        return None
+    return tv_dsl.When(
+        cond=tv_dsl.And(parts=(tv_dsl.IsCA(), tv_dsl.KeyUsageHas("CertSign"))),
+        main=tv_dsl.ExtPresent("BasicConstraintsOID"),
+    )
+
+
+def _extract_basic_constraints_pathlen_absent_atom(ir: dict) -> Optional[object]:
+    """basicConstraints pathLenConstraint prohibition."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "pathlenconstraint" not in key and "pathlenconstraint" not in subj:
+        return None
+    pred = str(ir.get("predicate") or "").lower()
+    if pred not in {"must_not_be_present", "must_be_absent", "must_not_include"}:
+        if "mustnot" not in key or "present" not in key:
+            return None
+    return tv_dsl.Not(tv_dsl.PathLenConstraintPresent())
+
+
+def _extract_asn1_module_version_comment_atom(ir: dict) -> Optional[object]:
+    """RFC 5280 Appendix A version-gating comments in the ASN.1 module.
+
+    These comments are attached to optional fields in the module:
+    issuerUniqueID/subjectUniqueID require v2 or v3; extensions require v3.
+    The extracted row text may contain only the trailing comment, so recover
+    the closed ASN.1 field antecedent from the standard comment form.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    section_hint = _compact_text(" ".join(str(ir.get(k) or "") for k in (
+        "citation", "section_scope", "_rule_title", "title",
+    )))
+    if "explicitlytaggedmodule" not in section_hint and not section_hint.endswith("a1"):
+        return None
+    if "ifpresentversionmustbev2orv3" in key:
+        return tv_dsl.When(
+            cond=tv_dsl.Or(parts=(
+                tv_dsl.FieldNonEmpty("IssuerUniqueId"),
+                tv_dsl.FieldNonEmpty("SubjectUniqueId"),
+            )),
+            main=tv_dsl.FieldInSet("Version", (2, 3)),
+        )
+    if "ifpresentversionmustbev3" in key:
+        return tv_dsl.When(
+            cond=tv_dsl.HasAnyExtension(),
+            main=tv_dsl.FieldEq("Version", 3),
+        )
     return None
 
 
@@ -693,6 +929,28 @@ def _extract_ip_version_octet_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_common_name_ipv4_text_atom(ir: dict) -> Optional[object]:
+    """CABF commonName IPv4 text syntax.
+
+    The §7.1.4.3 Common Name Attribute section says "the value" because the
+    section subject is commonName.  Recover that section-owned subject before
+    the generic SAN iPAddress octet reducer sees "IPv4Address" and maps the row
+    to the wrong field.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    if "ipv4address" not in key:
+        return None
+    if "encodedasanipv4address" not in key and "mustbeencodedasanipv4address" not in key:
+        return None
+    context = _compact_text(" ".join(str(ir.get(k) or "") for k in (
+        "subject", "_rule_title", "title", "citation", "section_scope",
+    )))
+    if "commonname" not in context and "7143" not in context:
+        return None
+    return tv_dsl.StringFieldIfIPv4AddressUsesDottedDecimal("Subject.CommonName")
+
+
 def _extract_ip_reverse_zone_suffix_atom(ir: dict) -> Optional[object]:
     """CABF issuance ban for Domain Names ending in IP reverse-zone suffixes."""
     raw = _full_ir_text(ir)
@@ -732,6 +990,26 @@ def _extract_dns_fqdn_wildcard_portion_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_dns_no_trailing_root_dot_atom(ir: dict) -> Optional[object]:
+    """CABF dNSName root-zone zero-length label exclusion.
+
+    The rule says the DNS root label must not be encoded in the certificate
+    name, e.g. "example.com" rather than "example.com.".  This is a field
+    syntax constraint on SAN dNSName values, independent of the example domain.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "dnsname" not in subj:
+        return None
+    if (
+        ("rootzone" in key or "zero-lengthdomainlabel" in key or "zerolengthdomainlabel" in key)
+        and ("mustnotbeincluded" in key or "mustnotbeencoded" in key)
+    ):
+        return tv_dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex("Re_NoTrailingDot")
+    return None
+
+
 def _extract_aia_access_description_count_atom(ir: dict) -> Optional[object]:
     """AIA AuthorityInfoAccessSyntax AccessDescription cardinality."""
     raw = _full_ir_text(ir)
@@ -757,6 +1035,21 @@ def _extract_aia_unique_location_per_method_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_aia_access_location_type_atom(ir: dict) -> Optional[object]:
+    """AIA accessLocation GeneralName CHOICE type per accessMethod table."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "authorityinfoaccess" not in subj and "authorityinfoaccesssyntax" not in key:
+        return None
+    if "accesslocation" not in key or "generalnametype" not in key:
+        return None
+    return tv_dsl.And(parts=(
+        tv_dsl.AIAMethodLocationsTagInSet("AiaOID", "OidIdAdOcsp", (6,)),
+        tv_dsl.AIAMethodLocationsTagInSet("AiaOID", "OidIdAdCaIssuers", (6,)),
+    ))
+
+
 def _extract_aia_permitted_access_methods_atom(ir: dict) -> Optional[object]:
     """AIA AccessDescription accessMethod allow-list.
 
@@ -770,29 +1063,92 @@ def _extract_aia_permitted_access_methods_atom(ir: dict) -> Optional[object]:
     subj = str(ir.get("subject") or "").lower()
     if "authorityinfoaccess" not in subj and "accessdescription" not in key:
         return None
-    if "accessmethod" not in key or "permitted" not in key:
+    if "accessmethod" not in key:
         return None
-    return tv_dsl.Not(tv_dsl.AIAHasMethodOtherThan(
-        "AiaOID",
-        ("OidIdAdOcsp", "OidIdAdCaIssuers"),
-    ))
+    is_allowlist = (
+        "permitted" in key
+        or "anyothervalue" in key
+        or "nootheraccessmethod" in key
+        or "nootheraccessmethods" in key
+    )
+    if not is_allowlist:
+        return None
+    c = ir.get("constraint") or {}
+    raw_values = list(c.get("allowed_values") or c.get("values") or [])
+    if c.get("value") is not None:
+        raw_values.append(c.get("value"))
+    raw_values_text = " ".join(str(v) for v in raw_values)
+    value_key = _compact_text(raw_values_text)
+    allowed = []
+    if "idadocsp" in value_key or "id-ad-ocsp" in raw_values_text.lower():
+        allowed.append("OidIdAdOcsp")
+    if "idadcaissuers" in value_key or "id-ad-caissuers" in raw_values_text.lower():
+        allowed.append("OidIdAdCaIssuers")
+    if not allowed:
+        section_scope = str(ir.get("section_scope") or ir.get("citation") or "")
+        title_text = str(ir.get("_rule_title") or ir.get("title") or "")
+        if "7.1.2.8.3" in section_scope or "OCSP Responder" in title_text:
+            allowed = ["OidIdAdOcsp"]
+        else:
+            allowed = ["OidIdAdOcsp", "OidIdAdCaIssuers"]
+    return tv_dsl.Not(tv_dsl.AIAHasMethodOtherThan("AiaOID", tuple(allowed)))
 
 
 def _extract_signature_algid_exact_hex_atom(ir: dict) -> Optional[object]:
     """Certificate signature AlgorithmIdentifier exact DER bytes."""
     raw = _full_ir_text(ir)
     key = _compact_text(raw)
-    if "algorithmidentifier" not in key or "byteforbyteidentical" not in key:
+    title_key = _compact_text(str(ir.get("_rule_title") or ir.get("title") or ""))
+    section_key = _compact_text(str(ir.get("citation") or ir.get("section_scope") or ""))
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    pred = str(ir.get("predicate") or "").lower()
+    is_signature_subject = "signaturealgorithm" in subj_key
+    has_signature_context = is_signature_subject or "signaturealgorithm" in key
+    has_exact_or_allowlist = (
+        "byteforbyteidentical" in key
+        or "hexencodedbytes" in key
+        or "signaturealgorithmsandencodings" in key
+        or pred == "allowed_values"
+    )
+    if "algorithmidentifier" not in key and not has_signature_context:
+        return None
+    if not has_exact_or_allowlist:
         return None
     if "subjectpublickeyinfo" in key or "subjectpublickey" in key:
         return None
-    m = re.search(r"`?([0-9a-fA-F]{12,})`?", raw)
-    if not m:
+    hex_lits = _constraint_hex_literals(ir)
+    if not hex_lits:
         return None
-    hex_lit = m.group(1)
-    if len(hex_lit) % 2 != 0:
-        return None
-    hex_lit = hex_lit.lower()
+    if len(hex_lits) > 1:
+        atom = tv_dsl.SignatureAlgorithmIdentifiersInHexSet(tuple(hex_lits))
+        rsa_signature_context = (
+            "rsa" in title_key
+            or "71321" in section_key
+            or (
+                "rsassapkcs1v15" in key
+                or "rsassapss" in key
+                or "mgf1" in key
+                or "sha256withrsa" in key
+                or "sha384withrsa" in key
+                or "sha512withrsa" in key
+            )
+        )
+        if rsa_signature_context:
+            rsa_sig_oids = (
+                "OidSHA256WithRSAEncryption",
+                "OidSHA384WithRSAEncryption",
+                "OidSHA512WithRSAEncryption",
+                "OidRSASSAPSS",
+            )
+            return tv_dsl.When(
+                cond=tv_dsl.Or(parts=tuple(
+                    tv_dsl.OidEq("SignatureAlgorithmOID", oid)
+                    for oid in rsa_sig_oids
+                )),
+                main=atom,
+            )
+        return atom
+    hex_lit = hex_lits[0]
     oid_by_hex = {
         "300a06082a8648ce3d040302": "OidSignatureSHA256withECDSA",
         "300a06082a8648ce3d040303": "OidSignatureSHA384withECDSA",
@@ -817,17 +1173,81 @@ def _extract_spki_algid_exact_hex_atom(ir: dict) -> Optional[object]:
         return None
     hex_lit = m.group(1).lower()
     curve_by_hex = {
-        "301306072a8648ce3d020106082a8648ce3d030107": "OidEcCurveP256",
-        "301006072a8648ce3d020106052b81040022": "OidEcCurveP384",
-        "301006072a8648ce3d020106052b81040023": "OidEcCurveP521",
+        "301306072a8648ce3d020106082a8648ce3d030107": "06082a8648ce3d030107",
+        "301006072a8648ce3d020106052b81040022": "06052b81040022",
+        "301006072a8648ce3d020106052b81040023": "06052b81040023",
     }
-    curve_oid = curve_by_hex.get(hex_lit)
-    if not curve_oid:
+    curve_oid_der = curve_by_hex.get(hex_lit)
+    if not curve_oid_der:
         return None
-    return tv_dsl.When(
-        cond=tv_dsl.BytesContainsOidDer("RawSubjectPublicKeyInfo", curve_oid),
-        main=tv_dsl.SPKIAlgorithmIdentifierEqualsHex(hex_lit),
+    return tv_dsl.SPKINamedCurveAlgorithmIdentifierEqualsHex(curve_oid_der, hex_lit)
+
+
+def _extract_ecdsa_namedcurve_algid_atom(ir: dict) -> Optional[object]:
+    """ECDSA namedCurve rows expressed through EC-point curve membership.
+
+    The source names a P-curve key and the required namedCurve OID. To avoid a
+    tautology, identify the P-curve key from the subjectPublicKey ECPoint bytes
+    (on-curve check) and then require the SPKI AlgorithmIdentifier parameters
+    to carry the matching namedCurve OID. Exact AlgorithmIdentifier DER rows are
+    handled separately by _extract_spki_algid_exact_hex_atom.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "namedcurve" not in key and "namedcurve" not in subj_key:
+        return None
+    curve_specs = (
+        ("p256", "secp256r1", "12184010045317",
+         "06082a8648ce3d030107",
+         "301306072a8648ce3d020106082a8648ce3d030107"),
+        ("p384", "secp384r1", "13132034",
+         "06052b81040022",
+         "301006072a8648ce3d020106052b81040022"),
+        ("p521", "secp521r1", "13132035",
+         "06052b81040023",
+         "301006072a8648ce3d020106052b81040023"),
     )
+    for p_name, secp_name, oid_key, curve_oid_der, _hex_lit in curve_specs:
+        if p_name in key or secp_name in key or oid_key in key:
+            curve_name = {
+                "p256": "P-256",
+                "p384": "P-384",
+                "p521": "P-521",
+            }[p_name]
+            return tv_dsl.SPKIECPointOnCurveNamedCurveOIDEqualsHex(curve_name, curve_oid_der)
+    return None
+
+
+def _extract_rsa_spki_algid_atom(ir: dict) -> Optional[object]:
+    """RSA SubjectPublicKeyInfo AlgorithmIdentifier constraints.
+
+    RSA rows in the BR split the AlgorithmIdentifier requirement across
+    independent statements: one row requires the rsaEncryption algorithm OID,
+    sibling rows require parameters to be present/NULL, and a later row gives
+    the complete byte-for-byte DER form. Keep those row meanings separate.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "rsa" not in key:
+        return None
+    if "subjectpublickeyinfo" not in key and "subjectpublickeyinfo" not in subj_key:
+        return None
+    full_der = re.search(r"`?([0-9a-fA-F]{20,})`?", raw)
+    if full_der and "byteforbyteidentical" in key:
+        return tv_dsl.SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex(
+            full_der.group(1).lower()
+        )
+    is_required_alg = (
+        "rsaencryption" in key
+        or "differentalgorithm" in key
+        or "rsassapss" in key
+        or "idrsassapss" in key
+    )
+    if not is_required_alg:
+        return None
+    return tv_dsl.SPKIRSAPublicKeyAlgorithmOIDEqualsHex("06092a864886f70d010101")
 
 
 def _extract_sigalg_match_atom(ir: dict) -> Optional[object]:
@@ -909,11 +1329,7 @@ def _extract_extkeyusage_only_allowed_usages_atom(ir: dict) -> Optional[object]:
     elif "ocspresponderextendedkeyusage" in title_key:
         allowed = ("OcspSigning",)
     elif "cacertificateextendedkeyusage" in title_key:
-        allowed = (
-            "ServerAuth", "ClientAuth", "CodeSigning", "EmailProtection",
-            "TimeStamping", "OcspSigning", "Any",
-            "PreCertificateSigningCertificate",
-        )
+        allowed = ("ServerAuth", "ClientAuth")
     elif "crosscertifiedsubordinatecaextendedkeyusagerestricted" in title_key:
         allowed = (
             "ServerAuth", "ClientAuth", "EmailProtection", "CodeSigning",
@@ -980,7 +1396,23 @@ def _extract_keyusage_not_recommended_bit_atom(ir: dict) -> Optional[object]:
     if bit is None:
         return None
     from app.services.certificate.dsl import dsl as _app_dsl
-    return _app_dsl.Not(_app_dsl.KeyUsageHas(bit))
+    main = _app_dsl.Not(_app_dsl.KeyUsageHas(bit))
+    cond = _keyusage_table_algorithm_condition(bit, key)
+    return _app_dsl.When(cond, main) if cond is not None else main
+
+
+def _keyusage_table_algorithm_condition(bit: str, compact_rule_text: str):
+    """Algorithm scope implied by CABF Subscriber KeyUsage RSA/ECC tables."""
+    if bit in {"KeyEncipherment", "DataEncipherment"}:
+        return tv_dsl.PublicKeyAlgorithmIs("RSA")
+    if bit == "KeyAgreement":
+        return tv_dsl.PublicKeyAlgorithmIs("ECDSA")
+    if bit == "DigitalSignature":
+        if "should" in compact_rule_text:
+            return tv_dsl.PublicKeyAlgorithmIs("RSA")
+        if "must" in compact_rule_text:
+            return tv_dsl.PublicKeyAlgorithmIs("ECDSA")
+    return None
 
 
 def _extract_subject_attr_not_recommended_atom(ir: dict) -> Optional[object]:
@@ -1000,6 +1432,29 @@ def _extract_subject_attr_not_recommended_atom(ir: dict) -> Optional[object]:
         if _compact_text(rdn_name) in _compact_text(hay):
             from app.services.certificate.dsl import dsl as _app_dsl
             return _app_dsl.Not(_app_dsl.FieldNonEmpty(f"Subject.{dn_field}"))
+    return None
+
+
+def _extract_subject_attr_must_not_present_atom(ir: dict) -> Optional[object]:
+    """CABF/RFC subject-attribute table row: an RDN attribute is prohibited.
+
+    For "X | MUST NOT | -" / "X MUST NOT be present" rows, the pass condition
+    is that X is absent. Attribute recognition is driven by the RDN vocabulary,
+    not by individual rule ids or sections.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    pred = str(ir.get("predicate") or "").lower()
+    if pred not in {"must_not_be_present", "must_be_absent", "must_not_include"}:
+        if "mustnot" not in key or "present" not in key:
+            return None
+    subj = str(ir.get("subject") or "")
+    hay = f"{subj}\n{raw}"
+    hay_key = _compact_text(hay)
+    for rdn_name, dn_field in V.RDN_TO_DN_NAME.items():
+        if _compact_text(rdn_name) in hay_key:
+            from app.services.certificate.dsl import dsl as _app_dsl
+            return _app_dsl.FieldEmpty(f"Subject.{dn_field}")
     return None
 
 
@@ -1039,9 +1494,15 @@ def _extract_name_constraints_fallback_marker_atom(ir: dict) -> Optional[object]
     if "nodnsnameinstance" in key and "zerolengthdnsname" in key:
         return tv_dsl.SubtreeStringListHasNonEmptyOrEmptyMarker("PermittedDNSNames")
     if "noipv4ipaddress" in key and "8zerooctets" in key:
-        return tv_dsl.SubtreeIPListAnyHasOctetCount("PermittedIPAddresses", 8)
+        return tv_dsl.Or(parts=(
+            tv_dsl.SubtreeIPListAnyHasOctetCountAndNotAllZero("PermittedIPAddresses", 8),
+            tv_dsl.SubtreeIPListAnyAllZero("PermittedIPAddresses", 8),
+        ))
     if "noipv6ipaddress" in key and "32zerooctets" in key:
-        return tv_dsl.SubtreeIPListAnyHasOctetCount("PermittedIPAddresses", 32)
+        return tv_dsl.Or(parts=(
+            tv_dsl.SubtreeIPListAnyHasOctetCountAndNotAllZero("PermittedIPAddresses", 32),
+            tv_dsl.SubtreeIPListAnyAllZero("PermittedIPAddresses", 32),
+        ))
     return None
 
 
@@ -1135,6 +1596,29 @@ def _extract_common_name_dnsname_copy_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_domaincomponent_domain_name_labels_atom(ir: dict) -> Optional[object]:
+    """CABF OV subject domainComponent labels must match a certificate Domain Name."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "domaincomponent" not in subj and "domaincomponent" not in key:
+        return None
+    if "domainlabel" not in key and "domainlabels" not in key:
+        return None
+    if (
+        "reverseorder" in key
+        or "rootisencodedfirst" in key
+        or "closesttotheroot" in key
+    ):
+        return tv_dsl.DNComponentOrderMatches("dns_reverse")
+    if (
+        "singlesequence" in key
+        or "orderedsequence" in key
+    ):
+        return tv_dsl.DomainComponentOrdered()
+    return None
+
+
 def _extract_keyusage_bit_atom(ir: dict) -> Optional[object]:
     """Recover keyUsage bit table rows such as `digitalSignature | Y | SHOULD`."""
     raw = _full_ir_text(ir)
@@ -1159,7 +1643,9 @@ def _extract_keyusage_bit_atom(ir: dict) -> Optional[object]:
     if vals and "n" == vals.strip().lower():
         return None
     from app.services.certificate.dsl import dsl as _app_dsl
-    return _app_dsl.KeyUsageHas(bit)
+    main = _app_dsl.KeyUsageHas(bit)
+    cond = _keyusage_table_algorithm_condition(bit, key)
+    return _app_dsl.When(cond, main) if cond is not None else main
 
 
 def _extract_reserved_policy_identifier_atom(ir: dict) -> Optional[object]:
@@ -1226,7 +1712,7 @@ def _extract_policy_qualifier_mixed_atom(ir: dict) -> Optional[object]:
     """Mixed CABF policyQualifiers table row.
 
     The row says two things: policyQualifiers are NOT RECOMMENDED, and if they
-    are present they MUST be from the permitted CPS/UserNotice qualifier set.
+    are present they MUST be from the CABF permitted qualifier set.
     A single zlint severity cannot represent both levels, but the predicate can
     still express both certificate-state constraints without pretending the row
     is only an allow-list rule.
@@ -1239,7 +1725,7 @@ def _extract_policy_qualifier_mixed_atom(ir: dict) -> Optional[object]:
         return None
     return tv_dsl.And(parts=(
         tv_dsl.CertificatePoliciesHasNoPolicyQualifiers(),
-        tv_dsl.ExtPolicyQualifierOIDInSet(("CpsOID", "UserNoticeOID")),
+        tv_dsl.ExtPolicyQualifierOIDInSet(("CpsOID",)),
     ))
 
 
@@ -1268,10 +1754,10 @@ def _extract_policy_qualifiers_not_recommended_atom(ir: dict) -> Optional[object
 def _extract_policy_qualifier_allowlist_atom(ir: dict) -> Optional[object]:
     """CertificatePolicies policyQualifierId allow-list.
 
-    CABF/RFC policy qualifier tables permit only the CPS pointer and UserNotice
-    qualifier IDs. "Any other qualifier MUST NOT" and "MUST contain only
-    permitted policyQualifiers" are both the same all-qualifiers-in-allow-list
-    predicate. We deliberately do not claim the separate formatting/content rows.
+    CABF BR policy qualifier tables permit only the CPS pointer qualifier.
+    "Any other qualifier MUST NOT" and "MUST contain only permitted
+    policyQualifiers" are both the same all-qualifiers-in-allow-list predicate.
+    We deliberately do not claim the separate formatting/content rows.
     """
     raw = _full_ir_text(ir)
     key = _compact_text(raw)
@@ -1283,29 +1769,83 @@ def _extract_policy_qualifier_allowlist_atom(ir: dict) -> Optional[object]:
     is_allowlist = (
         "mustcontainonlypermittedpolicyqualifiers" in key
         or "anyotherqualifier" in key
+        or "policyqualifierotherthan" in key
         or (str(ir.get("predicate") or "").lower() == "allowed_values"
             and "policyqualifier" in key)
     )
     if not is_allowlist:
         return None
     from app.services.certificate.dsl import dsl as _app_dsl
-    return _app_dsl.ExtPolicyQualifierOIDInSet(("CpsOID", "UserNoticeOID"))
+    return _app_dsl.ExtPolicyQualifierOIDInSet(("CpsOID",))
+
+
+def _extract_excluded_or_permitted_dns_ip_nameconstraints_atom(ir: dict) -> Optional[object]:
+    """NameConstraints type coverage across excluded/permitted subtrees.
+
+    CABF technically-constrained TLS CA rows can require excludedSubtrees to
+    carry a dNSName/iPAddress GeneralSubtree unless permittedSubtrees already
+    carries that same GeneralName type. This is observable from the parsed
+    NameConstraints lists and composes existing generic list-presence atoms.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "nameconstraints" not in subj and "nameconstraints" not in key:
+        return None
+    if "excludedsubtrees" not in key or "permittedsubtrees" not in key:
+        return None
+    if "dnsname" not in key or "ipaddress" not in key:
+        return None
+    if "unless" not in key:
+        return None
+    from app.services.certificate.dsl import dsl as _app_dsl
+    return _app_dsl.And((
+        _app_dsl.Or((
+            _app_dsl.FieldNonEmpty("ExcludedDNSNames"),
+            _app_dsl.FieldNonEmpty("PermittedDNSNames"),
+        )),
+        _app_dsl.Or((
+            _app_dsl.FieldNonEmpty("ExcludedIPAddresses"),
+            _app_dsl.FieldNonEmpty("PermittedIPAddresses"),
+        )),
+    ))
 
 
 def _extract_rdn_structure_atom(ir: dict) -> Optional[object]:
-    """Subject Name RDN structural constraints from CABF/RFC DN grammar."""
+    """Name/RDN structural constraints from CABF/RFC DN grammar."""
     raw = _full_ir_text(ir)
     key = _compact_text(raw)
     if "relativedistinguishedname" not in key and "rdnsequence" not in key:
         return None
     subj = str(ir.get("subject") or "").lower()
-    holder = "Issuer" if "issuer" in subj else "Subject"
+    raw_key = _compact_text(_ir_text(ir))
+    if "issuer" in raw_key:
+        holder = "Issuer"
+    elif "subject" in raw_key:
+        holder = "Subject"
+    else:
+        holder = None
     if "rdnsequence" in key and "contain" in key and "attributetypeandvalue" not in key:
+        if holder is None:
+            return tv_dsl.And(parts=(
+                tv_dsl.DNHasRDNSequence("Subject"),
+                tv_dsl.DNHasRDNSequence("Issuer"),
+            ))
         return tv_dsl.DNHasRDNSequence(holder)
     if "exactlyone" in key and "attributetypeandvalue" in key:
+        if holder is None:
+            return tv_dsl.And(parts=(
+                tv_dsl.RDNHasSingleAttribute("Subject"),
+                tv_dsl.RDNHasSingleAttribute("Issuer"),
+            ))
         return tv_dsl.RDNHasSingleAttribute(holder)
     if ("countryname" in key and "stateorprovincename" in key
             and "before" in key and "rdnsequence" in key):
+        if holder is None:
+            return tv_dsl.And(parts=(
+                tv_dsl.RDNSequenceHasCountryBefore("Subject"),
+                tv_dsl.RDNSequenceHasCountryBefore("Issuer"),
+            ))
         return tv_dsl.RDNSequenceHasCountryBefore(holder)
     return None
 
@@ -1321,6 +1861,9 @@ def _extract_condition_atom(rule_id: int, ir: dict) -> Optional[object]:
     pre = ir.get("precondition") if isinstance(ir, dict) else None
     if isinstance(pre, dict):
         kind = str(pre.get("kind") or "").lower()
+        pre_blob = " ".join(str(pre.get(k) or "") for k in (
+            "kind", "type", "value", "description", "trigger"
+        )).lower()
         if kind in ("version", "version_is"):
             vals = pre.get("values") or ([pre.get("value")] if pre.get("value") is not None else [])
             ints = []
@@ -1340,6 +1883,26 @@ def _extract_condition_atom(rule_id: int, ir: dict) -> Optional[object]:
     raw = _ir_text(ir)
     if not raw:
         return None
+    subj = str(ir.get("subject") or "").lower()
+    pred = str(ir.get("predicate") or "").lower()
+    citation = " ".join(str(ir.get(k) or "") for k in ("citation", "section_scope")).lower()
+    if (raw.strip().lower().startswith("otherwise")
+            and "subjectaltname" in re.sub(r"[^a-z0-9]", "", subj)
+            and pred in {"must_not_be_critical", "should_not_be_critical"}
+            and "7.1.2.7.12" in citation):
+        return _app_dsl.Not(_app_dsl.DNEmpty("Subject"))
+    if ("4.1.2.6" in citation
+            and "subjectaltname" in re.sub(r"[^a-z0-9]", "", raw.lower())
+            and "critical" in raw.lower()
+            and pred in {"must_be_critical", "should_be_critical"}):
+        return _app_dsl.DNEmpty("Subject")
+    raw_key = _compact_text(raw)
+    if (
+        "publickeys" in raw_key
+        and "validat" in raw_key
+        and "signaturesoncertificates" in raw_key
+    ):
+        return _app_dsl.KeyUsageHas("CertSign")
     for pat, field in _CONDITION_PATTERNS:
         m = re.search(pat, raw, re.I)
         if not m:

@@ -5,34 +5,28 @@ separates upstream findings from CICAS-generated `cicasgen_` findings.
 
 ## Current Status
 
-The current gate is a **failing regression check**, not a paper success result.
-
-Current run (`outputs/detection_summary.{json,md}`), after rebuilding zlint from
-the strict shipping manifest (`shipping_lints_manifest.json`).  This manifest is
-stricter than the row-fragment synonymy manifest: it admits only generated lints
-whose final in-tree zlint behavior (`CheckApplies` + `Execute` + severity) has
-been judged synonymous with the available original rule context.
+Current retained run (`outputs/detection_summary.{json,md}`), after rebuilding
+zlint from the current strict shipping manifest:
 
 | metric | value |
 |---|---:|
-| shipped `cicasgen_` lints | 25 |
+| shipped `cicasgen_` lints | 91 |
 | zlint testdata certs scanned | 1128 |
-| `cicasgen_` findings | 875 |
-| triage REAL | 868 |
-| weak-oracle triage SPURIOUS | 4 |
-| triage UNCERTAIN | 3 |
-| independent CONFIRMED | 435 |
+| `cicasgen_` findings | 2627 |
+| triage REAL | 2469 |
+| weak-oracle triage SPURIOUS | 133 |
+| triage UNCERTAIN | 25 |
+| uncertain confirmed real | 2 |
+| independent CONFIRMED | 299 |
 | independent REFUTED | 0 |
-| independent NOCHECK | 440 |
+| independent NOCHECK | 2328 |
+| unresolved weak-oracle SPURIOUS | 129 |
 | strict reportable findings | 0 |
 
-The gate is currently clean on zlint testdata under the independent-audit
-criterion (`REFUTED=0`, unresolved weak-oracle SPURIOUS=0).  The raw triage
-oracle still labels 4 findings SPURIOUS, but all 4 are independently confirmed
-real defects.  External CT/Tranco report-only scans with this 25-lint strict
-manifest found one non-overlapping, independently confirmed new issue in
-Tranco: a subscriber certificate for `*.enter-system.com` has zero CABF reserved
-policy OIDs, violating CABF-BR §7.1.2.7.9 / rule 29492.
+The current run is clean under the hard independent-audit contradiction
+criterion (`REFUTED=0`). Paper-facing claims should use only independently
+confirmed findings, or explicitly label the remaining `NOCHECK` rows as not
+structurally audited.
 
 ## Targeted Re-Extraction
 
@@ -68,7 +62,8 @@ Build or refresh the shipped manifest after coverage/codegen has been recomputed
 and strict shipping synonymy has been judged:
 
 ```bash
-python cicas_backend/experiments/codegen_metrics/run_codegen_synonymy.py --rejudge-shipping --k 5
+python cicas_backend/experiments/codegen_metrics/run_codegen_synonymy.py \
+  --standards all --run-name full_current_db --summary-only
 python cicas_backend/scripts/inject_and_build.py --emit --build
 ```
 
@@ -78,7 +73,9 @@ Run the testdata gate:
 python cicas_backend/experiments/cert_detection/run.py
 ```
 
-Expected behavior today: the command exits zero when `SPURIOUS=0`.
+Expected behavior today: the command writes all outputs, then exits non-zero
+while unresolved weak-oracle `SPURIOUS` rows remain. Those rows are excluded
+from strict paper-facing claims.
 
 External CT/Tranco-style corpus scans are report-only:
 

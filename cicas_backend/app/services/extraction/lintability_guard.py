@@ -67,6 +67,19 @@ CROSS_OR_RUNTIME_MARKERS = [
 ]
 _MARKER_RE = re.compile("|".join(CROSS_OR_RUNTIME_MARKERS), re.I)
 
+CROSS_ARTIFACT_RELATION_PATTERNS = [
+    r"certificates?\s+issued\s+by\s+the\s+subject\s+of\s+this\s+certificate",
+    r"certificates?\s+issued\s+by\s+the\s+subject\s+ca\b",
+    r"crls?\s+issued\s+by\s+the\s+subject\s+crl\s+issuer\b",
+    r"certificates?\s+issued\s+by\s+this\s+certificate",
+    r"certificates?\s+issued\s+by\s+(?:the\s+)?issuer",
+    r"of\s+another\s+certificate",
+    r"of\s+the\s+precertificate",
+    r"of\s+the\s+issuer\s+certificate",
+    r"corresponding\s+certificate",
+]
+_CROSS_ARTIFACT_RELATION_RE = re.compile("|".join(CROSS_ARTIFACT_RELATION_PATTERNS), re.I)
+
 
 # High-precision NEGATIVE patterns: rule text that a single-certificate linter
 # cannot observe, regardless of how the LLM labeled the axes. Each was validated
@@ -88,6 +101,8 @@ _NOT_OBSERVABLE_PATTERNS = [
     r"\b(CSPRNG|non-sequential|unpredictab|entropy)\b|\bat least \d+ bits of (output|entropy)\b",
     # cross-certificate / signing-key / runtime
     r"\b(signing key|issued by (a |the )?(given )?ca|corresponding certificate|during (validation|path|chain)|when validating|chain build|\bis revoked\b|current time)\b",
+    r"\bcertificates?\s+issued\s+by\s+the\s+subject\s+ca\b",
+    r"\bcrls?\s+issued\s+by\s+the\s+subject\s+crl\s+issuer\b",
     # cross-artifact: cert<->CRL issuer identity comparison (knowing "the CRL issuer"
     # needs the external CRL, not this certificate's bytes) and CRLDP/AIA rules whose
     # requirement is about what the URI POINTS TO (an external DER CRL / LDAP directory
@@ -114,6 +129,11 @@ _NOT_OBSERVABLE_PATTERNS = [
     # certificate's bytes (the keyUsage bits are observable, but the triggering
     # purpose is not). Often a definition of bit semantics, not a codeable check.
     r"\bonly to be used\b",
+    # OPEN-ENDED ENUMERATION: "https, ldaps, or similar schemes" / "or similar
+    # values" does not define a closed machine-checkable set. A lint can check
+    # the named examples, but it cannot be strictly equivalent to the open-ended
+    # "similar" class without extra policy vocabulary outside the certificate.
+    r"\bor similar (?:schemes?|values?|methods?|types?|forms?)\b",
     # certificate categorisation by real-world PURPOSE ("certificates for <X>
     # purposes" / "for infrastructure purposes") — the cert's purpose is not in its
     # bytes; the clause names a category of certs, not a field constraint. NOTE:
@@ -133,6 +153,12 @@ _NOT_OBSERVABLE_PATTERNS = [
     # is not decidable from the bytes (a normal notAfter is not a violation), so
     # the obligation is not observable. (matches exactly R31150 corpus-wide)
     r"no well-defined expiration date",
+    # HISTORICAL SUBJECT STATE: "certificates for new subjects" / "previously
+    # established" depends on issuance history outside the presented certificate.
+    # A single certificate exposes its current subject name encoding, but not
+    # whether that subject/attribute was new or already established elsewhere.
+    r"\bcertificates?\s+for\s+new\s+subjects?\b",
+    r"\bpreviously\s+established\b",
     # CROSS-ORGANISATION relationship: "CA certificates issued to other
     # organizations" turns on the issuer/subject organisational relationship,
     # which is not decidable from a single certificate's bytes.
@@ -153,6 +179,336 @@ _NOT_OBSERVABLE_PATTERNS = [
     r"network byte order",
 ]
 _NOT_OBSERVABLE_RE = re.compile("|".join(_NOT_OBSERVABLE_PATTERNS), re.I)
+_OPEN_ENDED_ENUMERATION_RE = re.compile(
+    r"\bor similar (?:schemes?|values?|methods?|types?|forms?)\b",
+    re.I,
+)
+_EXTERNAL_AVAILABILITY_RE = re.compile(
+    r"\b(?:where|when|if)\b[^.]{0,80}\bavailable via\s+"
+    r"(?:HTTP|HTTPS|FTP|LDAP|electronic mail|email)\b",
+    re.I,
+)
+_PREFERENCE_ORDER_RE = re.compile(
+    r"\bordered in priority\b|\bmost-preferred\b",
+    re.I,
+)
+_UNEXPANDED_SECTION_REFERENCE_RE = re.compile(
+    r"\b(?:encoded|formatted) as specified in \[?Section\s+\d"
+    r"|\bas specified in \[?Section\s+\d",
+    re.I,
+)
+_TABLE_FORMAT_REFERENCE_RE = re.compile(
+    r"\bformatted as follows:\s*(?:Table\b)?",
+    re.I,
+)
+_CROSS_CERTIFIED_PROFILE_RE = re.compile(
+    r"\bcross[\s-]?(?:certified|signed)\b",
+    re.I,
+)
+_CRL_DOCUMENT_STRUCTURE_RE = re.compile(
+    r"\b(?:CertificateList|TBSCertList|tbsCertList|crlEntryExtensions|"
+    r"crlExtensions|revokedCertificates)\b",
+    re.I,
+)
+_CRL_VERSION_FRAGMENT_RE = re.compile(
+    r"^\s*(?:--\s*)?if present,\s*(?:version\s+)?MUST\s+be\s+v2\s*$",
+    re.I,
+)
+_PRECERT_SIGNING_CA_CONTEXT_RE = re.compile(
+    r"\bPrecertificates?\s+issued\s+by\s+a\s+Precertificate\s+Signing\s+CA\b"
+    r"|\bfrom\s+a\s+Precertificate\s+Signing\s+CA\s+Certificate\b",
+    re.I,
+)
+_NON_TLS_TECHNICALLY_CONSTRAINED_PROFILE_RE = re.compile(
+    r"\bTechnically\s+Constrained\s+Non-TLS\s+Subordinate\s+CA\b"
+    r"|\bwill\s+not\s+be\s+used\s+to\s+issue\s+TLS\s+certificates?\s+directly\s+or\s+transitively\b",
+    re.I,
+)
+_TLS_TECHNICALLY_CONSTRAINED_PROFILE_RE = re.compile(
+    r"\bTechnically\s+Constrained\s+TLS\s+Subordinate\s+CA\b"
+    r"|\bwill\s+be\s+used\s+to\s+issue\s+TLS\s+certificates?\s+directly\s+or\s+transitively\b",
+    re.I,
+)
+_PRECERT_SIGNING_CA_PROFILE_RE = re.compile(
+    r"\bTechnically\s+Constrained\s+Precertificate\s+Signing\s+CA\b"
+    r"|\bwill\s+be\s+used\s+as\s+a\s+Precertificate\s+Signing\s+CA\b",
+    re.I,
+)
+_VALIDATION_LEVEL_PROFILE_RE = re.compile(
+    r"\bFor\s+a\s+Subscriber\s+Certificate\s+to\s+be\s+"
+    r"(?:(?:Domain|Individual|Organization)\s+Validated|Extended\s+Validation)\b"
+    r"|\b(?:(?:Domain|Individual|Organization)\s+Validated|Extended\s+Validation)\b",
+    re.I,
+)
+_VALIDATION_POLICY_ASSERTION_RE = re.compile(
+    r"\bMUST\s+assert\b.{0,180}\bReserved\s+Certificate\s+Policy\s+Identifier\b"
+    r"(?:.{0,160}\bpolicyIdentifier\b)?",
+    re.I,
+)
+_DIRECTORYSTRING_ALLOWED_ENCODING_RE = re.compile(
+    r"(?=.*\bDirectoryString\b)(?=.*\bPrintableString\b)(?=.*\bUTF8String\b)",
+    re.I | re.S,
+)
+_DIRECTORYSTRING_LEGACY_EXCEPTION_RE = re.compile(
+    r"\bpreviously\s+(?:issued|established)\b|"
+    r"\bpreserve\s+backward\s+compatibility\b",
+    re.I,
+)
+_CABF_NAME_ENCODING_RULE_RE = re.compile(
+    r"\b(?:Name|RelativeDistinguishedName|RDNSequence|AttributeTypeAndValue)\b",
+    re.I,
+)
+_CABF_NAME_ENCODING_EXTERNAL_SCOPE_RE = re.compile(
+    r"\bdoes\s+not\s+include\s+certificates\s+issued\s+by\s+such\s+CA\s+Certificates\b"
+    r"|\bCross-Certified\s+Subordinate\s+CA\s+Certificate\b.{0,160}\bexception\b",
+    re.I | re.S,
+)
+_CABF_RSA_SIGNATURE_ALGID_RULE_RE = re.compile(
+    r"\bsignature\s+algorithms?\s+and\s+encodings?\b"
+    r"|\bAlgorithmIdentifier\b.{0,120}\bbyte-for-byte\s+identical\b",
+    re.I | re.S,
+)
+_CABF_RSA_ALLOWED_SET_RULE_RE = re.compile(
+    r"\b(?:CA\s+)?(?:SHALL|MUST)\s+use\s+one\s+of\s+the\s+following\s+"
+    r"signature\s+algorithms?\s+and\s+encodings?\b"
+    r"|\bNo\s+other\s+encodings\s+are\s+permitted\b",
+    re.I | re.S,
+)
+_CABF_RSA_SHA1_TEMPORARY_DEADLINE_RE = re.compile(
+    r"\b(?:Until|Prior\s+to)\s+2026[-\u2010-\u2015]09[-\u2010-\u2015]15\b",
+    re.I,
+)
+_CABF_RSA_SHA1_EXCEPTION_ALG_RE = re.compile(
+    r"\bRSASSA-PKCS1-v1_5\s+with\s+SHA-1\b",
+    re.I,
+)
+_CABF_RSA_SHA1_EXTERNAL_CONDITION_RE = re.compile(
+    r"\b(?:Cross-Certificate|existing\s+Certificate|BasicOCSPResponse|"
+    r"CertificateList|TBSCertList|same\s+issuing\s+CA\s+Certificate|"
+    r"Root\s+CA\s+or\s+Subordinate\s+CA\s+Certificate\s+has\s+issued)\b",
+    re.I,
+)
+_CABF_ECDSA_SIGNING_KEY_CONTEXT_RE = re.compile(
+    r"\bIf\s+the\s+signing\s+key\s+is\s+P-(?:256|384|521)\b"
+    r"|\bbased\s+upon\s+the\s+signing\s+key\s+used\b",
+    re.I,
+)
+_CABF_ECDSA_ALGID_BYTE_ROW_RE = re.compile(
+    r"\bAlgorithmIdentifier\b.{0,120}\bbyte-for-byte\s+identical\b"
+    r".{0,120}\b300a06082a8648ce3d04030[234]\b",
+    re.I | re.S,
+)
+_RFC_SUBJECT_NAMING_ONLY_SAN_RE = re.compile(
+    r"\bsubject\s+naming\s+information\s+is\s+present\s+only\s+in\s+"
+    r"(?:the\s+)?subjectAltName\s+extension\b",
+    re.I,
+)
+_RFC_SUBJECT_NAMING_ONLY_SAN_EXAMPLE_RE = re.compile(
+    r"\be\.g\.\s*,?\s*a\s+key\s+bound\s+only\s+to\s+an\s+email\s+address\s+or\s+URI\b",
+    re.I,
+)
+_CSR_KEY_REQUEST_RE = re.compile(
+    r"key used in the certificate request",
+    re.I,
+)
+_IP_NETWORK_BYTE_ORDER_RE = re.compile(
+    r"network byte order",
+    re.I,
+)
+
+
+def context_lintability_assertion_subject(reason: str | None) -> str:
+    if reason and "CRL/TBSCertList" in reason:
+        return "CRL"
+    return "CrossArtifact"
+
+
+def non_single_artifact_context_lintability_reason(*texts) -> str | None:
+    """Return a C2 lintability reason from source-owned context.
+
+    Some profile names define applicability by an issuance/trust relationship
+    rather than by bytes in the certificate being linted.  The rule body can be
+    a normal certificate-field predicate, but a final zlint lint cannot be
+    strictly equivalent because it cannot decide whether the certificate belongs
+    to that profile from one artifact alone.
+    """
+    context = " ".join(str(t or "") for t in texts if t)
+    rule_text = _primary_rule_text(texts[1] if len(texts) > 1 else (texts[0] if texts else ""))
+    direct_reason = non_single_artifact_lintability_reason(rule_text)
+    if direct_reason:
+        return direct_reason
+    if (
+        any(_CRL_VERSION_FRAGMENT_RE.search(_primary_rule_text(t or "")) for t in texts)
+        and _CRL_DOCUMENT_STRUCTURE_RE.search(context)
+    ):
+        return (
+            "rule target is a CRL/TBSCertList ASN.1 field, a separate CRL "
+            "artifact outside the certificate-lint denominator"
+        )
+    if (
+        _VALIDATION_POLICY_ASSERTION_RE.search(rule_text)
+        and _VALIDATION_LEVEL_PROFILE_RE.search(context)
+    ):
+        return (
+            "rule applicability is scoped to a subscriber validation-level "
+            "profile, but this rule asserts the same Reserved Certificate "
+            "Policy Identifier used as the profile's certificate-encoded "
+            "discriminator; a missing-policy-OID violation is not decidable "
+            "from one certificate's encoded bytes without external validation "
+            "type context"
+        )
+    if (
+        _DIRECTORYSTRING_ALLOWED_ENCODING_RE.search(rule_text)
+        and re.search(r"\bexceptions?\b", rule_text, re.I)
+        and _DIRECTORYSTRING_LEGACY_EXCEPTION_RE.search(context)
+    ):
+        return (
+            "rule allows DirectoryString legacy encodings under previously "
+            "issued/previously established name compatibility exceptions, "
+            "which require issuance-history context not decidable from one "
+            "certificate's encoded bytes"
+        )
+    if (
+        _CABF_NAME_ENCODING_RULE_RE.search(rule_text)
+        and _CABF_NAME_ENCODING_EXTERNAL_SCOPE_RE.search(context)
+    ):
+        return (
+            "CABF Name Encoding applicability inherits Section 7.1.2 scope, "
+            "the exclusion for certificates issued by Technically Constrained "
+            "Non-TLS Subordinate CA Certificates, and the Cross-Certified "
+            "Subordinate CA exception, which require issuance/profile context "
+            "not decidable from one certificate's encoded bytes"
+        )
+    if (
+        _CABF_RSA_SIGNATURE_ALGID_RULE_RE.search(rule_text)
+        and (
+            _CABF_RSA_ALLOWED_SET_RULE_RE.search(rule_text)
+            or _CABF_RSA_SHA1_EXCEPTION_ALG_RE.search(rule_text)
+        )
+        and _CABF_RSA_SHA1_TEMPORARY_DEADLINE_RE.search(context)
+        and _CABF_RSA_SHA1_EXCEPTION_ALG_RE.search(context)
+        and _CABF_RSA_SHA1_EXTERNAL_CONDITION_RE.search(context)
+    ):
+        return (
+            "CABF RSA Signature AlgorithmIdentifier allowed-set requirements "
+            "have a temporary SHA-1 exception before 2026-09-15 whose "
+            "applicability depends on cross-certificate, existing-certificate, "
+            "OCSP, or CRL context not decidable from one certificate's encoded "
+            "bytes"
+        )
+    if (
+        _CABF_ECDSA_ALGID_BYTE_ROW_RE.search(rule_text)
+        and _CABF_ECDSA_SIGNING_KEY_CONTEXT_RE.search(context)
+    ):
+        return (
+            "CABF ECDSA Signature AlgorithmIdentifier applicability is keyed "
+            "to the issuer/signing-key curve, which is not encoded in the "
+            "issued certificate; a single certificate exposes the chosen "
+            "signatureAlgorithm OID but not whether it matches the external "
+            "signing key"
+        )
+    if _CROSS_CERTIFIED_PROFILE_RE.search(context):
+        return (
+            "rule applicability is scoped to a cross-certified/cross-signed "
+            "certificate profile, an issuance/trust relationship that is not "
+            "decidable from one certificate's encoded bytes"
+        )
+    if _PRECERT_SIGNING_CA_CONTEXT_RE.search(context):
+        return (
+            "rule applicability depends on whether the Precertificate was "
+            "issued by a Precertificate Signing CA, which requires issuer or "
+            "chain context not decidable from one certificate's encoded bytes"
+        )
+    if _NON_TLS_TECHNICALLY_CONSTRAINED_PROFILE_RE.search(context):
+        return (
+            "rule applicability is scoped to the Technically Constrained "
+            "Non-TLS Subordinate CA profile, whose 'will not be used to issue "
+            "TLS certificates directly or transitively' condition is not "
+            "decidable from one certificate's encoded bytes"
+        )
+    if _TLS_TECHNICALLY_CONSTRAINED_PROFILE_RE.search(context):
+        return (
+            "rule applicability is scoped to the Technically Constrained TLS "
+            "Subordinate CA profile, whose 'will be used to issue TLS "
+            "certificates directly or transitively' condition is not decidable "
+            "from one certificate's encoded bytes"
+        )
+    if _PRECERT_SIGNING_CA_PROFILE_RE.search(context):
+        return (
+            "rule applicability is scoped to the Technically Constrained "
+            "Precertificate Signing CA profile, whose intended-use condition "
+            "is not decidable from one certificate's encoded bytes"
+        )
+    if (
+        _RFC_SUBJECT_NAMING_ONLY_SAN_RE.search(rule_text)
+        and _RFC_SUBJECT_NAMING_ONLY_SAN_EXAMPLE_RE.search(rule_text)
+    ):
+        return (
+            "RFC 5280 subject-empty applicability depends on whether subject "
+            "naming information is present only in subjectAltName; the email/URI "
+            "phrase is a non-exhaustive example, so the triggering condition is "
+            "not a closed single-certificate byte predicate"
+        )
+    return None
+
+
+def non_single_artifact_lintability_reason(rule_text) -> str | None:
+    """Return a source-grounded reason when rule text is not strictly lintable.
+
+    This is intentionally pattern-class based, not rule-id based. The caller uses
+    the reason after re-extraction/re-judgment to keep denominator changes
+    auditable instead of directly editing metrics.
+    """
+    text = _primary_rule_text(rule_text)
+    if _CSR_KEY_REQUEST_RE.search(text):
+        return (
+            "rule compares the issued certificate to the external certificate "
+            "request/CSR key, which is not present in one certificate's encoded "
+            "bytes"
+        )
+    if _IP_NETWORK_BYTE_ORDER_RE.search(text):
+        return (
+            "rule constrains the semantic byte order of an iPAddress value; "
+            "without the externally intended address, any valid 4- or 16-octet "
+            "GeneralName iPAddress is already a network-order address value, "
+            "so the stated obligation is not independently decidable from one "
+            "certificate"
+        )
+    if _OPEN_ENDED_ENUMERATION_RE.search(text):
+        return (
+            "rule text contains an open-ended 'or similar ...' set, so the "
+            "allowed/disallowed values are not closed enough for strict "
+            "single-certificate linting"
+        )
+    if _EXTERNAL_AVAILABILITY_RE.search(text):
+        return (
+            "rule text is conditional on external information being available "
+            "via a network protocol, which is not decidable from one "
+            "certificate's encoded bytes"
+        )
+    if _PREFERENCE_ORDER_RE.search(text):
+        return (
+            "rule text depends on issuer preference or priority ordering, which "
+            "is not independently observable from the certificate encoding"
+        )
+    if _UNEXPANDED_SECTION_REFERENCE_RE.search(text):
+        return (
+            "rule text delegates the actual constraint to another standards "
+            "section rather than stating one closed atomic certificate predicate"
+        )
+    if _TABLE_FORMAT_REFERENCE_RE.search(text):
+        return (
+            "rule text is a table-format parent requirement; its concrete "
+            "certificate predicates must be extracted from the table rows rather "
+            "than treated as one atomic lint"
+        )
+    if _NOT_OBSERVABLE_RE.search(text):
+        return (
+            "rule text describes a non-single-certificate-observable "
+            "requirement (CA process / runtime / cross-cert / real-world "
+            "semantic content)"
+        )
+    return None
 
 
 def definitely_not_single_artifact_lintable(rule_text) -> bool:
@@ -161,12 +517,37 @@ def definitely_not_single_artifact_lintable(rule_text) -> bool:
     content). Used as a NEGATIVE gate in the lintability decision so such rules are
     never marked lintable and never reach codegen. High-precision by construction;
     returns False (does not demote) for anything it is not confident about."""
-    return bool(_NOT_OBSERVABLE_RE.search(_norm(rule_text)))
+    return non_single_artifact_lintability_reason(rule_text) is not None
+
+
+def has_cross_artifact_relationship(*texts) -> bool:
+    """True when the source/constraint text explicitly relates this artifact to
+    another certificate/precertificate/issuer artifact.
+
+    This is a C2-axis helper: callers should set assertion_subject=CrossArtifact
+    and let the normal lintability predicate recompute the final decision.
+    """
+    combined = " ".join(_primary_rule_text(t) for t in texts)
+    return bool(_CROSS_ARTIFACT_RELATION_RE.search(combined))
 
 
 
 def _norm(x) -> str:
     return (x.value if hasattr(x, "value") else str(x or "")).strip()
+
+
+def _primary_rule_text(x) -> str:
+    """Return the target rule sentence, excluding appended section context.
+
+    Some extractors append "[Full section context]" to rule_text for semantic
+    auditing. Lintability gates must classify the target atom, not unrelated
+    normative words later in the section excerpt.
+    """
+    text = _norm(x)
+    marker = "[Full section context]:"
+    if marker in text:
+        text = text.split(marker, 1)[0]
+    return text.strip()
 
 
 def is_single_artifact_observable(predicate, assertion_subject, subject_path,
@@ -175,7 +556,11 @@ def is_single_artifact_observable(predicate, assertion_subject, subject_path,
     real certificate/CRL field (see module docstring for the full soundness contract)."""
     if _norm(predicate).lower() not in OBSERVABLE_PREDICATES:
         return False
-    if _norm(assertion_subject).lower() not in ("certificate", "crl"):
+    # CA is accepted here only as an extraction-axis repair candidate.  The final
+    # lintability gate still requires assertion_subject=Certificate; callers that
+    # use this helper must rewrite CA to Certificate when the subject path proves
+    # the rule constrains certificate bytes rather than CA process.
+    if _norm(assertion_subject).lower() not in ("certificate", "crl", "ca"):
         return False
     if _norm(obligation).upper().replace("_", " ") not in NORMATIVE_OBLIGATIONS:
         return False
@@ -184,9 +569,11 @@ def is_single_artifact_observable(predicate, assertion_subject, subject_path,
         return False
     if subj.split(".")[0] not in CERT_FIELD_ROOTS:
         return False                                   # operational noun, not a cert field
-    text = _norm(rule_text)
+    text = _primary_rule_text(rule_text)
     if len(text) < 15 or " | " in text:
         return False                                   # table-row fragment / stub
+    if definitely_not_single_artifact_lintable(text):
+        return False                                   # CA process / external state
     if _MARKER_RE.search(text):
         return False                                   # genuinely cross-artifact / runtime
     return True

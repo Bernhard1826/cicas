@@ -483,6 +483,7 @@ CONDITION_KINDS = {
     "field_equals",       # field, values → FieldEq/FieldInSet  (generalizes field_boolean)
     "version_is",         # values:[1|2|3] → FieldInSet(Version, …)
     "address_family",     # field, family:ipv4|ipv6 → SubtreeIPv4Conditional arm
+    "general_name_allowed_set",  # ext, values:[rfc822Name|URI|...] → only these GeneralName tags appear
     "key_usage",          # bit → KeyUsageHas
     "eku_present",        # eku → ExtKeyUsageHas
     "field_boolean",      # legacy: cA → IsCA / FieldEq(field, True)
@@ -500,6 +501,8 @@ _LEGACY_TYPE_TO_KIND = {
     "field_nonempty": "field_present", "field_present": "field_present",
     "certificate_type": "certificate_type", "field_boolean": "field_boolean",
     "version": "version_is", "field_value": "field_equals",
+    "general_name_allowed_set": "general_name_allowed_set",
+    "san_general_name_allowed_set": "general_name_allowed_set",
 }
 
 
@@ -790,9 +793,9 @@ class IntermediateRepresentation(BaseModel):
 
         if not constrains_certificate:
             if assertion_str == "CrossArtifact":
-                reasons.append(f"Assertion subject is '{assertion_str}' (cross-artifact), not 'Certificate'/'CA'")
+                reasons.append(f"Assertion subject is '{assertion_str}' (cross-artifact), not 'Certificate'")
             else:
-                reasons.append(f"Assertion subject is '{assertion_str}', not 'Certificate'/'CA'")
+                reasons.append(f"Assertion subject is '{assertion_str}', not 'Certificate'")
 
         # Subject path gate: regardless of assertion_subject, the subject must point
         # to a real certificate/CRL field. Rules whose subject is an operational noun
@@ -857,12 +860,11 @@ class IntermediateRepresentation(BaseModel):
         # content) the LLM-labeled axes miss. Validated to demote ZERO codegen-
         # proven-synonymous rules. Stops "can't be coded" rules reaching codegen.
         from app.services.extraction.lintability_guard import (
-            definitely_not_single_artifact_lintable as _dnl)
-        not_observable = _dnl(getattr(self, "rule_text", "") or "")
+            non_single_artifact_lintability_reason as _non_lint_reason)
+        not_observable_reason = _non_lint_reason(getattr(self, "rule_text", "") or "")
+        not_observable = not_observable_reason is not None
         if not_observable:
-            reasons.append("rule text describes a non-single-certificate-observable "
-                           "requirement (CA process / runtime / cross-cert / "
-                           "real-world semantic content)")
+            reasons.append(not_observable_reason)
 
         # Determine final lintability.
         # NOTE: observable/verifiability is intentionally NOT a conjunct (see Rule 2).
@@ -876,7 +878,9 @@ class IntermediateRepresentation(BaseModel):
             not not_observable
         )
 
-        if not self.lintable and reasons:
+        if self.lintable:
+            self.non_lintable_reason = None
+        elif reasons:
             self.non_lintable_reason = "; ".join(reasons)
 
         # === IR Eligibility Gate (问题4修复) ===

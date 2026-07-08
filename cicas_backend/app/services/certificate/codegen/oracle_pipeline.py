@@ -47,6 +47,14 @@ CERTIFIED = {
     "CommonNameFromSAN",
     "AIAHasMethodOtherThan",
     "OidListCountInSet",
+    # Raw-DER DN AttributeTypeAndValue tag check. Same certification basis as
+    # FieldEncodedAs on whole-DN holders, but scoped by a closed standard
+    # AttributeType OID vocabulary instead of checking every attribute.
+    "DNAttributeValuesEncodedAs",
+    # Raw-DER SPKI AlgorithmIdentifier check scoped by namedCurve parameter OID.
+    # The renderer parses RawSubjectPublicKeyInfo and compares complete DER
+    # elements; no decoded-string approximation or per-rule heuristic is used.
+    "SPKINamedCurveAlgorithmIdentifierEqualsHex",
 }
 DN_HOLDERS = {"Subject", "Issuer", "subject", "issuer"}
 

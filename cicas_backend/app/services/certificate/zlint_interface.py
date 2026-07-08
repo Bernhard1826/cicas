@@ -138,6 +138,13 @@ class ZLintInterface:
         for z in data:
             if z.get("tool") != "zlint":
                 continue
+            meta = getattr(self, "zlint_metadata_dict", {}).get(z.get("rule_id"))
+            if meta:
+                z = dict(z)
+                z.setdefault("description", meta.description)
+                z.setdefault("citation", meta.citation)
+                z.setdefault("package", meta.package)
+                z.setdefault("file_path", meta.file_path)
             z["_sect"] = set(sect_re.findall(str(z.get("_raw_citation") or "")))
             src = z.get("_raw_source") or ""
             if src.startswith("zlint/rfc"):
@@ -358,6 +365,7 @@ For "none" you MUST still name the closest candidate and give the field-by-field
     @staticmethod
     def _coverage_tokens(*values) -> Set[str]:
         text = " ".join(str(v or "") for v in values).lower()
+        text = re.sub(r"[_./:\\-]+", " ", text)
         return {
             t for t in re.findall(r"[a-z0-9][a-z0-9_.-]{2,}", text)
             if t not in {"must", "shall", "should", "certificate", "certificates",

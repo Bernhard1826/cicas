@@ -285,10 +285,10 @@ def fill_check(t: Template, slots: dict) -> list[str]:
 # Body shapes: compound  vs  conditional (NA precondition)
 # ---------------------------------------------------------------------
 
-# {severity} is substituted with one of: lint.Error | lint.Warn | lint.Notice
+# {severity} is substituted with one of: lint.Error | lint.Warn
 # according to the source rule's prescriptive level (MUST -> Error,
-# SHOULD/RECOMMENDED -> Warn, MAY/Notice -> Notice). The Pass branch is
-# unchanged across all severities.
+# SHOULD/RECOMMENDED -> Warn). MAY/OPTIONAL rows are permissive and must be
+# filtered before codegen rather than mapped to a lint status.
 
 _COMPOUND_BODY = """\
         if {expr} {{
@@ -309,7 +309,8 @@ _CONDITIONAL_BODY = """\
 def render_body(t: Template, slots: dict, severity: str = "lint.Error") -> dict:
     """Build DSL tree, validate, render to Go body, collect imports.
     `severity` is the lint status returned when the requirement is violated;
-    one of "lint.Error", "lint.Warn", "lint.Notice".
+    one of "lint.Error", "lint.Warn". lint.Notice exists in zlint, but CICAS
+    does not use it for MAY/OPTIONAL because those rows define no violation.
     Returns:
       {"execute_body": str, "imports": set[str], "dsl_tree": Compound|tuple}
     Raises dsl.DSLError on internal inconsistency.
@@ -348,7 +349,7 @@ def render_body(t: Template, slots: dict, severity: str = "lint.Error") -> dict:
 
 # Map requirement levels (RFC 2119 / source-doc strings) to lint severities.
 # Anything MUST/MUST NOT/REQUIRED/SHALL/SHALL NOT is Error; SHOULD / SHOULD
-# NOT / RECOMMENDED / NOT RECOMMENDED is Warn; MAY / OPTIONAL is Notice.
+# NOT / RECOMMENDED / NOT RECOMMENDED is Warn. MAY / OPTIONAL is not codegen.
 _LEVEL_TO_SEV = {
     "MUST":            "lint.Error",
     "MUST_NOT":        "lint.Error",
@@ -363,9 +364,8 @@ _LEVEL_TO_SEV = {
     "RECOMMENDED":     "lint.Warn",
     "NOT_RECOMMENDED": "lint.Warn",
     "NOT RECOMMENDED": "lint.Warn",
-    "MAY":             "lint.Notice",
-    "OPTIONAL":        "lint.Notice",
 }
+_NON_CODE_LEVELS = {"MAY", "OPTIONAL"}
 
 # Heuristic phrases inside rule_text used as a fallback when the structured
 # requirement_level field disagrees / is missing.
@@ -384,6 +384,8 @@ def severity_for(rule_text: str = "", requirement_level: str = "") -> str:
       4. Default lint.Error (fail-safe)
     """
     lvl = (requirement_level or "").strip().upper()
+    if lvl.replace("_", " ") in _NON_CODE_LEVELS:
+        raise dsl.DSLError(f"{lvl} is permissive/optional and has no violation lint")
     if lvl in _LEVEL_TO_SEV:
         return _LEVEL_TO_SEV[lvl]
     txt = rule_text or ""

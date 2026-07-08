@@ -51,6 +51,7 @@ import sys
 import tempfile
 from collections import Counter
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -71,6 +72,11 @@ DB_URL = os.environ.get("CICAS_DB_URL", "postgresql://postgres:123456@localhost:
 STANDARDS = {
     "rfc5280": {"id": 1, "source": "RFC5280"},
     "cabf": {"id": 19, "source": "CABF-BR"},
+}
+
+RAW_SOURCES = {
+    "CABF-BR": BACKEND / "data/raw/cabf-server/BR.md",
+    "RFC5280": BACKEND / "data/raw/rfc/rfc5280.txt",
 }
 
 
@@ -130,6 +136,61 @@ def _load_nearby_section_rows(selected: list[int], window: int = 4) -> dict[int,
     return out
 
 
+@lru_cache(maxsize=64)
+def _raw_source_text(source: str) -> str:
+    path = RAW_SOURCES.get(source)
+    if not path or not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+@lru_cache(maxsize=512)
+def _raw_section_excerpt(source: str, section: str, max_chars: int = 7000) -> str:
+    """Return a bounded original-spec excerpt for a section.
+
+    This is source-owned context, not IR.  It lets the strict shipping judge
+    read table headers and sibling rows such as "Permitted policyQualifiers"
+    when an extracted row says only "Any other qualifier".
+    """
+    source = source or ""
+    section = section or ""
+    text = _raw_source_text(source)
+    if not text or not section:
+        return ""
+
+    import re
+
+    if source == "CABF-BR":
+        heading_re = re.compile(
+            rf"(?m)^#{{1,6}}\s+{re.escape(section)}(?:\s|$)"
+        )
+        next_heading_re = re.compile(r"(?m)^#{1,6}\s+(\d+(?:\.\d+)*)(?:\s|$)")
+    else:
+        heading_re = re.compile(
+            rf"(?m)^\s*{re.escape(section)}(?:\.|\s+)"
+        )
+        next_heading_re = re.compile(r"(?m)^\s*(\d+(?:\.\d+)*)(?:\.|\s+)")
+
+    m = heading_re.search(text)
+    if not m:
+        return ""
+    start = m.start()
+    end = len(text)
+    for nm in next_heading_re.finditer(text, m.end()):
+        next_section = nm.group(1)
+        if next_section == section or next_section.startswith(section + "."):
+            continue
+        end = nm.start()
+        break
+    excerpt = text[start:end].strip()
+    if len(excerpt) <= max_chars:
+        return excerpt
+    return excerpt[:max_chars].rstrip() + "\n[excerpt truncated]"
+
+
 def profile_scope_for(section: Optional[str], sec2title: dict[str, str]) -> Optional[str]:
     """The certificate-profile title governing `section`, or None.
 
@@ -178,12 +239,31 @@ def rule_context_for(source: str, section: Optional[str], title: Optional[str],
                     "1.2.840.113549.1.1.10")
         return ctx
 
+    def _with_signature_algid_context(ctx: str) -> str:
+        if ((source or "").upper().startswith("CABF")
+                and str(section or "").startswith("7.1.3.2")):
+            return (
+                f"{ctx}; CABF §7.1.3.2 Signature AlgorithmIdentifier applies "
+                "to the signatureAlgorithm field of a Certificate or "
+                "Precertificate and to the signature field of a TBSCertificate; "
+                "no other encodings are permitted for these fields"
+            )
+        return ctx
+
     if profile:
         prefix = f"{source} §{section} " if section else f"{source} "
-        return _with_reserved_policy_oid(f"{prefix}{profile}")
+        return _with_signature_algid_context(_with_reserved_policy_oid(f"{prefix}{profile}"))
     if title:
         prefix = f"{source} §{section} " if section else f"{source} "
-        return _with_reserved_policy_oid(f"{prefix}{title}")
+        ctx = f"{prefix}{title}"
+        if (source or "").upper().startswith("CABF") and str(section or "") == "7.1.2.10.5":
+            ctx += (
+                "; source section contains separate No Policy Restrictions "
+                "(anyPolicy) and Policy Restricted (anyPolicy MUST NOT) "
+                "CertificatePolicies profiles; exact-one Reserved Certificate "
+                "Policy Identifier rows belong to the Policy Restricted profile"
+            )
+        return _with_signature_algid_context(_with_reserved_policy_oid(ctx))
     return None
 
 
@@ -382,7 +462,7 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
     expresses = [r for r in judged if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
     dne = [r for r in judged if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
     ship_judged = [
-        r for r in expresses
+        r for r in generated
         if r.get("ship_synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
     ]
     ship_expresses = [
@@ -411,7 +491,7 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         src_exp = [r for r in src_judged if r.get("synonymy", {}).get("verdict") == "EXPRESSES"]
         src_dne = [r for r in src_judged if r.get("synonymy", {}).get("verdict") == "DOES_NOT_EXPRESS"]
         src_ship_judged = [
-            r for r in src_exp
+            r for r in src_gen
             if r.get("ship_synonymy", {}).get("verdict") in _DECIDED_SYNONYMY
         ]
         src_ship_exp = [
@@ -424,17 +504,19 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             "completed": len(src_rows),
             "generation_success": len(src_gen),
             "generation_rate": _rate(len(src_gen), len(ids)),
-            "synonymy_judged": len(src_judged),
-            "synonymy_not_judged": len(src_gen) - len(src_judged),
-            "synonymy_expresses": len(src_exp),
-            "synonymy_does_not_express": len(src_dne),
-            "synonymy_rate_over_generated": _rate(len(src_exp), len(src_judged)),
-            "end_to_end_expresses_rate_over_domain": _rate(len(src_exp), len(ids)),
-            "shipping_synonymy_judged": len(src_ship_judged),
-            "shipping_synonymy_expresses": len(src_ship_exp),
-            "shipping_synonymy_uncertain": len(src_ship_uncertain),
-            "shipping_synonymy_rate_over_row_expresses": _rate(len(src_ship_exp), len(src_exp)),
-            "shipping_end_to_end_expresses_rate_over_domain": _rate(len(src_ship_exp), len(ids)),
+            "final_shipping_strict_judged": len(src_ship_judged),
+            "final_shipping_strict_expresses": len(src_ship_exp),
+            "final_shipping_strict_uncertain": len(src_ship_uncertain),
+            "final_shipping_strict_rate_over_generated": _rate(len(src_ship_exp), len(src_gen)),
+            "final_shipping_strict_rate_over_domain": _rate(len(src_ship_exp), len(ids)),
+            "diagnostic_row_level": {
+                "judged": len(src_judged),
+                "not_judged": len(src_gen) - len(src_judged),
+                "expresses": len(src_exp),
+                "does_not_express": len(src_dne),
+                "rate_over_generated": _rate(len(src_exp), len(src_judged)),
+                "end_to_end_rate_over_domain": _rate(len(src_exp), len(ids)),
+            },
             "code_eq_ir_certified": sum(1 for r in src_gen if r.get("code_eq_ir_certified")),
         }
 
@@ -466,20 +548,26 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         "generation_rate": _rate(generated_count, total),
         "generation_by_method": dict(sorted(by_method.items())),
         "generation_failure_by_reason": dict(sorted(by_reason.items())),
-        "synonymy_judged": len(judged),
-        "synonymy_not_judged": generated_count - len(judged),
-        "synonymy_expresses": len(expresses),
-        "synonymy_does_not_express": len(dne),
-        "synonymy_rate_over_generated": _rate(len(expresses), len(judged)),
-        "end_to_end_expresses_rate_over_domain": _rate(len(expresses), total),
-        "shipping_synonymy_judged": len(ship_judged),
-        "shipping_synonymy_not_judged": len(expresses) - len(ship_judged),
-        "shipping_synonymy_expresses": len(ship_expresses),
-        "shipping_synonymy_does_not_express": len(ship_dne),
-        "shipping_synonymy_uncertain": len(ship_uncertain),
-        "shipping_synonymy_rate_over_row_expresses": _rate(len(ship_expresses), len(expresses)),
-        "shipping_end_to_end_expresses_rate_over_domain": _rate(len(ship_expresses), total),
-        "synonymy_by_method": {
+        "final_shipping_strict_definition": (
+            "final emitted in-tree zlint lint semantics vs original rule text/context; "
+            "row-fragment synonymy is diagnostic only"
+        ),
+        "final_shipping_strict_judged": len(ship_judged),
+        "final_shipping_strict_not_judged": generated_count - len(ship_judged),
+        "final_shipping_strict_expresses": len(ship_expresses),
+        "final_shipping_strict_does_not_express": len(ship_dne),
+        "final_shipping_strict_uncertain": len(ship_uncertain),
+        "final_shipping_strict_rate_over_generated": _rate(len(ship_expresses), generated_count),
+        "final_shipping_strict_rate_over_domain": _rate(len(ship_expresses), total),
+        "diagnostic_row_level": {
+            "judged": len(judged),
+            "not_judged": generated_count - len(judged),
+            "expresses": len(expresses),
+            "does_not_express": len(dne),
+            "rate_over_generated": _rate(len(expresses), len(judged)),
+            "end_to_end_rate_over_domain": _rate(len(expresses), total),
+        },
+        "diagnostic_row_level_by_method": {
             method: {
                 "generated": count,
                 "judged": sum(
@@ -592,8 +680,6 @@ def _write_shipping_index(run_dir: Path, latest: dict[int, dict],
         rid = row.get("rule_id")
         if domain_ids is not None and int(rid or 0) not in domain_ids:
             continue
-        if row.get("synonymy", {}).get("verdict") != "EXPRESSES":
-            continue
         if _shipping_gate(row) != "EXPRESSES":
             continue
         rendered = row.get("rendered_lint") or {}
@@ -636,6 +722,7 @@ def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = Non
     rows = _write_expresses_index(run_dir, latest, domain_ids)
     ship_rows = _write_shipping_index(run_dir, latest, domain_ids)
     expected_files = {r.get("filename") for r in rows if r.get("filename")}
+    expected_files.update(r.get("filename") for r in ship_rows if r.get("filename"))
     rendered_root = run_dir / "synonymous_lints"
     if rendered_root.exists():
         for path in rendered_root.rglob("*.go"):
@@ -676,6 +763,13 @@ def compact_ledger(domain: list[dict], run_dir: Path) -> dict:
 # per-rule work
 # ---------------------------------------------------------------------------
 def _judge(rule: dict, tree, precondition, code_semantics: str, k: int) -> dict:
+    """Row-level synonymy: generated semantics vs this extracted source row.
+
+    Keep this intentionally narrower than the strict shipping judge. A single IR
+    row carries one normative keyword/atom; nearby rows and full section excerpts
+    can contain sibling keywords that belong to separate IRs. Profile/table scope
+    is still passed separately so certificate type/profile context is preserved.
+    """
     return cascade.synonymy_verdict(
         tree,
         rule.get("text") or "",
@@ -710,8 +804,55 @@ def _full_rule_context(rule: dict) -> str:
         pieces.append(f"Profile/table context: {rule.get('profile_scope')}")
     if rule.get("nearby_section_rows"):
         pieces.append(f"Nearby rows from the same source section/table:\n{rule.get('nearby_section_rows')}")
-    if rule.get("context"):
-        pieces.append(f"Surrounding source context: {rule.get('context')}")
+    source_name = rule.get("source") or ""
+    section_name = str(rule.get("section") or "")
+    row_text = rule.get("text") or ""
+    if (
+        source_name == "RFC5280"
+        and section_name == "A.1"
+        and "version MUST be v2 or v3" in row_text
+    ):
+        pieces.append(
+            "Source-local ASN.1 antecedent: in RFC 5280 Appendix A.1, this "
+            "trailing comment appears immediately after the optional "
+            "`issuerUniqueID [1] IMPLICIT UniqueIdentifier OPTIONAL` line or "
+            "the optional `subjectUniqueID [2] IMPLICIT UniqueIdentifier "
+            "OPTIONAL` line, so `If present` refers to either of those "
+            "UniqueIdentifier fields being present."
+        )
+    if (
+        source_name == "RFC5280"
+        and section_name == "A.1"
+        and "version MUST be v3" in row_text
+        and "}" in row_text
+    ):
+        pieces.append(
+            "Source-local ASN.1 antecedent: in RFC 5280 Appendix A.1, this "
+            "trailing comment is attached to `extensions [3] Extensions "
+            "OPTIONAL`, so `If present` refers to the TBSCertificate extensions "
+            "[3] field being present."
+        )
+    if (
+        source_name == "CABF-BR"
+        and section_name == "7.1.4.3"
+        and "IPv4 address" in row_text
+        and "IPv4Address" in row_text
+    ):
+        pieces.append(
+            "Source-local row role: in CABF §7.1.4.3, this extracted row is "
+            "the IPv4 bullet under `The value of the field MUST be encoded as "
+            "follows`, where the field is the Subscriber Certificate "
+            "commonName attribute. The preceding sentence requiring commonName "
+            "to contain a value from subjectAltName is a separate row-level "
+            "requirement; this IPv4 bullet constrains the textual encoding of "
+            "the commonName value when that value is an IPv4 address."
+        )
+    source_excerpt = _raw_section_excerpt(
+        rule.get("source") or "",
+        str(rule.get("section") or ""),
+    )
+    if source_excerpt:
+        pieces.append(f"Original source section excerpt:\n{source_excerpt}")
     if ir.get("effective_date"):
         pieces.append(f"Rule effective date: {ir.get('effective_date')}")
     return "\n".join(p for p in pieces if p and not p.endswith(": "))
@@ -734,6 +875,7 @@ def _shipping_code_semantics(rule: dict, tree=None, precondition=None,
         severity=_severity_for_rule(rule),
         ir=rule.get("ir") or {},
         pass_condition_text=pass_condition_text,
+        source=rule.get("source") or "",
     )
 
 
@@ -875,6 +1017,7 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
         "title": rule.get("title"),
         "text": rule.get("text"),
         "context": rule.get("context"),
+        "nearby_section_rows": rule.get("nearby_section_rows"),
         "profile_scope": rule.get("profile_scope"),
         "ir": rule.get("ir"),
     }
@@ -908,7 +1051,7 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
                 }
             else:
                 rec["synonymy"] = _judge(rule, tree, precondition, rec["code_semantics"], k)
-            if rec["synonymy"].get("verdict") == "EXPRESSES":
+            if not skip_synonymy:
                 rendered = _render_synonymous_lint(rule, tree, precondition)
                 if rendered:
                     output_path = _write_rendered(rendered, rendered_root)
@@ -917,7 +1060,7 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
                         rendered["output_path"] = output_path
                         rendered.pop("file_content", None)
                 rec["rendered_lint"] = rendered
-                if rendered and not rendered.get("render_error") and not skip_synonymy:
+                if rendered and not rendered.get("render_error"):
                     ship_sem, ship_syn = _judge_shipping(rule, tree, precondition, k)
                     rec["ship_code_semantics"] = ship_sem
                     rec["ship_synonymy"] = ship_syn
@@ -948,7 +1091,8 @@ def iter_pending(domain, done, *, retry_errors, retry_generation_failures, retry
 # ---------------------------------------------------------------------------
 # --rejudge : reuse cached generation, re-run only the judge with rule context
 # ---------------------------------------------------------------------------
-def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
+def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool,
+            target_ids: set[int] | None = None) -> dict:
     ledger = run_dir / "codegen_synonymy.jsonl"
     summary_path = run_dir / "codegen_synonymy_summary.json"
     ps_by_id = {int(r["id"]): r.get("profile_scope") for r in domain}
@@ -957,6 +1101,8 @@ def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
     n_rejudged = 0
     for rec in records:
         rid = rec.get("rule_id")
+        if target_ids is not None and int(rid or 0) not in target_ids:
+            continue
         if not rec.get("generation_success") or rec.get("code_semantics") is None:
             continue
         ps = ps_by_id.get(rid)
@@ -994,7 +1140,8 @@ def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool) -> dict:
 # --rejudge-shipping : final emitted zlint semantics vs original rule context
 # ---------------------------------------------------------------------------
 def rejudge_shipping(domain: list[dict], run_dir: Path, k: int,
-                     only_missing: bool, inner_workers: int) -> dict:
+                     only_missing: bool, inner_workers: int,
+                     target_ids: set[int] | None = None) -> dict:
     ledger = run_dir / "codegen_synonymy.jsonl"
     summary_path = run_dir / "codegen_synonymy_summary.json"
     rendered_root = run_dir / "synonymous_lints"
@@ -1006,10 +1153,10 @@ def rejudge_shipping(domain: list[dict], run_dir: Path, k: int,
     n_skipped = 0
     for rec in records:
         rid = int(rec.get("rule_id") or 0)
-        if not rid or not rec.get("generation_success"):
+        if target_ids is not None and rid not in target_ids:
             n_skipped += 1
             continue
-        if rec.get("synonymy", {}).get("verdict") != "EXPRESSES":
+        if not rid or not rec.get("generation_success"):
             n_skipped += 1
             continue
         cur = rec.get("ship_synonymy", {}).get("verdict")
@@ -1069,6 +1216,26 @@ def rejudge_shipping(domain: list[dict], run_dir: Path, k: int,
                 inner_workers=inner_workers,
                 pass_condition_text=pass_condition_text,
             )
+            if ship_syn.get("verdict") == "ERROR":
+                previous = rec.get("ship_synonymy") or {}
+                if previous.get("verdict") in _DECIDED_SYNONYMY:
+                    err = dict(ship_syn)
+                    rec["ship_rejudge_error"] = err
+                    ship_syn = previous
+                    ship_sem = rec.get("ship_code_semantics") or ship_sem
+                else:
+                    rec["ship_synonymy"] = {
+                        "verdict": None,
+                        "path": "shipping_rejudge_error",
+                        "reason": ship_syn.get("sample_why") or ship_syn.get("judge_raw") or "shipping judge error",
+                    }
+                    n_skipped += 1
+                    print(
+                        f"  shipping R{rid}: {cur or 'UNJUDGED'} -> ERROR "
+                        f"({ship_syn.get('n_err', 0)}X; kept unjudged)",
+                        flush=True,
+                    )
+                    continue
             if parse_error:
                 ship_syn["cached_tree_parse_error"] = parse_error
                 ship_syn["execute_semantics_source"] = "cached_code_semantics"
@@ -1175,17 +1342,26 @@ def main() -> int:
         return 0
 
     if args.rejudge:
-        summary = rejudge(domain, run_dir, k=args.k, only_dne=not args.rejudge_all)
+        target_ids = {int(x) for x in args.rule_id} if args.rule_id else None
+        summary = rejudge(
+            domain,
+            run_dir,
+            k=args.k,
+            only_dne=not args.rejudge_all,
+            target_ids=target_ids,
+        )
         print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
         return 0
 
     if args.rejudge_shipping:
+        target_ids = {int(x) for x in args.rule_id} if args.rule_id else None
         summary = rejudge_shipping(
             domain,
             run_dir,
             k=args.k,
             only_missing=not args.rejudge_shipping_all,
             inner_workers=max(1, args.shipping_inner_workers),
+            target_ids=target_ids,
         )
         print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
         return 0
@@ -1220,9 +1396,10 @@ def main() -> int:
             append_jsonl(ledger, rec)
             summary = summarize(domain, ledger, summary_path)
             export_synonymous_from_ledger(run_dir, domain)
-            sr = summary["synonymy_rate_over_generated"]
+            sr = summary["final_shipping_strict_rate_over_domain"]
             print("[progress] completed={completed}/{domain_total} generated={generation_success} "
-                  "expresses={synonymy_expresses} gen_rate={generation_rate:.3f} syn_rate={sr}".format(
+                  "shipping_strict={final_shipping_strict_expresses} "
+                  "gen_rate={generation_rate:.3f} shipping_e2e={sr}".format(
                       **{**summary, "sr": f"{sr:.3f}" if sr is not None else "NA"}), flush=True)
 
     summary = summarize(domain, ledger, summary_path)

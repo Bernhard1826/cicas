@@ -283,6 +283,21 @@ class DNDirectoryStringValuesEncodedAs:
 
 
 @dataclass(frozen=True)
+class DNAttributeValuesEncodedAs:
+    """Every value of one named AttributeType in a Subject/Issuer DN is encoded
+    with one of the given ASN.1 string tags.
+
+    This is the attribute-level counterpart to FieldEncodedAs(Subject/Issuer):
+    it walks RawSubject/RawIssuer DER, matches AttributeType by a closed X.520 /
+    CABF OID vocabulary, and checks the actual AttributeValue tag. Attribute
+    absence is vacuously true because this atom expresses an encoding constraint,
+    not a presence requirement."""
+    dn: str
+    attr: str
+    types: tuple
+
+
+@dataclass(frozen=True)
 class DateAfter:
     """True iff later > earlier."""
     later: str    # DATE_FIELD name
@@ -856,10 +871,75 @@ class SignatureAlgorithmIdentifiersEqualHex:
 
 
 @dataclass(frozen=True)
+class SignatureAlgorithmIdentifiersInHexSet:
+    """True iff both certificate signature AlgorithmIdentifier encodings are
+    independently members of the given DER hex set. This does not assert that
+    the two fields are byte-identical; profile/RFC signatureAlgorithm equality
+    rows are represented by separate lints."""
+    hex_lits: tuple
+
+
+@dataclass(frozen=True)
 class SPKIAlgorithmIdentifierEqualsHex:
     """True iff SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals
     the given hex bytes exactly."""
     hex_lit: str
+
+
+@dataclass(frozen=True)
+class SPKIECPointLengthAlgorithmIdentifierEqualsHex:
+    """True iff an EC SubjectPublicKeyInfo whose subjectPublicKey BIT STRING
+    has the given uncompressed point length uses the given AlgorithmIdentifier
+    DER bytes.
+
+    Generic over EC point length and AlgorithmIdentifier DER. Values whose
+    subjectPublicKey length differs are outside the conditional clause."""
+    point_len: int
+    hex_lit: str
+
+
+@dataclass(frozen=True)
+class SPKINamedCurveAlgorithmIdentifierEqualsHex:
+    """True iff a SubjectPublicKeyInfo AlgorithmIdentifier whose parameters
+    are the given namedCurve OID DER bytes has the given complete
+    AlgorithmIdentifier DER bytes.
+
+    Generic over namedCurve OID DER and AlgorithmIdentifier DER. Values whose
+    AlgorithmIdentifier parameters are not that namedCurve are outside the
+    conditional clause."""
+    curve_oid_der_hex: str
+    hex_lit: str
+
+
+@dataclass(frozen=True)
+class SPKIECPointOnCurveNamedCurveOIDEqualsHex:
+    """True iff an EC SubjectPublicKeyInfo whose public EC point lies on the
+    named curve uses that curve's namedCurve OID in AlgorithmIdentifier
+    parameters.
+
+    This separates curve-name rows ("For P-256 keys, namedCurve MUST be
+    secp256r1") from sibling exact-AlgorithmIdentifier-DER rows. The curve
+    predicate is derived from the subjectPublicKey ECPoint bytes, not from the
+    namedCurve value being checked."""
+    curve_name: str
+    curve_oid_der_hex: str
+
+
+@dataclass(frozen=True)
+class SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex:
+    """True iff a SubjectPublicKeyInfo whose subjectPublicKey BIT STRING
+    contains an ASN.1 RSAPublicKey SEQUENCE uses the given AlgorithmIdentifier
+    DER bytes. Non-RSA public-key bit strings are outside the conditional
+    clause."""
+    hex_lit: str
+
+
+@dataclass(frozen=True)
+class SPKIRSAPublicKeyAlgorithmOIDEqualsHex:
+    """True iff a SubjectPublicKeyInfo whose subjectPublicKey BIT STRING
+    contains an ASN.1 RSAPublicKey SEQUENCE uses the given AlgorithmIdentifier
+    algorithm OID DER element. Parameters are intentionally not checked."""
+    oid_der_hex: str
 
 
 @dataclass(frozen=True)
@@ -886,6 +966,16 @@ class SubjectCommonNameFQDNMatchesDNSNameSAN:
     is a character-for-character copy of one subjectAltName dNSName entry.
 
     NON_GENERIC: scoped to CABF commonName-from-SAN dNSName rules."""
+
+
+@dataclass(frozen=True)
+class StringFieldIfIPv4AddressUsesDottedDecimal:
+    """True iff a string field that has IPv4-address-like shape uses the
+    IPv4Address textual literal grammar: dotted decimal decimal-octets.
+
+    Empty values and values that are not IPv4-like are outside this conditional
+    clause. Generic: parameterized by string field."""
+    field: str
 
 
 @dataclass(frozen=True)
@@ -1212,10 +1302,11 @@ class ExtHasAnyGeneralNameOfTag:
 
 @dataclass(frozen=True)
 class DomainComponentOrdered:
-    """True iff the Subject DN contains domainComponent fields in a single
-    contiguous ordered sequence (no gaps, no intervening non-DC RDN types).
-    Empty Organization is allowed as a precondition. The rule requires
-    "domainComponent fields MUST be in a single ordered sequence" (R4660)."""
+    """True iff the Subject DN domainComponent fields, when present, form one
+    contiguous sequence whose values contain all labels of a certificate Domain
+    Name. The separate DNComponentOrderMatches("dns_reverse") atom checks the
+    root-first order sentence. NON_GENERIC: CABF domainComponent Domain Label
+    sequence semantics."""
 
 
 @dataclass(frozen=True)
@@ -1480,7 +1571,8 @@ Atom = Union[
     KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas, ExtKeyUsageOnlyHasUsagesInSet,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
-    FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs, FieldContains,
+    FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs,
+    DNAttributeValuesEncodedAs, FieldContains,
     CrossFieldEq,
     DateAfter, DateBefore,
     ListAllMatch, ListAnyMatch, ListUnique, WildcardFilter,
@@ -1511,15 +1603,21 @@ Atom = Union[
     ScalarInList, ScalarInAnyOfLists, ListSubsetOfList,
     DNSNamesFQDNOrWildcardPortionMatchesRegex, IPv4Conditional,
     SubtreeIPv4Conditional,
-    ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag, DomainComponentOrdered,
+    ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag,
+    DNComponentOrderMatches, DomainComponentOrdered,
     DNSOnionNamesHaveValidTorV3Address, DomainNamesDoNotEndWithIPReverseZoneSuffix,
     RSAModulusBitsInRange, RSAPublicExponentInRange,
     SigAlgMatchesTBSSignature, SignatureAlgorithmIdentifiersEqualHex,
-    SPKIAlgorithmIdentifierEqualsHex,
+    SignatureAlgorithmIdentifiersInHexSet,
+    SPKIAlgorithmIdentifierEqualsHex, SPKIECPointLengthAlgorithmIdentifierEqualsHex,
+    SPKINamedCurveAlgorithmIdentifierEqualsHex,
+    SPKIECPointOnCurveNamedCurveOIDEqualsHex,
+    SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex,
+    SPKIRSAPublicKeyAlgorithmOIDEqualsHex,
     NotAfterIsNoExpirySentinel,
     ValidityUTCTimeValuesUseZulu,
     CommonNameFromSAN, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex,
-    SubjectCommonNameFQDNMatchesDNSNameSAN,
+    SubjectCommonNameFQDNMatchesDNSNameSAN, StringFieldIfIPv4AddressUsesDottedDecimal,
     RDNCountInRange, DNHasRDNSequence, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
     SerialNumberDERSignBitZero,
     # New extension-aware atoms for policy qualifiers, key usage, serial number, SAN
@@ -1540,7 +1638,8 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     KeyUsageHas, KeyUsageOnlyHasBitsInSet, ExtKeyUsageHas, ExtKeyUsageOnlyHasUsagesInSet,
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
-    FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs, FieldContains,
+    FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs,
+    DNAttributeValuesEncodedAs, FieldContains,
     CrossFieldEq,
     DateAfter, DateBefore,
     ListAllMatch, ListAnyMatch, ListUnique, WildcardFilter,
@@ -1571,15 +1670,21 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     ScalarInList, ScalarInAnyOfLists, ListSubsetOfList,
     DNSNamesFQDNOrWildcardPortionMatchesRegex, IPv4Conditional,
     SubtreeIPv4Conditional,
-    ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag, DomainComponentOrdered,
+    ExtHasGeneralNameWithTag, ExtHasAnyGeneralNameOfTag,
+    DNComponentOrderMatches, DomainComponentOrdered,
     DNSOnionNamesHaveValidTorV3Address, DomainNamesDoNotEndWithIPReverseZoneSuffix,
     RSAModulusBitsInRange, RSAPublicExponentInRange,
     SigAlgMatchesTBSSignature, SignatureAlgorithmIdentifiersEqualHex,
-    SPKIAlgorithmIdentifierEqualsHex,
+    SignatureAlgorithmIdentifiersInHexSet,
+    SPKIAlgorithmIdentifierEqualsHex, SPKIECPointLengthAlgorithmIdentifierEqualsHex,
+    SPKINamedCurveAlgorithmIdentifierEqualsHex,
+    SPKIECPointOnCurveNamedCurveOIDEqualsHex,
+    SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex,
+    SPKIRSAPublicKeyAlgorithmOIDEqualsHex,
     NotAfterIsNoExpirySentinel,
     ValidityUTCTimeValuesUseZulu,
     CommonNameFromSAN, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex,
-    SubjectCommonNameFQDNMatchesDNSNameSAN,
+    SubjectCommonNameFQDNMatchesDNSNameSAN, StringFieldIfIPv4AddressUsesDottedDecimal,
     RDNCountInRange, DNHasRDNSequence, RDNHasSingleAttribute, RDNSequenceHasCountryBefore,
     SerialNumberPositive, SerialNumberOctetLengthInRange, SerialNumberDERSignBitZero,
     # New extension-aware atoms for policy qualifiers, key usage, serial number, SAN
@@ -1618,13 +1723,21 @@ NON_GENERIC_ATOMS: frozenset[str] = frozenset({
     "SubjectCommonNameFQDNMatchesDNSNameSAN", # CABF CN exact dNSName copy
     "SigAlgMatchesTBSSignature",         # RFC5280 sigAlg==tbsCert.signature, single structural rule
     "SignatureAlgorithmIdentifiersEqualHex", # exact DER for cert signature AlgorithmIdentifiers
+    "SignatureAlgorithmIdentifiersInHexSet", # allowed DER set for cert signature AlgorithmIdentifiers
     "SPKIAlgorithmIdentifierEqualsHex",  # exact DER for SubjectPublicKeyInfo.algorithm
+    "SPKIECPointLengthAlgorithmIdentifierEqualsHex", # EC point length conditional exact SPKI algid
+    "SPKINamedCurveAlgorithmIdentifierEqualsHex", # namedCurve conditional exact SPKI algid
+    "SPKIECPointOnCurveNamedCurveOIDEqualsHex", # EC point-on-curve conditional namedCurve OID
+    "SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex", # RSA public-key conditional exact SPKI algid
+    "SPKIRSAPublicKeyAlgorithmOIDEqualsHex", # RSA public-key conditional SPKI alg OID
     "NotAfterIsNoExpirySentinel",        # RFC5280 §4.1.2.5 99991231235959Z sentinel, single value
     "ValidityUTCTimeValuesUseZulu",      # RFC5280 UTCTime Zulu/GMT encoding form
     "KeyUsageOnlyHasBitsInSet",          # KeyUsage any-other-value rows
     "ExtKeyUsageOnlyHasUsagesInSet",    # EKU any-other-value rows
+    "DNComponentOrderMatches",           # domainComponent DNS-order rows
     "DomainComponentOrdered",            # DC contiguous-ordered, single rule
     "DNDirectoryStringValuesEncodedAs",  # DirectoryString per-attr + fixed exception-OID table
+    "DNAttributeValuesEncodedAs",        # named DN attribute DER tag check by standard OID table
     "CertPolicyExplicitTextHasEncodingTagInSet",  # certPolicies UserNotice explicitText, one construct
     "CertPolicyExplicitTextAllHaveEncodingTagInSet", # certPolicies explicitText universal encoding
     "PolicyQualifierOIDInSet",           # certPolicies policyQualifierId OID set, specific extension
@@ -1799,12 +1912,36 @@ def parse(obj: Any) -> Compound:
                NameConstraintsPermittedSubtreesNonEmpty):
         _expect_args(fname, args, 0, "(no args)")
         return cls()
+    if cls is StringFieldIfIPv4AddressUsesDottedDecimal:
+        _expect_args(fname, args, 1, "<STRING_FIELD>")
+        return cls(field=str(args[0]))
     if cls is SignatureAlgorithmIdentifiersEqualHex:
         _expect_args(fname, args, 1, "<hex_literal>")
         return cls(hex_lit=str(args[0]))
+    if cls is SignatureAlgorithmIdentifiersInHexSet:
+        _expect_args(fname, args, 1, "[<hex_literal>, ...]")
+        vals = args[0]
+        if not isinstance(vals, (list, tuple)) or not vals:
+            raise DSLError("SignatureAlgorithmIdentifiersInHexSet needs a non-empty hex list")
+        return cls(hex_lits=tuple(str(v) for v in vals))
     if cls is SPKIAlgorithmIdentifierEqualsHex:
         _expect_args(fname, args, 1, "<hex_literal>")
         return cls(hex_lit=str(args[0]))
+    if cls is SPKIECPointLengthAlgorithmIdentifierEqualsHex:
+        _expect_args(fname, args, 2, "<point_len:int> <hex_literal>")
+        return cls(point_len=int(args[0]), hex_lit=str(args[1]))
+    if cls is SPKINamedCurveAlgorithmIdentifierEqualsHex:
+        _expect_args(fname, args, 2, "<curve_oid_der_hex> <hex_literal>")
+        return cls(curve_oid_der_hex=str(args[0]), hex_lit=str(args[1]))
+    if cls is SPKIECPointOnCurveNamedCurveOIDEqualsHex:
+        _expect_args(fname, args, 2, "<curve_name> <curve_oid_der_hex>")
+        return cls(curve_name=str(args[0]), curve_oid_der_hex=str(args[1]))
+    if cls is SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex:
+        _expect_args(fname, args, 1, "<hex_literal>")
+        return cls(hex_lit=str(args[0]))
+    if cls is SPKIRSAPublicKeyAlgorithmOIDEqualsHex:
+        _expect_args(fname, args, 1, "<oid_der_hex>")
+        return cls(oid_der_hex=str(args[0]))
     if cls is SubjectCommonNameFQDNOrWildcardPortionMatchesRegex:
         _expect_args(fname, args, 1, "<NAMED_REGEX>")
         regex_name = str(args[0])
@@ -1878,6 +2015,12 @@ def parse(obj: Any) -> Compound:
         if not isinstance(args[1], list):
             raise DSLError(f"{fname}: second arg must be list of ASN1_TYPEs")
         return cls(dn=str(args[0]), types=tuple(str(t) for t in args[1]))
+
+    if cls is DNAttributeValuesEncodedAs:
+        _expect_args(fname, args, 3, "<dn:Subject|Issuer> <DN_ATTR> [<ASN1_TYPE>...]")
+        if not isinstance(args[2], list):
+            raise DSLError(f"{fname}: third arg must be list of ASN1_TYPEs")
+        return cls(dn=str(args[0]), attr=str(args[1]), types=tuple(str(t) for t in args[2]))
 
     if cls is DateAfter:
         _expect_args(fname, args, 2, "<later DATE_FIELD> <earlier DATE_FIELD>")
@@ -2142,6 +2285,9 @@ def parse(obj: Any) -> Compound:
     if cls is ExtHasAnyGeneralNameOfTag:
         _expect_args(fname, args, 2, "<OID_CONST> <tag:int>")
         return cls(oid=str(args[0]), tag=int(args[1]))
+    if cls is DNComponentOrderMatches:
+        _expect_args(fname, args, 1, "<dns_reverse>")
+        return cls(order_type=str(args[0]))
     if cls is DomainComponentOrdered:
         _expect_args(fname, args, 0, "(no args) — checks Subject DN domainComponent ordering")
         return cls()
@@ -2282,12 +2428,48 @@ def _validate(n, errs: list[str], in_item: bool):
                       SigAlgMatchesTBSSignature, NotAfterIsNoExpirySentinel, CommonNameFromSAN,
                       SubjectCommonNameFQDNMatchesDNSNameSAN)):
         return
-    if isinstance(n, (SignatureAlgorithmIdentifiersEqualHex, SPKIAlgorithmIdentifierEqualsHex)):
-        if not re.fullmatch(r"[0-9a-fA-F]+", n.hex_lit) or len(n.hex_lit) % 2 != 0:
+    if isinstance(n, StringFieldIfIPv4AddressUsesDottedDecimal):
+        fd = V.lookup_anyfield(n.field)
+        if fd is None:
+            errs.append(f"unknown string field '{n.field}'")
+        elif fd.semantic != "string":
+            errs.append(f"StringFieldIfIPv4AddressUsesDottedDecimal requires a string field, got {n.field}:{fd.semantic}")
+        return
+    if isinstance(n, SignatureAlgorithmIdentifiersInHexSet):
+        bad = next((v for v in n.hex_lits
+                    if not re.fullmatch(r"[0-9a-fA-F]+", v) or len(v) % 2 != 0), None)
+        if bad is not None:
             errs.append(
                 f"{type(n).__name__}: hex literal must be even-length hex chars "
-                f"(got {n.hex_lit[:30]!r})"
+                f"(got {bad[:30]!r})"
             )
+        return
+    if isinstance(n, (SignatureAlgorithmIdentifiersEqualHex,
+                      SPKIAlgorithmIdentifierEqualsHex,
+                      SPKIECPointLengthAlgorithmIdentifierEqualsHex,
+                      SPKINamedCurveAlgorithmIdentifierEqualsHex,
+                      SPKIECPointOnCurveNamedCurveOIDEqualsHex,
+                      SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex,
+                      SPKIRSAPublicKeyAlgorithmOIDEqualsHex)):
+        if isinstance(n, SPKINamedCurveAlgorithmIdentifierEqualsHex):
+            hex_values = (n.curve_oid_der_hex, n.hex_lit)
+        elif isinstance(n, SPKIECPointOnCurveNamedCurveOIDEqualsHex):
+            hex_values = (n.curve_oid_der_hex,)
+        elif isinstance(n, SPKIRSAPublicKeyAlgorithmOIDEqualsHex):
+            hex_values = (n.oid_der_hex,)
+        else:
+            hex_values = (n.hex_lit,)
+        bad = next((v for v in hex_values
+                    if not re.fullmatch(r"[0-9a-fA-F]+", v) or len(v) % 2 != 0), None)
+        if bad is not None:
+            errs.append(
+                f"{type(n).__name__}: hex literal must be even-length hex chars "
+                f"(got {bad[:30]!r})"
+            )
+        if isinstance(n, SPKIECPointLengthAlgorithmIdentifierEqualsHex) and n.point_len <= 0:
+            errs.append(f"{type(n).__name__}: point_len must be positive")
+        if isinstance(n, SPKIECPointOnCurveNamedCurveOIDEqualsHex) and n.curve_name not in {"P-256", "P-384", "P-521"}:
+            errs.append(f"{type(n).__name__}: curve_name must be P-256, P-384, or P-521")
         return
     if isinstance(n, SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
         if n.pattern not in V.NAMED_REGEX_NAMES:
@@ -2416,6 +2598,18 @@ def _validate(n, errs: list[str], in_item: bool):
             errs.append(f"DNDirectoryStringValuesEncodedAs: dn must be Subject/Issuer, got '{n.dn}'")
         if not n.types:
             errs.append("DNDirectoryStringValuesEncodedAs: types cannot be empty")
+        for t in n.types:
+            if t not in V.ASN1_BY_NAME:
+                errs.append(f"unknown ASN1_TYPE '{t}'")
+        return
+
+    if isinstance(n, DNAttributeValuesEncodedAs):
+        if n.dn not in ("Subject", "Issuer"):
+            errs.append(f"DNAttributeValuesEncodedAs: dn must be Subject/Issuer, got '{n.dn}'")
+        if n.attr not in V.DN_ATTR_OID_BY_NAME:
+            errs.append(f"DNAttributeValuesEncodedAs: unknown DN_ATTR '{n.attr}'")
+        if not n.types:
+            errs.append("DNAttributeValuesEncodedAs: types cannot be empty")
         for t in n.types:
             if t not in V.ASN1_BY_NAME:
                 errs.append(f"unknown ASN1_TYPE '{t}'")
@@ -2854,6 +3048,12 @@ def _validate(n, errs: list[str], in_item: bool):
     if isinstance(n, DomainComponentOrdered):
         # DomainComponentOrdered is a zero-arg sentinel atom with no field args
         return
+    if isinstance(n, DNComponentOrderMatches):
+        if n.order_type not in {"dns_reverse"}:
+            errs.append(
+                f"DNComponentOrderMatches: order_type must be dns_reverse, got {n.order_type!r}"
+            )
+        return
     if isinstance(n, DNSOnionNamesHaveValidTorV3Address):
         return
     if isinstance(n, DomainNamesDoNotEndWithIPReverseZoneSuffix):
@@ -3025,12 +3225,20 @@ ATOM_SIGNATURES = [
     ('RSAPublicExponentInRange', ['<lo>', '<hi|MAX_INT>'], 'RSA public exponent in [lo,hi]; vacuous for non-RSA (e.g. "exponent MUST be >= 3")'),
     ('SigAlgMatchesTBSSignature', [], 'the outer signatureAlgorithm is byte-identical to tbsCertificate.signature'),
     ('SignatureAlgorithmIdentifiersEqualHex', ['<hex_literal>'], 'both certificate signature AlgorithmIdentifier DER encodings (outer signatureAlgorithm and TBSCertificate.signature) equal the given hex bytes exactly'),
+    ('SignatureAlgorithmIdentifiersInHexSet', [['<hex_literal>', '...']], 'both certificate signature AlgorithmIdentifier DER encodings are independently members of the given exact DER hex set; does not assert outer/TBS equality'),
     ('SPKIAlgorithmIdentifierEqualsHex', ['<hex_literal>'], 'SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals the given hex bytes exactly'),
+    ('SPKIECPointLengthAlgorithmIdentifierEqualsHex', ['<point_len:int>', '<hex_literal>'], 'if SubjectPublicKeyInfo.subjectPublicKey BIT STRING has the given EC point length, SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals the hex bytes exactly'),
+    ('SPKINamedCurveAlgorithmIdentifierEqualsHex', ['<curve_oid_der_hex>', '<hex_literal>'], 'if SubjectPublicKeyInfo.algorithm parameters is the given namedCurve OID DER element, SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals the hex bytes exactly'),
+    ('SPKIECPointOnCurveNamedCurveOIDEqualsHex', ['<P-256|P-384|P-521>', '<curve_oid_der_hex>'], 'if SubjectPublicKeyInfo.subjectPublicKey ECPoint lies on the named NIST curve, SubjectPublicKeyInfo.algorithm parameters namedCurve OID DER element equals the given curve OID. Use for rows like "For P-256 keys, namedCurve MUST be secp256r1"; use SPKINamedCurveAlgorithmIdentifierEqualsHex for separate exact AlgorithmIdentifier DER hex rows.'),
+    ('SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex', ['<hex_literal>'], 'if SubjectPublicKeyInfo.subjectPublicKey BIT STRING is an ASN.1 RSAPublicKey SEQUENCE, SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER equals the hex bytes exactly'),
+    ('SPKIRSAPublicKeyAlgorithmOIDEqualsHex', ['<oid_der_hex>'], 'if SubjectPublicKeyInfo.subjectPublicKey BIT STRING is an ASN.1 RSAPublicKey SEQUENCE, SubjectPublicKeyInfo.algorithm OID DER element equals the hex bytes; parameters are not checked'),
     ('NotAfterIsNoExpirySentinel', [], 'notAfter is the RFC5280 no-well-defined-expiration sentinel 99991231235959Z (GeneralizedTime)'),
     ('CommonNameFromSAN',   [], 'Subject.CommonName equals one of the SAN dNSName entries ("CN MUST be from SAN")'),
+    ('StringFieldIfIPv4AddressUsesDottedDecimal', ['<STRING_FIELD>'], 'If a string field is IPv4-address-like text, it must use the IPv4Address textual literal grammar: dotted decimal decimal-octets, four octets 0..255, no leading zero except 0. This is a string-value syntax rule, not a SAN iPAddress OCTET STRING rule. Non-IPv4-like values are outside this conditional clause.'),
     ('IsEndEntity',         [], 'cert is an end-entity / subscriber (non-CA)'),
     ('FieldEncodedAs',      ['<FIELD>', ['<ASN1_TYPE>', '...']],     'string field encoded as one of types'),
     ('DNDirectoryStringValuesEncodedAs', ['<dn:Subject|Issuer>', ['<ASN1_TYPE>', '...']], 'every DirectoryString-syntax attribute value in the Subject/Issuer DN is encoded as one of the types; non-DirectoryString attributes (countryName, domainComponent, ...) are skipped — use for "DirectoryString attribute values MUST be PrintableString or UTF8String, with exceptions"'),
+    ('DNAttributeValuesEncodedAs', ['<dn:Subject|Issuer>', '<DN_ATTR>', ['<ASN1_TYPE>', '...']], 'every present value of one named Subject/Issuer DN attribute is DER-encoded as one of the types; attribute absence passes because this is an encoding constraint, not a presence check'),
     ('FieldContains',       ['<STRING_FIELD>', '<char_or_substring>'], 'string field contains the given character substring; use for "@ MUST NOT appear" / "underscore MUST NOT appear" type checks'),
     ('DateAfter',           ['<DATE_FIELD>', '<DATE_FIELD>'],        'later > earlier'),
     ('DateBefore',          ['<DATE_FIELD|YYYY-MM-DD>', '<DATE_FIELD|YYYY-MM-DD>'], 'first date < second; either side can be a YYYY-MM-DD literal'),
@@ -3082,7 +3290,8 @@ ATOM_SIGNATURES = [
     ('SubtreeIPv4Conditional', ['<subtree_ip_list>', '<ipv4_predicate>', '<ipv6_predicate>'], 'mirror of IPv4Conditional for NameConstraints subtree IP lists ([]GeneralSubtreeIP). For each entry: if IPv4 subtree (4-byte IP part) then ipv4_predicate; if IPv6 subtree (16-byte IP part) then ipv6_predicate. Item predicate operates on total subtree-entry byte length (IP+Mask): ItemLenIn([8]) = IPv4 canonical (4+4), ItemLenIn([32]) = IPv6 canonical (16+16). For asymmetric rules, use the self-tautology pattern (ItemLenIn on the canonical size for the unconstrained branch). Empty list = vacuous true.'),
     ('ExtHasGeneralNameWithTag', ['<OID_CONST>', '<tag:int>'], 'ENCODING CHECK (NOT a presence check). True iff EVERY GeneralName entry in the named extension that has the given CHOICE tag is IA5String-encoded. Returns vacuously TRUE when zero entries of the given tag are present, so this atom CANNOT detect presence/absence — use ExtHasAnyGeneralNameOfTag for presence. RFC 5280 GeneralName tags: 0=otherName, 1=rfc822Name, 2=dNSName, 3=x400Address, 4=directoryName, 5=ediPartyName, 6=URI, 7=iPAddress, 8=registeredID. Use for "rfc822Name MUST be IA5String"-shape rules.'),
     ('ExtHasAnyGeneralNameOfTag', ['<OID_CONST>', '<tag:int>'], 'PRESENCE CHECK. True iff the named extension is present AND contains at least one GeneralName entry with the given CHOICE tag. Re-parses the raw extension SEQUENCE OF GeneralName because zcrypto exposes only DNSNames/EmailAddresses/URIs/IPAddresses (drops directoryName/otherName/ediPartyName/registeredID). RFC 5280 GeneralName tags: 0=otherName, 1=rfc822Name, 2=dNSName, 3=x400Address, 4=directoryName, 5=ediPartyName, 6=URI, 7=iPAddress, 8=registeredID. Use for "directoryName NOT RECOMMENDED in SAN" / "MUST contain at least one dNSName" presence rules.'),
-    ('DomainComponentOrdered',   [],                                       'Subject DN contains domainComponent fields in a single contiguous ordered sequence (no gaps or intervening non-DC RDN types); use for "domainComponent fields MUST be in ordered sequence" rules (R4660)'),
+    ('DNComponentOrderMatches', ['dns_reverse'], 'Subject DN domainComponent values, when present, form one contiguous sequence ordered as a root-first prefix of a certificate Domain Name labels. Use for "Domain Labels MUST be encoded in reverse order to DNS on-wire representation" rows; does not require the DC sequence to contain every label.'),
+    ('DomainComponentOrdered',   [],                                       'Subject DN domainComponent values, when present, form one contiguous sequence containing all labels of a certificate Domain Name. Use for rows requiring the domainComponent sequence to contain all Domain Labels from the Domain Name; use DNComponentOrderMatches("dns_reverse") for the separate reverse-order sentence.'),
     ('DomainNamesDoNotEndWithIPReverseZoneSuffix', [],                     'Certificate domain-name fields (SAN dNSName and legacy subject commonName) do not end in an IP reverse-zone suffix: in-addr.arpa or ip6.arpa. Use for CABF rules banning Domain Names that end in an IP Reverse Zone Suffix.'),
     # ── New extension-aware atoms (13 added 2026-07-02) ──────────────────
     ('ExtPolicyQualifierOIDInSet', ['<OID_CONST>', ['<QUALIFIER_OID_CONST>', '...']], 'CertificatePolicies extension contains a qualifier (CPS-pointer/id-qt-unotice) whose policyQualifierId OID is in the allow-list. Vacuously true when extension absent. Use for "policy qualifiers MUST be CPS OID or UserNotice OID" rules.'),
@@ -3152,18 +3361,15 @@ def compound_to_dict(node: Compound) -> dict:
               if getattr(n, f.name, None) is not None}
         ordered = [kw[f.name] for f in fields(type(n)) if f.name in kw]
 
-        # Atoms with tuple-valued fields → convert to list for JSON round-trip.
-        # Single-element tuples unwrapped to bare value only when the TUPLE is a
-        # list-of-identifiers with no other scalar args (parse reads scalar FIELD
-        # as positional[0] — unwrap keeps the tuple item in the right position).
-        # NOTE: allowed_oids in OidListCountInSet / AIAHasMethodOtherThan must
-        # ALWAYS stay as list (they're followed by scalar int args, so parse would
-        # mis-read a bare string as the next int arg).
+        # Atoms with tuple-valued fields: convert to JSON lists for round-trip.
+        # The parser's corresponding slots require list values even when there is
+        # only one element; unwrapping a single-item tuple corrupts cached ledgers.
         if op_name in (
             "FieldInSet", "FieldNotInSet",   # values: tuple
             "ItemInSet",                       # values: tuple
             "FieldEncodedAs",                  # types: tuple
             "DNDirectoryStringValuesEncodedAs",  # types: tuple
+            "DNAttributeValuesEncodedAs",      # types: tuple
             "IPListAllOctetCountIn",           # counts: tuple
             "SubtreeIPListAllOctetCountIn",    # counts: tuple
             "AIAMethodLocationsTagInSet",      # allowed_tags: tuple
@@ -3179,12 +3385,7 @@ def compound_to_dict(node: Compound) -> dict:
             for fi, f in enumerate(fields(type(n))):
                 v = kw_tup.get(f.name)
                 if isinstance(v, tuple):
-                    # AIAMethodLocationsTagInSet.allowed_tags: always keep as list
-                    # (contains ints 1..8; single-element unwrap breaks parse's isinstance(list) guard)
-                    if op_name == "AIAMethodLocationsTagInSet" and f.name == "allowed_tags":
-                        ordered[fi] = list(v)
-                    else:
-                        ordered[fi] = list(v) if len(v) != 1 else list(v)[0]
+                    ordered[fi] = list(v)
 
         # OidListCountInSet: allowed_oids tuple followed by int lo/hi → always list
         if op_name == "OidListCountInSet":

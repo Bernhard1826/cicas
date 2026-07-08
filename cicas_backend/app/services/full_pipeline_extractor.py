@@ -540,8 +540,17 @@ class FullPipelineExtractor:
                     for ir in all_irs:
                         subj_path = ir.subject.path if hasattr(ir.subject, 'path') else str(ir.subject)
                         subj_lower = subj_path.lower().strip()
+                        assertion_subject = getattr(ir, 'assertion_subject', '')
+                        if hasattr(assertion_subject, 'value'):
+                            assertion_subject = assertion_subject.value
+                        as_lower = str(assertion_subject or '').lower()
                         # Keep if subject is in allowed namespace or contains the extension name
+                        # Non-Certificate IRs are kept so lintability can adjudicate
+                        # CA/Implementation/CrossArtifact rules instead of turning
+                        # them into missing extraction results.
                         keep = (
+                            as_lower not in ('certificate', 'crl', '')
+                            or
                             any(subj_lower.startswith(p) for p in allowed_prefixes)
                             or ext_name in subj_lower
                         )
@@ -1791,4 +1800,3 @@ Rules:"""
         return {
             'layers': layers_data
         }
-

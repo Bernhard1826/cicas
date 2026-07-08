@@ -15,7 +15,9 @@ The report answers: which findings came from CICAS-added zlint lints
 ## Run
 
 ```
-python3 cicas_backend/experiments/cert_detection/run.py --certs /path/to/flat-pem-corpus
+python3 cicas_backend/experiments/cert_detection/run.py \
+  --certs /path/to/flat-pem-corpus \
+  --independent-audit-scope no-upstream
 ```
 
 Default output:
@@ -37,15 +39,24 @@ Input corpus convention: a flat directory of `*.pem` certificates. For CT or
 Tranco collection, keep acquisition metadata outside this directory or in a
 parallel manifest so the scanner sees only PEM files.
 
-Retained input/output pairs are current inspection artifacts only:
+Retained input/output pairs have been rerun with the current 91-lint strict
+shipping manifest and the compiled in-tree `cicasgen_` zlint binary:
 
 - `inputs/ct_recent/` -> `outputs/ct_recent/`
 - `inputs/tranco_1m/` -> `outputs/tranco_1m/`
 
-Current strict-shipping scan result: CT recent has 21 CICAS findings, all
-upstream-overlapping and independently confirmed; Tranco has 68 CICAS findings,
-including 1 no-upstream finding independently confirmed for rule 29492
-(`*.enter-system.com` lacks a CABF reserved policy OID).
+Current retained strict-shipping scan result:
+
+- `ct_recent`: 63,327 certs scanned; 57,558 CICAS findings; 283 no-upstream
+  findings independently audited; 1 strict reportable finding.
+- `tranco_1m`: 47,791 certs scanned; 44,020 CICAS findings; 1,316 no-upstream
+  findings independently audited; 6 strict reportable findings.
+
+Strict reportable here means: CICAS-generated lint fired, no upstream zlint lint
+fired on the same certificate, and the independent structural auditor confirmed
+the specific defect. Findings are not removed because of certificate issuance
+time; time/effective-date questions are treated as audit context, not a reporting
+filter.
 
 Probe, smoke, generic overwritten `outputs/certs/`, and older corpus runs are
 intentionally not kept.

@@ -21,6 +21,7 @@ Name doubles as the attribution key and is recorded in the emission manifest.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +38,12 @@ _SOURCE_TO_PKG = {
     "CABF": ("cabf_br", "CABFBaselineRequirements"),
     "CABF-BR": ("cabf_br", "CABFBaselineRequirements"),
     "CABF_BR": ("cabf_br", "CABFBaselineRequirements"),
+}
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[4]
+_RAW_SOURCE_PATHS = {
+    "CABF-BR": _BACKEND_ROOT / "data/raw/cabf-server/BR.md",
+    "RFC5280": _BACKEND_ROOT / "data/raw/rfc/rfc5280.txt",
 }
 
 
@@ -59,6 +66,7 @@ func init() {{
 \t\t\tDescription: {desc_lit},
 \t\t\tCitation:    {citation_lit},
 \t\t\tSource:      lint.{source_const},
+{effective_date_line}
 \t\t}},
 \t\tLint: New{struct_name},
 \t}})
@@ -104,6 +112,133 @@ def _build_imports(imps: set) -> str:
         lines.append("")
     lines += [f'\t"{i}"' for i in external]
     return "\n".join(lines)
+
+
+def _source_key(source: str) -> str:
+    key = (source or "").upper().replace(" ", "").replace("-", "_")
+    if "CABF" in key or "BR" in key:
+        return "CABF-BR"
+    if "RFC" in key or "5280" in key:
+        return "RFC5280"
+    return source or ""
+
+
+@lru_cache(maxsize=64)
+def _raw_source_text(source: str) -> str:
+    path = _RAW_SOURCE_PATHS.get(_source_key(source))
+    if not path or not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+@lru_cache(maxsize=512)
+def _raw_section_text(source: str, section: str) -> str:
+    text = _raw_source_text(source)
+    section = section or ""
+    if not text or not section:
+        return ""
+    if _source_key(source) == "CABF-BR":
+        heading_re = re.compile(rf"(?m)^#{{1,6}}\s+{re.escape(section)}(?:\s|$)")
+        next_heading_re = re.compile(r"(?m)^#{1,6}\s+(\d+(?:\.\d+)*)(?:\s|$)")
+    else:
+        heading_re = re.compile(rf"(?m)^\s*{re.escape(section)}(?:\.|\s+)")
+        next_heading_re = re.compile(r"(?m)^\s*(\d+(?:\.\d+)*)(?:\.|\s+)")
+    m = heading_re.search(text)
+    if not m:
+        return ""
+    end = len(text)
+    for nm in next_heading_re.finditer(text, m.end()):
+        next_section = nm.group(1)
+        if next_section == section or next_section.startswith(section + "."):
+            continue
+        end = nm.start()
+        break
+    return text[m.start():end]
+
+
+def _date_tuple(value: object) -> Optional[tuple[int, int, int]]:
+    if value is None:
+        return None
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", str(value))
+    if not m:
+        return None
+    y, mo, d = (int(x) for x in m.groups())
+    if not (1 <= mo <= 12 and 1 <= d <= 31):
+        return None
+    return y, mo, d
+
+
+def _norm_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def _effective_date_tuple(source: str,
+                          section: str,
+                          rule_text: str = "",
+                          ir: Optional[dict] = None) -> Optional[tuple[int, int, int]]:
+    ir = ir or {}
+    for key in ("effective_date", "effectiveDate"):
+        parsed = _date_tuple(ir.get(key))
+        if parsed:
+            return parsed
+
+    candidates = [
+        rule_text or "",
+        str(ir.get("description") or ""),
+        str((ir.get("constraint") or {}).get("raw_text") or ""),
+    ]
+    for candidate in candidates:
+        parsed = _date_tuple(candidate)
+        if parsed:
+            return parsed
+
+    norm_candidates = [
+        n for n in (_norm_text(c) for c in candidates)
+        if len(n) >= 30
+    ]
+    if not norm_candidates:
+        return None
+    section_text = _raw_section_text(source, section)
+    if not section_text:
+        return None
+    # Split into sentence-ish fragments so a date in one table-cell sentence
+    # does not leak to a neighboring sentence in the same Markdown row.
+    fragments = re.split(r"(?<=[.!?])\s+|\n+", section_text)
+    for frag in fragments:
+        parsed = _date_tuple(frag)
+        if not parsed:
+            continue
+        norm_frag = _norm_text(frag)
+        if any(c in norm_frag for c in norm_candidates):
+            return parsed
+    return None
+
+
+def _effective_date_go_line(source: str,
+                            section: str,
+                            rule_text: str,
+                            ir: Optional[dict]) -> tuple[str, bool]:
+    parsed = _effective_date_tuple(source, section, rule_text, ir)
+    if not parsed:
+        return "", False
+    y, mo, d = parsed
+    return (
+        f"\t\t\tEffectiveDate: time.Date({y}, time.Month({mo}), {d}, 0, 0, 0, 0, time.UTC),",
+        True,
+    )
+
+
+def _effective_date_natural(source: str,
+                            section: str,
+                            ir: Optional[dict]) -> Optional[str]:
+    parsed = _effective_date_tuple(source, section, "", ir)
+    if not parsed:
+        return None
+    y, mo, d = parsed
+    return f"{y:04d}-{mo:02d}-{d:02d}"
 
 
 def lint_name_for(rule_id: int, tree=None) -> str:
@@ -273,10 +408,211 @@ def _top_level_when_condition(tree) -> Optional[dsl.Compound]:
     return None
 
 
+def _tree_has_negative_ext_subfield(tree) -> bool:
+    if tree is None:
+        return False
+    if type(tree).__name__ == "Not" and type(getattr(tree, "inner", None)).__name__ == "ExtSubfieldPresent":
+        return True
+    for attr in ("inner", "cond", "main"):
+        child = getattr(tree, attr, None)
+        if child is not None and _tree_has_negative_ext_subfield(child):
+            return True
+    for child in getattr(tree, "parts", ()) or ():
+        if _tree_has_negative_ext_subfield(child):
+            return True
+    return False
+
+
+def _implicit_extension_presence_oid(tree) -> Optional[str]:
+    """Extension-content predicates apply only when their extension is present.
+
+    The Execute predicate for many atoms is intentionally vacuous or fail-closed
+    when the extension is absent, but a shipped zlint should report NA outside
+    the extension's content scope. Infer that CheckApplies guard from the atom
+    shape, not from rule ids.
+    """
+    if tree is None:
+        return None
+    name = type(tree).__name__
+    if name == "When" and hasattr(tree, "main"):
+        return _implicit_extension_presence_oid(tree.main)
+    if name == "Not" and hasattr(tree, "inner"):
+        # A negative sub-field requirement ("authorityCertIssuer MUST NOT be
+        # present") is satisfied when the containing extension is absent. Do
+        # not narrow CheckApplies to certificates that already contain the
+        # extension, or the final zlint behavior no longer mirrors the source
+        # rule's all-certificate scope for absence.
+        if type(tree.inner).__name__ == "ExtSubfieldPresent":
+            return None
+        return _implicit_extension_presence_oid(tree.inner)
+    if name == "Or" and _tree_has_negative_ext_subfield(tree):
+        return None
+    if name in ("And", "Or") and hasattr(tree, "parts"):
+        oids = {
+            oid for oid in (_implicit_extension_presence_oid(p) for p in (tree.parts or ()))
+            if oid
+        }
+        return next(iter(oids)) if len(oids) == 1 else None
+    if name in {
+        "ExtCritical", "ExtNotCritical", "ExtContentNonEmpty",
+        "ExtRawValueEqualsHex", "ExtRawValueContainsHex",
+        "ExtSubfieldPresent",
+    } and hasattr(tree, "oid"):
+        return tree.oid
+    if name in {
+        "CertPolicyExplicitTextHasEncodingTagInSet",
+        "CertPolicyExplicitTextHasEncodingTagNotInSet",
+        "CertificatePoliciesHasNoPolicyQualifiers",
+        "PolicyQualifierOIDInSet",
+        "PolicyQualifierOIDNotInSet",
+        "ExtPolicyQualifierOIDInSet",
+        "ExtPolicyQualifierOIDNotInSet",
+    }:
+        return "CertPolicyOID"
+    if name in {
+        "AIAHasMethodOtherThan", "AIAMethodLocationsTagInSet",
+        "AIAMethodLocationsAnyMatchRegex",
+    } and hasattr(tree, "ext_oid"):
+        return tree.ext_oid
+    if name in {"AIAAccessDescriptionCountInRange", "AIAAccessLocationUniquePerMethod"}:
+        return "AiaOID"
+    if name in {"CRLDPHasNameRelative", "CRLDPHasNameRelativeWithMultiIssuer"}:
+        return "CrlDistOID"
+    if name.startswith("Subtree") or name.startswith("NameConstraints"):
+        return "NameConstOID"
+    return None
+
+
+def _tree_has_atom(tree, atom_name: str) -> bool:
+    if tree is None:
+        return False
+    if type(tree).__name__ == atom_name:
+        return True
+    for attr in ("inner", "cond", "main"):
+        child = getattr(tree, attr, None)
+        if child is not None and _tree_has_atom(child, atom_name):
+            return True
+    for child in getattr(tree, "parts", ()) or ():
+        if _tree_has_atom(child, atom_name):
+            return True
+    return False
+
+
+def _tree_has_reserved_policy_count(tree) -> bool:
+    """True for CABF reserved-policy exact-cardinality checks."""
+    if tree is None:
+        return False
+    if type(tree).__name__ == "OidListCountInSet":
+        if getattr(tree, "field", "") != "PolicyIdentifiers":
+            return False
+        allowed = set(getattr(tree, "allowed_oids", ()) or ())
+        reserved = {
+            "OidPolicyDomainValidated",
+            "OidPolicyOrganizationValidated",
+            "OidPolicyIndividualValidated",
+            "OidPolicyExtendedValidation",
+        }
+        return bool(allowed & reserved)
+    for attr in ("inner", "cond", "main"):
+        child = getattr(tree, attr, None)
+        if child is not None and _tree_has_reserved_policy_count(child):
+            return True
+    for child in getattr(tree, "parts", ()) or ():
+        if _tree_has_reserved_policy_count(child):
+            return True
+    return False
+
+
+def _tree_has_rsa_spki_key_condition(tree) -> bool:
+    """True when an SPKI RSA-key conditional atom needs CheckApplies scope."""
+    if tree is None:
+        return False
+    if type(tree).__name__ in {
+        "SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex",
+        "SPKIRSAPublicKeyAlgorithmOIDEqualsHex",
+    }:
+        return True
+    for attr in ("inner", "cond", "main"):
+        child = getattr(tree, attr, None)
+        if child is not None and _tree_has_rsa_spki_key_condition(child):
+            return True
+    for child in getattr(tree, "parts", ()) or ():
+        if _tree_has_rsa_spki_key_condition(child):
+            return True
+    return False
+
+
+def _tree_has_domain_component_content_check(tree) -> bool:
+    if tree is None:
+        return False
+    if type(tree).__name__ in {"DomainComponentOrdered", "DNComponentOrderMatches"}:
+        return True
+    for attr in ("inner", "cond", "main"):
+        child = getattr(tree, attr, None)
+        if child is not None and _tree_has_domain_component_content_check(child):
+            return True
+    for child in getattr(tree, "parts", ()) or ():
+        if _tree_has_domain_component_content_check(child):
+            return True
+    return False
+
+
+def _raw_spki_rsa_key_expr() -> str:
+    """Go expression: certificate SPKI subjectPublicKey is an ASN.1 RSAPublicKey.
+
+    This intentionally does not trust c.PublicKeyAlgorithm because the rule being
+    linted is precisely whether an RSA key was indicated with the right
+    AlgorithmIdentifier.
+    """
+    return """func() bool {
+\tinput := cryptobyte.String(c.RawSubjectPublicKeyInfo)
+\tvar spki cryptobyte.String
+\tif !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }
+\tvar alg cryptobyte.String
+\tvar tag asn1.Tag
+\tif !spki.ReadAnyASN1Element(&alg, &tag) { return false }
+\tvar keyBytes []byte
+\tif !spki.ReadASN1BitStringAsBytes(&keyBytes) { return false }
+\trsaKey := cryptobyte.String(keyBytes)
+\tvar seq cryptobyte.String
+\tif !rsaKey.ReadASN1(&seq, asn1.SEQUENCE) { return false }
+\tvar modulus cryptobyte.String
+\tif !seq.ReadASN1(&modulus, asn1.INTEGER) { return false }
+\tvar exponent cryptobyte.String
+\tif !seq.ReadASN1(&exponent, asn1.INTEGER) { return false }
+\treturn seq.Empty() && rsaKey.Empty()
+}()"""
+
+
+def _tree_has_policy_identifier_content_check(tree) -> bool:
+    """True when the predicate constrains CertificatePolicies policyIdentifier values."""
+    if tree is None:
+        return False
+    name = type(tree).__name__
+    if name in {"OidListContains", "OidListCountInSet"}:
+        return getattr(tree, "field", "") == "PolicyIdentifiers"
+    for attr in ("inner", "cond", "main"):
+        child = getattr(tree, attr, None)
+        if child is not None and _tree_has_policy_identifier_content_check(child):
+            return True
+    for child in getattr(tree, "parts", ()) or ():
+        if _tree_has_policy_identifier_content_check(child):
+            return True
+    return False
+
+
+def _certificate_policies_if_present_context(source: str, section: str, title: str) -> bool:
+    if "certificate policies" not in (title or "").lower():
+        return False
+    text = _raw_section_text(source or "", section or "").lower()
+    return "if present, the certificate policies extension" in text
+
+
 def check_applies_expr(section: str, title: str,
                        ir: Optional[dict] = None,
                        tree: Optional[dsl.Compound] = None,
-                       precondition: Optional[dsl.Compound] = None) -> tuple[str, bool]:
+                       precondition: Optional[dsl.Compound] = None,
+                       source: Optional[str] = None) -> tuple[str, bool]:
     """Return (go_bool_expr, needs_util) for a lint's CheckApplies guard.
 
     Section number is the authoritative divisor; the title is a fallback when
@@ -302,6 +638,23 @@ def check_applies_expr(section: str, title: str,
     when_cond = _top_level_when_condition(tree)
     if when_cond is not None:
         exprs.append(render.render(when_cond))
+    implicit_ext_oid = _implicit_extension_presence_oid(tree)
+    if implicit_ext_oid:
+        exprs.append(render.render(dsl.ExtPresent(implicit_ext_oid)))
+
+    source_key = (source or "").upper()
+    if (_tree_has_policy_identifier_content_check(tree)
+            and _certificate_policies_if_present_context(source or "", section or "", title or "")):
+        exprs.append(render.render(dsl.ExtPresent("CertPolicyOID")))
+    if ("CABF" in source_key and str(section or "").startswith("7.1.2.10.5")
+            and _tree_has_reserved_policy_count(tree)):
+        exprs.append("!util.SliceContainsOID(c.PolicyIdentifiers, util.AnyPolicyOID)")
+    if _tree_has_atom(tree, "DomainNamesDoNotEndWithIPReverseZoneSuffix"):
+        exprs.append("(len(c.DNSNames) > 0 || c.Subject.CommonName != \"\")")
+    if _tree_has_domain_component_content_check(tree):
+        exprs.append("(len(c.Subject.DomainComponent) > 0)")
+    if _tree_has_rsa_spki_key_condition(tree):
+        exprs.append(_raw_spki_rsa_key_expr())
 
     # Requirement-grounded narrowing: exempt self-signed certs from the
     # AKI-keyIdentifier presence obligation (mirrors zlint's own carve-out).
@@ -318,7 +671,7 @@ _APPLIES_EXPR_NATURAL = {
     "util.IsRootCA(c)": "Root CA certificates",
     "util.IsSubCA(c)": "Subordinate CA certificates",
     "util.IsSubCA(c) && util.IsServerAuthCert(c)":
-        "TLS Subordinate CA certificates identified by zlint's server-auth profile predicate",
+        "TLS Subordinate CA certificates, i.e. subordinate CA certificates in the server-auth/TLS certificate profile",
     "util.IsCACert(c)": "CA certificates",
     "util.IsSubscriberCert(c)": "Subscriber certificates",
     "util.IsDelegatedOCSPResponderCert(c)": "Delegated OCSP responder certificates",
@@ -334,6 +687,8 @@ _APPLIES_EXPR_NATURAL = {
         "Subscriber certificates asserting the CABF organization-validated Reserved Certificate Policy Identifier (2.23.140.1.2.2)",
     "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRExtendedValidatedOID)":
         "Subscriber certificates asserting the CABF extended-validation Reserved Certificate Policy Identifier (2.23.140.1.1)",
+    "!util.SliceContainsOID(c.PolicyIdentifiers, util.AnyPolicyOID)":
+        "certificates whose CertificatePolicies do not contain the anyPolicy OID (the CABF policy-restricted CA profile signal)",
 }
 
 
@@ -341,10 +696,29 @@ def _condition_natural(condition: dsl.Compound) -> str:
     return tree_to_natural(condition)
 
 
+def _condition_duplicates_scope(condition: dsl.Compound, scope_expr: str) -> bool:
+    if isinstance(condition, dsl.IsSubscriberCert):
+        return scope_expr == "util.IsSubscriberCert(c)"
+    if isinstance(condition, dsl.OidListContains) and condition.field == "PolicyIdentifiers":
+        expected = {
+            "OidPolicyDomainValidated":
+                "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRDomainValidatedOID)",
+            "OidPolicyIndividualValidated":
+                "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRIndividualValidatedOID)",
+            "OidPolicyOrganizationValidated":
+                "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BROrganizationValidatedOID)",
+            "OidPolicyExtendedValidation":
+                "util.IsSubscriberCert(c) && util.SliceContainsOID(c.PolicyIdentifiers, util.BRExtendedValidatedOID)",
+        }.get(condition.oid)
+        return expected == scope_expr
+    return False
+
+
 def check_applies_natural(section: str, title: str,
                           ir: Optional[dict] = None,
                           tree: Optional[dsl.Compound] = None,
-                          precondition: Optional[dsl.Compound] = None) -> str:
+                          precondition: Optional[dsl.Compound] = None,
+                          source: Optional[str] = None) -> str:
     """Mechanical English for the exact in-tree CheckApplies guard.
 
     This is intentionally derived from ``check_applies_expr`` rather than from
@@ -377,19 +751,62 @@ def check_applies_natural(section: str, title: str,
 
     pieces: list[str] = []
     if scope_expr != "true":
-        pieces.append(_APPLIES_EXPR_NATURAL.get(
-            scope_expr,
-            f"certificates satisfying `{scope_expr}`",
-        ))
+        if (
+            scope_expr == "util.IsSubscriberCert(c)"
+            and (source or "").upper().startswith("CABF")
+            and str(section or "").startswith("7.1.2.7")
+        ):
+            pieces.append(
+                "CABF Subscriber (Server) Certificate Profile certificates, "
+                "represented by zlint's subscriber-certificate guard"
+            )
+        else:
+            pieces.append(_APPLIES_EXPR_NATURAL.get(
+                scope_expr,
+                f"certificates satisfying `{scope_expr}`",
+            ))
     if precondition is not None:
         pieces.append(f"certificates where {_condition_natural(precondition)}")
     when_cond = _top_level_when_condition(tree)
-    if when_cond is not None:
+    if when_cond is not None and not _condition_duplicates_scope(when_cond, scope_expr):
         cond_piece = f"certificates where {_condition_natural(when_cond)}"
         if _norm_scope_piece(cond_piece) not in {
             _norm_scope_piece(p) for p in pieces
         }:
             pieces.append(cond_piece)
+    implicit_ext_oid = _implicit_extension_presence_oid(tree)
+    if implicit_ext_oid:
+        ext_piece = f"certificates where {_condition_natural(dsl.ExtPresent(implicit_ext_oid))}"
+        if _norm_scope_piece(ext_piece) not in {
+            _norm_scope_piece(p) for p in pieces
+        }:
+            pieces.append(ext_piece)
+    source_key = (source or "").upper()
+    if (_tree_has_policy_identifier_content_check(tree)
+            and _certificate_policies_if_present_context(source or "", section or "", title or "")):
+        ext_piece = f"certificates where {_condition_natural(dsl.ExtPresent('CertPolicyOID'))}"
+        if _norm_scope_piece(ext_piece) not in {
+            _norm_scope_piece(p) for p in pieces
+        }:
+            pieces.append(ext_piece)
+    if ("CABF" in source_key and str(section or "").startswith("7.1.2.10.5")
+            and _tree_has_reserved_policy_count(tree)):
+        pieces.append(_APPLIES_EXPR_NATURAL[
+            "!util.SliceContainsOID(c.PolicyIdentifiers, util.AnyPolicyOID)"
+        ])
+    if _tree_has_atom(tree, "DomainNamesDoNotEndWithIPReverseZoneSuffix"):
+        pieces.append(
+            "certificates containing at least one certificate Domain Name in "
+            "subjectAltName dNSName or legacy subject commonName"
+        )
+    if _tree_has_domain_component_content_check(tree):
+        pieces.append("certificates where Subject domainComponent is present")
+    if _tree_has_rsa_spki_key_condition(tree):
+        pieces.append(
+            "certificates whose SubjectPublicKeyInfo.subjectPublicKey BIT "
+            "STRING contains an ASN.1 RSAPublicKey SEQUENCE with modulus and "
+            "publicExponent INTEGERs"
+        )
     if _is_aki_keyid_presence_rule(ir):
         pieces.append("certificates that are not self-signed")
 
@@ -418,6 +835,39 @@ def _pass_condition_under_check_applies(tree) -> str:
     clearer and stricter when summarized this way.
     """
     effective = tree.main if isinstance(tree, dsl.When) else tree
+    if isinstance(effective, dsl.SPKIRSAPublicKeyAlgorithmOIDEqualsHex):
+        return (
+            "the SubjectPublicKeyInfo.algorithm AlgorithmIdentifier algorithm "
+            "OID DER element is byte-for-byte identical to hex "
+            f"{effective.oid_der_hex}; AlgorithmIdentifier parameters are not "
+            "checked by this predicate"
+        )
+    if isinstance(effective, dsl.SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex):
+        return (
+            "the SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER "
+            "encoding is byte-for-byte identical to hex "
+            f"{effective.hex_lit}"
+        )
+    if isinstance(effective, dsl.DomainComponentOrdered):
+        return (
+            "Subject DN domainComponent fields form exactly one contiguous "
+            "sequence/block, and that block contains exactly all Domain Labels "
+            "from one certificate Domain Name with no missing or extra labels; "
+            "the separate reverse-DNS order requirement is checked by a "
+            "separate reverse-order predicate"
+        )
+    if isinstance(effective, dsl.DNComponentOrderMatches):
+        if effective.order_type == "dns_reverse":
+            return (
+                "Subject DN domainComponent fields form one sequence encoded in "
+                "reverse order to the DNS on-wire representation, with the "
+                "Domain Label closest to the root encoded first"
+            )
+    if isinstance(effective, dsl.CertificatePoliciesHasNoPolicyQualifiers):
+        return (
+            "every PolicyInformation in the present CertificatePolicies "
+            "extension has no policyQualifiers"
+        )
     return tree_to_natural(effective)
 
 
@@ -428,7 +878,8 @@ def intree_semantics_summary(section: str,
                              precondition=None,
                              severity: str = "lint.Error",
                              ir: Optional[dict] = None,
-                             pass_condition_text: Optional[str] = None) -> str:
+                             pass_condition_text: Optional[str] = None,
+                             source: Optional[str] = None) -> str:
     """Mechanical σ(final zlint lint), including CheckApplies and severity.
 
     Earlier synonymy measurements rendered only the DSL predicate.  That is not
@@ -436,19 +887,49 @@ def intree_semantics_summary(section: str,
     Execute + lint severity (+ any date metadata).  This summary is the string
     the strict shipping judge should compare against the original rule context.
     """
-    applies = check_applies_natural(section, title, ir, tree, precondition)
+    applies = check_applies_natural(section, title, ir, tree, precondition, source=source)
     pass_condition = pass_condition_text or _pass_condition_under_check_applies(tree)
     sev_short = {
         "lint.Error": "Error",
         "lint.Warn": "Warn",
         "lint.Notice": "Notice",
     }.get(severity, severity)
+    severity_text = {
+        "lint.Error": "lint.Error",
+        "lint.Warn": "lint.Warn (an advisory warning for a SHOULD/SHOULD NOT/NOT RECOMMENDED requirement, not a hard error)",
+        "lint.Notice": "lint.Notice",
+    }.get(severity, f"lint.{sev_short}")
+    effective = _effective_date_natural(source or "", section, ir)
+    effective_text = (
+        f"The generated lint metadata sets EffectiveDate to {effective}."
+        if effective else
+        "The generated lint metadata does not set an EffectiveDate field."
+    )
+    warning_text = (
+        " Because this lint's severity is lint.Warn, a non-pass result is an "
+        "advisory warning that the discouraged state is present; it is not a "
+        "certificate-invalidating hard error."
+        if severity == "lint.Warn" else
+        ""
+    )
+    effective_tree = tree.main if isinstance(tree, dsl.When) else tree
+    if severity == "lint.Warn" and isinstance(effective_tree, dsl.CertificatePoliciesHasNoPolicyQualifiers):
+        return (
+            "The final generated in-tree zlint certificate lint applies to "
+            f"{applies}. When CheckApplies is true, this advisory lint emits "
+            "lint.Warn exactly when at least one PolicyInformation in the "
+            "present CertificatePolicies extension contains policyQualifiers. "
+            "It returns lint.Pass when no policyQualifiers are present, which "
+            "is the recommended state for this NOT RECOMMENDED row. This warning "
+            "is not a certificate-invalidating hard error and does not claim or "
+            "replace the separate hard allow-list rule for permitted "
+            f"policyQualifierId values when policyQualifiers are present. {effective_text}"
+        )
     return (
         "The final generated in-tree zlint certificate lint applies to "
-        f"{applies}. When CheckApplies is true, the lint returns lint.{sev_short} "
+        f"{applies}. When CheckApplies is true, the lint returns {severity_text} "
         "on violation and lint.Pass when the following condition is satisfied: "
-        f"{pass_condition}. The generated lint metadata does not set an "
-        "EffectiveDate field."
+        f"{pass_condition}.{warning_text} {effective_text}"
     )
 
 
@@ -473,9 +954,12 @@ def render_intree_file(rule_id: int,
     # Profile-scope guard: narrow CheckApplies to the certificate type the rule
     # is written for. Falls back to "true" when the profile is ambiguous.
     applies_expr, needs_util = check_applies_expr(
-        section, title, ir, tree=tree, precondition=precondition)
+        section, title, ir, tree=tree, precondition=precondition, source=source)
     if needs_util:
         imports.add("github.com/zmap/zlint/v3/util")
+    effective_date_line, needs_time = _effective_date_go_line(source, section, rule_text, ir)
+    if needs_time:
+        imports.add("time")
 
     lint_name = lint_name_for(rule_id, tree)
     struct_name = f"CicasGen{int(rule_id)}"
@@ -487,6 +971,7 @@ def render_intree_file(rule_id: int,
         desc_lit=_go_string(rule_text or ""),
         citation_lit=_go_string(f"{source}: {section}" if section else (source or "")),
         source_const=source_const,
+        effective_date_line=effective_date_line,
         struct_name=struct_name,
         check_applies_expr=applies_expr,
         execute_body=out["execute_body"],

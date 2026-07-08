@@ -10,9 +10,9 @@ From `outputs/coverage_table.{json,md}`:
 
 | | CABF | RFC 5280 | total |
 |---|---:|---:|---:|
-| lint-able rules | 223 | 92 | **315** |
-| full native zlint coverage | 102 | 52 | **154** |
-| judged uncovered (= codegen domain) | 121 | 40 | **161** |
+| lint-able rules | 170 | 79 | **249** |
+| full native zlint coverage | 106 | 52 | **158** |
+| judged uncovered (= codegen domain) | 64 | 27 | **91** |
 | pending coverage | 0 | 0 | **0** |
 | *native zlint certificate lints (reference denominator)* | *164* | *115* | *279* |
 | *CRL lints (outside denominator)* | *6* | *7* | *13* |

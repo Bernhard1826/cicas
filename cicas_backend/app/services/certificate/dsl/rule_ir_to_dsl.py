@@ -893,6 +893,48 @@ def _precondition_guard(ir: dict, c: dict):
         # named constant so V.OID_BY_NAME succeeds.
         _name = _POLICY_OID_NAMES.get(pval, pval)  # fallthrough = dotted string
         guard = dsl.OidListContains("PolicyIdentifiers", _name)
+    elif ptype in ("general_name_allowed_set", "san_general_name_allowed_set"):
+        # "subject naming information is present only in subjectAltName
+        # (e.g. email address or URI)" -> the relevant GeneralName entries are
+        # non-empty and every GeneralName CHOICE tag is in the allowed set.
+        #
+        # GENERAL: this consumes a structured Condition, not rule text or rule
+        # ids. The values are RFC 5280 GeneralName subtype names; the ext field
+        # selects SAN/IAN or another GeneralName-bearing extension when provided.
+        vals = [str(x) for x in (pvalues or []) if str(x).strip()]
+        if not vals and precond.get("value"):
+            vals = [str(precond.get("value"))]
+        allowed_tags = sorted({
+            _GN_TAG.get(v.lower().replace(" ", "").replace("-", ""))
+            for v in vals
+        } - {None})
+        if not allowed_tags:
+            return None
+        ext_name = (precond.get("ext") or precond.get("field") or "").strip()
+        if not ext_name and ptype == "san_general_name_allowed_set":
+            ext_name = "subjectAltName"
+        if not ext_name:
+            ext_name = "subjectAltName"
+        if ext_name in OID_BY_NAME:
+            oid = ext_name
+        else:
+            cand = ext_name if ext_name.startswith("extensions.") else "extensions." + ext_name
+            kind, oid = _resolve_subject(cand)
+            if kind != "ext_oid":
+                kind, oid = _resolve_subject(ext_name)
+            if kind != "ext_oid":
+                return None
+        allowed_presence = tuple(
+            dsl.ExtHasAnyGeneralNameOfTag(oid, tag) for tag in allowed_tags
+        )
+        any_allowed = allowed_presence[0] if len(allowed_presence) == 1 else \
+            dsl.Or(parts=allowed_presence)
+        disallowed_absence = tuple(
+            dsl.Not(dsl.ExtHasAnyGeneralNameOfTag(oid, tag))
+            for tag in range(9)
+            if tag not in set(allowed_tags)
+        )
+        guard = dsl.And(parts=(any_allowed,) + disallowed_absence)
     elif ptype == "field_boolean":
         # "if the cA boolean is asserted" → IsCA; otherwise FieldEq(field, True).
         if pl in ("ca", "ca boolean", "cabolean", "is_ca", "isca"):
@@ -1400,6 +1442,24 @@ _VALUE_FIELD_ATOMS = frozenset({
 })
 
 
+def _dn_attr_encoded_as_atom(field: str, types: tuple):
+    """Return a DN attribute DER-tag atom for Subject.X / Issuer.X encoding rows.
+
+    FieldEncodedAs on decoded pkix.Name strings can only approximate character
+    sets. For named DN attributes, the sound certificate-observable check is to
+    walk RawSubject/RawIssuer and inspect the AttributeValue tag for the matching
+    AttributeType OID. Presence is intentionally separate from encoding."""
+    if not isinstance(field, str) or "." not in field:
+        return None
+    holder, leaf = field.split(".", 1)
+    if holder not in ("Subject", "Issuer"):
+        return None
+    attr = dsl.V.DN_FIELD_TO_ATTR_NAME.get(leaf)
+    if not attr or attr not in dsl.V.DN_ATTR_OID_BY_NAME:
+        return None
+    return dsl.DNAttributeValuesEncodedAs(holder, attr, tuple(types))
+
+
 def _wellformed(node) -> bool:
     """Sound-by-construction gate: True iff `node` faithfully expresses a checkable
     constraint against the real certificate structure. Degenerate / ill-formed
@@ -1424,6 +1484,12 @@ def _wellformed(node) -> bool:
         if not node.types or any(x not in ASN1_BY_NAME for x in node.types):
             return False
         return _is_value_target(node.field) or node.field in ("Subject", "Issuer")
+    if t == "DNAttributeValuesEncodedAs":
+        if node.dn not in ("Subject", "Issuer"):
+            return False
+        if node.attr not in dsl.V.DN_ATTR_OID_BY_NAME:
+            return False
+        return bool(node.types) and all(x in ASN1_BY_NAME for x in node.types)
     if t in _VALUE_FIELD_ATOMS:
         return _is_value_target(node.field)
     return True  # ExtPresent-free atoms (IsCA, KeyUsageHas, RSA*, regex, ...) are sound by construction
@@ -1687,6 +1753,10 @@ def _structured_fallback(subj_kind, subj_val, pred, c, ext_oid):
             # encoding tag must be none of the listed types); positive →
             # FieldEncodedAs. Without this the polarity was inverted (rendered
             # σ_mech said the opposite of the rule).
+            attr_atom = _dn_attr_encoded_as_atom(
+                subj_val if subj_kind == "dn_field" else field, types)
+            if attr_atom is not None and not neg:
+                return attr_atom
             if neg:
                 return dsl.Not(dsl.FieldEncodedAs(field, types))
             return dsl.FieldEncodedAs(field, types)
@@ -2053,67 +2123,73 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
         # GENERAL: OID constants (CpsOID, UserNoticeOID) are standard PKI vocabulary.
         if oid == "CertPolicyOID":
             raw = (c.get("raw_text") or raw_text or "").lower()
-            # Also search description field when raw_text doesn't contain keywords
-            desc = (ir.get("description") or "").lower()
-            av = c.get("allowed_values") or []
             neg = pred in ("must_not_include", "must_not_be_present", "must_not_contain",
                            "must_not_be_in_set")
-            # Map colloquial names to OID consts (closed vocabulary, not free prose)
-            _QUALIFIER_NAME_TO_OID = {
-                "cps": "CpsOID",
-                "cps-pointer": "CpsOID",
-                "id-qt-cps": "CpsOID",
-                "certification practice statement": "CpsOID",
-                "notice": "UserNoticeOID",
-                "user-notice": "UserNoticeOID",
-                "id-qt-unotice": "UserNoticeOID",
-                "explicittext": "UserNoticeOID",
-                "displaytext": "UserNoticeOID",
-                "any other qualifier": None,  # special sentinel
-            }
-            # Collect allowed/forbidden qualifier OIDs from allowed_values
-            oids_to_check = []
-            for v in av:
-                v_key = re.sub(r"[^a-z0-9]", "", v.lower())
-                oid_const = None
-                for name, const in _QUALIFIER_NAME_TO_OID.items():
-                    if name in v_key:
-                        oid_const = const
-                        break
-                if oid_const:
-                    oids_to_check.append(oid_const)
-            # Also try to extract from raw_text and description if allowed_values didn't yield OIDs
-            if not oids_to_check:
-                # Search in raw_text first, then fall back to description
-                for search_text, source_name in [(raw, "raw_text"), (desc, "description")]:
+            skip_qualifier_oid_route = (
+                "explicittext" in raw
+                and isinstance(c.get("asn1_types"), list)
+                and bool(c.get("asn1_types"))
+            )
+            if not skip_qualifier_oid_route:
+                # Also search description field when raw_text doesn't contain keywords.
+                desc = (ir.get("description") or "").lower()
+                av = c.get("allowed_values") or []
+                # Map colloquial names to OID consts (closed vocabulary, not free prose)
+                _QUALIFIER_NAME_TO_OID = {
+                    "cps": "CpsOID",
+                    "cps-pointer": "CpsOID",
+                    "id-qt-cps": "CpsOID",
+                    "certification practice statement": "CpsOID",
+                    "notice": "UserNoticeOID",
+                    "user-notice": "UserNoticeOID",
+                    "id-qt-unotice": "UserNoticeOID",
+                    "explicittext": "UserNoticeOID",
+                    "displaytext": "UserNoticeOID",
+                    "any other qualifier": None,  # special sentinel
+                }
+                # Collect allowed/forbidden qualifier OIDs from allowed_values
+                oids_to_check = []
+                for v in av:
+                    v_key = re.sub(r"[^a-z0-9]", "", v.lower())
+                    oid_const = None
                     for name, const in _QUALIFIER_NAME_TO_OID.items():
-                        if name in search_text:
-                            if const is None:  # "any other qualifier" → forbid everything
-                                oids_to_check = ["CpsOID", "UserNoticeOID"]  # exhaustive negation
-                                break
-                            oids_to_check.append(const)
-                    if oids_to_check:
-                        break
-            if oids_to_check:
-                # Deduplicate while preserving order
-                seen, unique = set(), []
-                for o in oids_to_check:
-                    if o not in seen:
-                        seen.add(o); unique.append(o)
-                # "any other qualifier" / "other qualifier" pattern → forbid_other=True
-                _has_any_other = any(k in raw for k in ("any other", "other qualifier"))
-                oids_tuple = tuple(unique)
-                # Use the extension-aware atom whose app-side and codegen-side
-                # dataclass shapes match. It walks CertificatePolicies and
-                # requires every policyQualifierId to be in the allow-list.
-                if _has_any_other:
-                    return dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
-                if neg and len(oids_tuple) == 1:
-                    return dsl.ExtPolicyQualifierOIDNotInSet(oids_tuple[0])
-                inner = dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
-                if neg:
-                    inner = dsl.Not(inner)
-                return inner
+                        if name in v_key:
+                            oid_const = const
+                            break
+                    if oid_const:
+                        oids_to_check.append(oid_const)
+                # Also try to extract from raw_text and description if allowed_values didn't yield OIDs
+                if not oids_to_check:
+                    # Search in raw_text first, then fall back to description
+                    for search_text, source_name in [(raw, "raw_text"), (desc, "description")]:
+                        for name, const in _QUALIFIER_NAME_TO_OID.items():
+                            if name in search_text:
+                                if const is None:  # "any other qualifier" → forbid everything
+                                    oids_to_check = ["CpsOID", "UserNoticeOID"]  # exhaustive negation
+                                    break
+                                oids_to_check.append(const)
+                        if oids_to_check:
+                            break
+                if oids_to_check:
+                    # Deduplicate while preserving order
+                    seen, unique = set(), []
+                    for o in oids_to_check:
+                        if o not in seen:
+                            seen.add(o); unique.append(o)
+                    # "any other qualifier" / "other qualifier" pattern → forbid_other=True
+                    _has_any_other = any(k in raw for k in ("any other", "other qualifier"))
+                    oids_tuple = tuple(unique)
+                    # Use the extension-aware atom whose app-side and codegen-side
+                    # dataclass shapes match. It walks CertificatePolicies and
+                    # requires every policyQualifierId to be in the allow-list.
+                    if _has_any_other:
+                        return dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
+                    if neg and len(oids_tuple) == 1:
+                        return dsl.ExtPolicyQualifierOIDNotInSet(oids_tuple[0])
+                    inner = dsl.ExtPolicyQualifierOIDInSet(oids_tuple)
+                    if neg:
+                        inner = dsl.Not(inner)
+                    return inner
 
             # ---- allowed_values predicate on policy qualifiers ----
             # IR extractor sometimes produces predicate="allowed_values" instead of
@@ -3810,6 +3886,9 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                 if "directorystring" in _blob2:
                     _dn2 = "Issuer" if "Issuer" in field else "Subject"
                     return dsl.DNDirectoryStringValuesEncodedAs(_dn2, types)
+            attr_atom = _dn_attr_encoded_as_atom(field, types)
+            if attr_atom is not None:
+                return attr_atom
             return dsl.FieldEncodedAs(field, types)
 
         # matches_pattern: IR predicate for regex constraints (extracted as regex ctype)
@@ -3864,6 +3943,9 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                 return None
             if field in ("NotBefore", "NotAfter"):
                 return None  # ValidityDate encoding atom not in minimal DSL
+            attr_atom = _dn_attr_encoded_as_atom(field, types)
+            if attr_atom is not None:
+                return attr_atom
             return dsl.FieldEncodedAs(field, types)
 
         # ---- Validity time encoding: GeneralizedTime/UTCTime/Zulu/GMT ----
@@ -4077,6 +4159,9 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                 return None
             if field in ("NotBefore", "NotAfter"):
                 return None  # ValidityDate encoding atom not in minimal DSL
+            attr_atom = _dn_attr_encoded_as_atom(field, types)
+            if attr_atom is not None:
+                return attr_atom
             return dsl.FieldEncodedAs(field, types)
 
         # Equality
@@ -4184,9 +4269,12 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                     "SignatureAlgorithm",             # AlgorithmIdentifier enc
                     "PolicyIdentifiers",             # CertPolicy explicitText
                 }
-                # Also allow for any subject/issuer DN sub-field (DirectoryString)
+                # Named Subject/Issuer DN sub-fields must be checked on the raw
+                # RDN AttributeValue tag, not by decoded string character set.
                 if field.startswith("Subject.") or field.startswith("Issuer."):
-                    return dsl.FieldEncodedAs(field, types)
+                    attr_atom = _dn_attr_encoded_as_atom(field, types)
+                    if attr_atom is not None:
+                        return attr_atom
                 if field in zlint_encoded_fields:
                     return dsl.FieldEncodedAs(field, types)
 
@@ -4235,6 +4323,9 @@ def _dispatch(subj_kind: str, subj_val: str, pred: str, c: dict, ctype: str, ext
                 raw_types = [t.strip() for t in val.split("|")]
             types = tuple(t for t in raw_types if t in ASN1_BY_NAME)
             if types:
+                attr_atom = _dn_attr_encoded_as_atom(field, types)
+                if attr_atom is not None:
+                    return attr_atom
                 # NotBefore/NotAfter: encode_as with known ASN.1 types → FieldEncodedAs
                 if field in ("NotBefore", "NotAfter"):
                     return dsl.FieldEncodedAs(field, types)

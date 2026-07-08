@@ -82,8 +82,23 @@ def _name_has(subject_rfc2253: str, label: str) -> bool:
 
 def _ext(t: str, header: str):
     """(present, critical, body_lines) for an X509v3 extension block."""
+    blocks = _ext_all(t, header)
+    return blocks[0] if blocks else (False, False, [])
+
+
+def _ext_all(t: str, header: str):
+    """All extension blocks matching a header in openssl's text view.
+
+    Some adversarial fixtures intentionally duplicate an extension.  A
+    per-finding auditor must examine every block; looking only at the first one
+    can refute a real finding when a later duplicate carries the violating
+    subfield.
+    """
     lines = t.splitlines()
-    for i, ln in enumerate(lines):
+    blocks = []
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
         if header in ln:
             crit = "critical" in ln
             body, j = [], i + 1
@@ -91,8 +106,11 @@ def _ext(t: str, header: str):
                                       or lines[j].strip() == ""):
                 body.append(lines[j].strip())
                 j += 1
-            return True, crit, [b for b in body if b]
-    return False, False, []
+            blocks.append((True, crit, [b for b in body if b]))
+            i = j
+            continue
+        i += 1
+    return blocks
 
 
 def _der_from_pem(cert: Path) -> bytes:
@@ -211,9 +229,12 @@ def _subject_has_attr_raw(cert: Path, label: str) -> bool | None:
 
 
 def _aki_subfields(t: str):
-    present, _, body = _ext(t, "X509v3 Authority Key Identifier")
-    if not present:
+    blocks = _ext_all(t, "X509v3 Authority Key Identifier")
+    if not blocks:
         return None
+    body = []
+    for _, _, block_body in blocks:
+        body.extend(block_body)
     joined = " ".join(body)
     has_keyid = ("keyid" in joined
                  or re.search(r"[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2})+", joined) is not None)
@@ -247,6 +268,68 @@ def _tbs_unique_ids(cert: Path):
             sub = True
         k = m + ln
     return iss, sub
+
+
+def _tbs_version(cert: Path):
+    """Return zcrypto-style certificate version: v1=1, v2=2, v3=3, etc."""
+    raw = _der_of(cert)
+
+    def rdlen(b, i):
+        n = b[i]; i += 1
+        if n & 0x80:
+            k = n & 0x7f; n = int.from_bytes(b[i:i + k], "big"); i += k
+        return n, i
+
+    try:
+        if not raw or raw[0] != 0x30:
+            return None
+        _, i = rdlen(raw, 1)
+        if raw[i] != 0x30:
+            return None
+        _, j = rdlen(raw, i + 1)
+        if raw[j] != 0xa0:
+            return 1
+        vlen, vi = rdlen(raw, j + 1)
+        if vi >= j + 1 + vlen or raw[vi] != 0x02:
+            return None
+        ilen, ii = rdlen(raw, vi + 1)
+        return int.from_bytes(raw[ii:ii + ilen], "big") + 1
+    except Exception:
+        return None
+
+
+def _tbs_has_extensions(cert: Path):
+    raw = _der_of(cert)
+
+    def rdlen(b, i):
+        n = b[i]; i += 1
+        if n & 0x80:
+            k = n & 0x7f; n = int.from_bytes(b[i:i + k], "big"); i += k
+        return n, i
+
+    try:
+        if not raw or raw[0] != 0x30:
+            return None
+        _, i = rdlen(raw, 1)
+        if raw[i] != 0x30:
+            return None
+        tlen, j = rdlen(raw, i + 1)
+        end, k = j + tlen, j
+        while k < end:
+            tag = raw[k]; ln, m = rdlen(raw, k + 1)
+            if tag == 0xa3:
+                # extensions is [3] EXPLICIT Extensions, where Extensions is a
+                # SEQUENCE OF Extension.  Match zcrypto/c.Extensions semantics:
+                # an explicitly present but empty sequence is still zero
+                # extension entries for the generated HasAnyExtension atom.
+                if m < len(raw) and raw[m] == 0x30:
+                    seq_len, _ = rdlen(raw, m + 1)
+                    return seq_len > 0
+                return ln > 0
+            k = m + ln
+        return False
+    except Exception:
+        return None
 
 
 def _sig_algs_match(cert: Path):
@@ -345,6 +428,23 @@ def verify(lint: str, cert: Path, probe: ZlintProbe) -> tuple[str, str]:
         if a or b:
             return "CONFIRMED", f"uniqueID present (issuer={a} subject={b})"
         return "REFUTED", "both uniqueIDs absent"
+    if "when_not_has_any_extension_and_issuer_unique_id_absent_31153" in lint:
+        # RFC5280 4.1.2.1: if only basic fields are present (no extensions and
+        # no issuer/subject unique IDs), version SHOULD be v1.  This lint name
+        # contains "issuer_unique_id_absent", but the finding is about the
+        # version value under that compound precondition, not about issuer UID
+        # absence by itself.
+        has_ext = _tbs_has_extensions(cert)
+        a, b = _tbs_unique_ids(cert)
+        version = _tbs_version(cert)
+        if has_ext is None or version is None:
+            return "NOCHECK", "could not parse TBS version/extensions"
+        if has_ext or a or b:
+            return "REFUTED", (
+                f"out of only-basic-fields scope (extensions={has_ext} "
+                f"issuer_uid={a} subject_uid={b})")
+        return ("CONFIRMED", f"only basic fields present and version is v{version}, not v1") \
+            if version != 1 else ("REFUTED", "only basic fields present and version is v1")
     if "issuer_unique_id_absent" in lint:
         a, _ = _tbs_unique_ids(cert)
         return ("CONFIRMED", "issuerUniqueID present") if a else \

@@ -216,6 +216,15 @@ class FieldEncodedAs:
 
 
 @dataclass(frozen=True)
+class DNAttributeValuesEncodedAs:
+    """True iff every present value of one named DN attribute uses an allowed
+    ASN.1 tag type. Absence of that attribute is not a violation."""
+    dn: str
+    attr: str
+    types: tuple
+
+
+@dataclass(frozen=True)
 class IsCA:
     """True iff certificate is a CA (BasicConstraintsValid && IsCA)."""
     pass

@@ -578,14 +578,94 @@ field IS a check on the parsed sub-field of the extension:
   c.PolicyIdentifiers      = CertificatePolicies policyIdentifier list
   c.DNSNames / c.EmailAddresses / c.URIs / c.IPAddresses
                            = SAN dNSName / rfc822Name / URI / iPAddress entries
+For CertificatePolicies, zcrypto's c.PolicyIdentifiers contains one parsed
+policyIdentifier for each PolicyInformation entry in the extension. Therefore,
+counting c.PolicyIdentifiers is a faithful way to count PolicyInformation
+entries when the row is about the number of PolicyInformation values, unless
+the rule also constrains another PolicyInformation subfield not represented in
+that list.
+
+IP ADDRESS FIELD-TYPE DISTINCTION: Do not transfer the SAN iPAddress binary
+OCTET STRING encoding rule to DN/subject string attributes. When (A) constrains
+a string-valued field such as subject commonName and says that an IPv4 address
+value uses an IPv4Address/IPv4 address textual form, a check for four
+dotted-decimal decimal-octets in that string field EXPRESSES the text syntax.
+Only rules whose field is SAN iPAddress / c.IPAddresses require the X.509
+GeneralName iPAddress OCTET STRING length/content interpretation.
+
+DNS NAME PHRASE SCOPE: A phrase such as "the Fully-Qualified Domain Name or
+the FQDN portion of the Wildcard Domain Name" names two cases: ordinary FQDNs
+and wildcard names after removing the leading "*." label. A predicate covering
+both ordinary FQDN commonName/dNSName values and the FQDN portion of wildcard
+values is not overbroad merely because it covers the ordinary-FQDN half.
+
+X.509 NAME SCOPE: In X.509 prose, an unqualified `Name`,
+`RelativeDistinguishedName`, or `RDNSequence` is the generic Name type unless
+the source-owned section/table context scopes the row to a specific certificate
+field such as RFC5280 §4.1.2.4 Issuer or RFC5280 §4.1.2.6 Subject. Use that
+section/table context when the extracted rule text omits the field name. If the
+source text/context says "When encoding a Name" or "Each
+Name/RelativeDistinguishedName" without a Subject-only or Issuer-only context,
+code that checks both Subject DN and Issuer DN can faithfully EXPRESS the rule.
+Do not reject it as overbroad merely because the extracted IR subject was
+"subject"; the original text/context controls synonymy.
+DIRECTORYSTRING TYPE SCOPE: A rule about "attribute values of type
+DirectoryString" applies only to attributes whose ASN.1 value type is
+DirectoryString. Code that checks DirectoryString-typed RDN attributes and
+skips non-DirectoryString attributes such as countryName, domainComponent,
+emailAddress, serialNumber, or dnQualifier does not drop those attributes; they
+are outside the DirectoryString type scope or are table-defined exceptions.
 
 DN BYTE EQUALITY: c.RawSubject and c.RawIssuer are DER-encoded distinguished
 names. A check "bytes.Equal(c.RawSubject, c.RawIssuer)" directly encodes
-"subject DN MUST be byte-for-byte identical to issuer DN".
+"subject DN MUST be byte-for-byte identical to issuer DN" or a self-issued
+subject==issuer requirement. It does NOT express a rule that merely requires
+the same DirectoryString/attribute encoding style between different issuer and
+subject names, such as RFC 5280 "subject field MUST be encoded in the same way
+as it is encoded in the issuer field"; that rule permits different DN values.
 
 SEVERITY EQUIVALENCE: lint.Error <=> MUST/MUST NOT/SHALL/PROHIBITED;
-lint.Warn <=> SHOULD/SHOULD NOT/RECOMMENDED; lint.Notice <=> MAY/OPTIONAL.
+lint.Warn <=> SHOULD/SHOULD NOT/RECOMMENDED/NOT RECOMMENDED.
+MAY/OPTIONAL rows are filtered by lintability C1 and are not generated as
+violation lints.
 A code returning lint.Warn for a SHOULD rule IS faithful.
+A code returning lint.Warn when a NOT RECOMMENDED/SHOULD NOT condition is
+present is also faithful; do NOT reject it as a hard prohibition merely because
+the generated pass condition is the recommended/advised state. In zlint,
+lint.Warn is the advisory finding level.
+For a NOT RECOMMENDED row such as "field X | NOT RECOMMENDED | If present",
+a lint.Warn when X is present and Pass when X is absent EXPRESSES the row; the
+warning severity is the distinction from a MUST NOT prohibition.
+Likewise, a SHOULD NOT source row is advisory. A lint.Warn on the discouraged
+state EXPRESSES SHOULD NOT; do not require lint.Error unless (A) says MUST NOT,
+SHALL NOT, prohibited, or an equivalent hard ban.
+
+CONDITIONAL CHECKAPPLIES EQUIVALENCE: A source rule of the form "if/when C,
+P MUST/SHOULD hold" may be implemented by zlint as CheckApplies(C) plus
+Execute(P). Outside C, zlint reports NA rather than Pass; that is faithful for
+certificate-violation detection and is not an extra precondition. However,
+reject a lint when CheckApplies is the very fact that P is supposed to require
+(for example, a rule requiring policy OID X must not have CheckApplies require
+that OID X already be present).
+For extension criticality/content rows such as "this extension MUST be marked
+critical" or "extension E MUST be non-critical", CheckApplies(extension present)
+is faithful: criticality/content exists only for a present extension, while a
+missing mandatory extension is a separate presence requirement.
+Example: (A) "If the subject field is an empty SEQUENCE, the subjectAltName
+extension MUST be marked critical"; (B) CheckApplies(subject empty AND
+subjectAltName present) plus Execute(subjectAltName critical) -> EXPRESSES.
+CONDITIONAL FALLBACK EQUIVALENCE: A rule of the form "if no X is present,
+include fallback marker/value Y" is logically satisfied by the pass condition
+"X is present OR Y is present". Do not reject this form merely because (B)
+mentions the ordinary X branch; that branch is the case where the source
+antecedent "no X" is false. The fallback Y must still be checked exactly.
+NAMECONSTRAINTS IP EXCLUDE-ALL: In X.509 nameConstraints, an iPAddress
+GeneralSubtree is encoded as address bytes plus mask bytes. Excluding all
+iPAddress names means covering both IP address families: the IPv4 0.0.0.0/0
+all-zero 8-octet marker and the IPv6 ::0/0 all-zero 32-octet marker. For a
+rule that allows omission of permittedSubtrees iPAddress only when
+excludedSubtrees excludes all iPAddress names, requiring both markers is not
+an unjustified narrowing.
 
 FINAL-LINT SCOPE STRICTNESS: When (B) says "The final generated in-tree zlint
 certificate lint applies to X", X is the actual zlint CheckApplies scope and
@@ -606,6 +686,28 @@ is a CA. Infer a CA-certificate scope only when (A) says "CA certificate(s)",
 certificate-type condition. For actor-scoped certificate encoding constraints
 such as serialNumber format, applying the lint to issued certificates generally
 does not add a CA-certificate-only scope.
+For RFC certificate-content rules expressed as "CAs MUST force/use ..." and
+for CABF issuance prohibitions expressed as "CAs SHALL NOT issue Certificates
+containing ...", a certificate lint that checks the prohibited/required
+certificate property on the applicable certificate type is faithful; do not
+reject solely because (A) names the CA actor and (B) describes certificate
+instances.
+Example: (A) "Conforming CAs MUST NOT use serialNumber values longer than
+20 octets"; (B) "all parsed certificates pass only when SerialNumber length is
+at most 20 octets" -> EXPRESSES.
+KEYCERTSIGN SCOPE: For rules scoped to certificates whose public keys are used
+to validate signatures on certificates, the certificate-observable keyUsage
+signal is the keyCertSign bit. A lint scoped to KeyUsage keyCertSign and then
+checking the required property expresses that usage condition. If the source
+also says "CA certificates", the lint must also include a CA-certificate
+condition; keyCertSign alone is not equivalent to "CA certificate".
+
+CROSS-CERTIFICATE RELATIONS: Reject (B) when (A) relates this certificate to
+certificates or CRLs that it issues, unless (B) explicitly models that other
+artifact. For example, RFC 5280 "the subject key identifier MUST be the value
+placed in the authority key identifier extension of certificates issued by the
+subject of this certificate" is NOT a same-certificate requirement that this
+certificate's SKI equals this certificate's AKI.
 
 TABLE-FRAGMENT STRICTNESS: Some (A) inputs are extracted rows from a larger
 standards table. If (A) includes "Nearby rows from the same source
@@ -616,6 +718,228 @@ conditional presence. For example, if nearby rows show attribute X is required
 when Y is absent and attribute Y is required when X is absent, then (B) does
 NOT express the table by unconditionally requiring only X or only Y; it drops
 the alternative.
+However, do NOT merge independent neighboring source sentences/rows into (A)
+when the "Original extracted rule text" already names one specific branch or
+requirement. Source excerpts provide inherited conditions, table headers,
+allowed-value rows, and antecedents for words like "otherwise"; they do not
+turn the current row into every adjacent rule in the section.
+This also applies inside one Markdown table cell or paragraph: if the source
+cell/paragraph contains multiple independent RFC2119 sentences, judge the
+sentence represented by "Original extracted rule text". Do not transfer an
+effective date, severity, or condition from a neighboring RFC2119 sentence
+unless that date/condition is in the extracted text itself or is grammatically
+the antecedent of that same sentence.
+Example: if the extracted rule text is "If the subject field is an empty
+SEQUENCE, subjectAltName MUST be marked critical", then code scoped to the
+empty-subject branch EXPRESSES that row. Do not reject it for omitting the
+neighboring "Otherwise, subjectAltName MUST NOT be marked critical" row.
+When an extracted fragment says only "the subjectAltName extension MUST be
+critical" but the RFC 5280 §4.1.2.6 source excerpt shows it is the consequent
+of the empty-subject/subjectAltName-only naming condition, code scoped to
+Subject DN empty plus subjectAltName critical EXPRESSES that fragment.
+For table rows such as "Any other qualifier MUST NOT" or "Any other value
+MUST NOT", "other" means "outside the values separately permitted by the same
+table." A code predicate that allows the table-permitted value(s) and rejects
+everything else EXPRESSES that row; do NOT reject it merely because it permits
+the explicitly permitted value(s). Conversely, code that forbids all values
+does NOT express a complement row if the table explicitly permits one or more
+values.
+For table-complement rows, the table-permitted set is formed by rows whose
+presence/permission column is MUST, SHOULD, MAY, RECOMMENDED, or equivalent
+positive permission. Rows whose column is MUST NOT, SHALL NOT, NOT RECOMMENDED,
+or equivalent negative/advisory-against wording are not members of the allowed
+set. A warning predicate for "Any other value | NOT RECOMMENDED" therefore
+EXPRESSES the row when it passes the positively permitted values and warns on
+every value outside that set.
+When the source section/table title itself names the certificate profile
+(for example Root CA, CA Certificate, Subscriber Certificate, or a validation
+tier), a final zlint CheckApplies guard matching that profile is faithful
+scope, not an added narrowing condition.
+For CABF Subscriber validation tiers (Domain Validated, Individual Validated,
+Organization Validated, Extended Validation), a guard using the corresponding
+Reserved Certificate Policy Identifier is the certificate-encoded discriminator
+for that tier. Do not reject it as an arbitrary or extra precondition when the
+source profile_scope/section/table title names that tier.
+For Organization Validated subscriber subject rows, `domainComponent | MAY |
+If present, this field MUST contain a Domain Label from a Domain Name` is a
+conditional content rule. A final CheckApplies guard requiring OV subscriber
+scope and subject domainComponent presence is faithful; the MAY cell permits
+omission, while the MUST clause constrains values only if the field is present.
+P-Labels in xn-- form and Non-Reserved LDH labels are Domain Labels for this
+purpose.
+In CABF §7.1.2 profile tables, "CA Certificate ..." / "Common CA Fields" means
+the row is scoped to CA certificates; a final CheckApplies guard "CA
+certificates" is faithful for those rows. "OCSP Responder Certificate ..." means
+the row is scoped to delegated OCSP responder certificates; a final
+CheckApplies guard using zlint's delegated OCSP responder predicate is faithful
+for those rows. Do not reject those profile guards merely because the extracted
+row text itself is a terse table cell.
+Likewise, the TLS Subordinate CA Certificate Profile is represented in zlint
+by subordinate CA certificates in the server-auth/TLS profile; a final
+CheckApplies guard described that way is faithful to CABF §7.1.2.6.
+For the CABF Subscriber (Server) Certificate Profile under §7.1.2.7, zlint's
+standard certificate-observable profile guard is `IsSubscriberCert` (non-CA,
+non-self-signed subscriber certificate). Do not reject that guard as broader
+than "Subscriber (Server)" merely because it does not repeat the profile title
+or add a separate serverAuth EKU guard; §7.1.2.7.10 has a separate lintable row
+requiring serverAuth in EKU.
+When (A) says "Any other qualifier MUST NOT" in a table immediately following
+"Permitted policyQualifiers" and the same table has an id-qt-cps MAY row, a
+predicate "no policyQualifierId outside id-qt-cps" EXPRESSES that complement
+row. The permitted id-qt-cps value is not an exception invented by (B); it is
+the value whose complement the word "other" denotes.
+If a source table row/cell contains two independent normative clauses, judge
+only the clause represented by "Original extracted rule text"; do not require
+(B) to also implement a neighboring or omitted clause merely because it appears
+elsewhere in the source excerpt and has a different RFC2119 keyword.
+When an extracted row is one sentence split from a single source table cell,
+use the same-cell local context to resolve anaphora and applicability. A
+content/order constraint on an optional field may be implemented as applying
+only when that field is present if the same cell/table marks the field MAY or
+says "if present"; this is not an added narrowing. Likewise, words such as
+"the values", "the fields", or "the Domain Labels" may refer back to the set
+defined by the immediately preceding same-cell sentence. Do not reject code for
+including that definitional antecedent when it is needed to identify the thing
+being ordered or encoded.
+For split domainComponent rows, keep the two clauses separate: a row requiring
+the domainComponent fields to be one sequence containing all labels is expressed
+by a predicate that checks one contiguous domainComponent block and exact label
+coverage; the neighboring row requiring reverse DNS/root-first order is a
+separate rule and should not be imported into the first row unless the extracted
+text itself includes that order direction.
+For AlgorithmIdentifier sections, keep OID rows, parameter rows, and complete
+byte-for-byte DER rows separate. A row saying a key is indicated by a named
+algorithm OID is expressed by checking that algorithm OID; do not require it
+to also check AlgorithmIdentifier parameters unless the extracted row itself
+is the parameter row or a full DER byte-for-byte row. Conversely, a parameter
+row or full DER row is not expressed by an OID-only check. This remains true
+when nearby rows in the same table separately state that parameters MUST be
+present/NULL or later give a complete DER encoding: those are sibling
+requirements, not hidden sub-clauses of the current OID row.
+For exact byte-for-byte AlgorithmIdentifier rows that list DER hex bytes for
+one named algorithm, the DER bytes contain that algorithm OID. Code that first
+conditions on the same parsed AlgorithmIdentifier OID and then requires the
+full DER bytes for that AlgorithmIdentifier EXPRESSES the row; the OID guard
+selects the named algorithm row and is not an unrelated narrowing.
+For signature AlgorithmIdentifier allowed-encoding rows that list a set of
+permitted complete DER encodings for Certificate.signatureAlgorithm and
+TBSCertificate.signature, keep the allowed-set row separate from neighboring
+or profile/RFC rows requiring the two fields to be byte-for-byte identical to
+each other. Code that checks each of those two fields is independently one of
+the permitted complete DER encodings EXPRESSES the allowed-set row. Do not
+require cross-field equality unless the extracted row itself says the encoded
+value is identical to tbsCertificate.signature, and treat code that adds that
+equality as stronger than the allowed-set row rather than necessary for it.
+For RSA signature AlgorithmIdentifier rows, a CheckApplies guard matching the
+RSA signatureAlgorithm OID family (SHA-256/384/512 with RSA or RSASSA-PSS) is
+faithful row scope, not an arbitrary narrowing; it prevents applying the RSA
+row to ECDSA or other signature algorithms.
+For EC SubjectPublicKeyInfo exact-encoding rows keyed by a named curve
+(for example P-256/secp256r1, P-384/secp384r1, P-521/secp521r1), the SPKI
+AlgorithmIdentifier parameters namedCurve OID is the certificate field that
+identifies that named curve. Code that conditions on the same namedCurve OID
+and then checks the complete SPKI AlgorithmIdentifier DER expresses that
+curve-specific exact-encoding row; it is not the same as using EC point length
+as a proxy.
+For EC namedCurve value rows such as "For P-256 keys, namedCurve MUST be
+secp256r1", a certificate-observable way to identify the P-256/P-384/P-521 key
+antecedent is to parse SubjectPublicKeyInfo.subjectPublicKey as an ECPoint and
+test whether the point lies on that named NIST curve, then require the matching
+namedCurve OID. A malformed point or a point on a different curve is outside
+that curve-specific row; other structure/key-validity rules may reject it, but
+do not reject this namedCurve row as too narrow merely because it does not treat
+malformed ECPoint bytes as a valid P-256/P-384/P-521 key.
+In RSA SubjectPublicKeyInfo rows, using the raw subjectPublicKey BIT STRING
+as an ASN.1 RSAPublicKey SEQUENCE (modulus and publicExponent) is a faithful
+certificate-observable way to identify the "RSA key" antecedent, including
+cases where the AlgorithmIdentifier OID is wrong. Do not treat that raw-key
+condition as an added precondition for rows about how RSA keys are indicated.
+When neighboring rows separately mention parameters present/NULL, the phrase
+"AlgorithmIdentifier" in the OID row does not by itself import those parameter
+requirements into the current row.
+For a CABF RSA SubjectPublicKeyInfo row that says the CA SHALL NOT use a
+different algorithm, such as id-RSASSA-PSS, to indicate an RSA key, a predicate
+requiring the rsaEncryption algorithm OID for raw RSAPublicKey BIT STRINGs
+EXPRESSES the prohibition on different algorithm OIDs; it need not separately
+enumerate every forbidden alternative algorithm.
+If the same section/table has a header sentence such as "If present, the
+Certificate Policies extension ..." or "If present, the
+AuthorityInfoAccessSyntax ...", subordinate rows about PolicyInformation,
+policyQualifiers, AccessDescription, accessMethod, or accessLocation inherit
+that if-present condition. A final zlint lint with CheckApplies requiring that
+extension to be present is faithful for those subordinate rows.
+For extension subfield rows saying a nested field "MUST NOT be present", a
+pass condition that returns true when the containing extension is absent and
+false when that subfield appears EXPRESSES the row; the extension has no
+nested subfield to violate when absent.
+For RFC version rows, "only basic fields are present" means no extensions and
+no issuerUniqueID/subjectUniqueID; the standard base TBSCertificate fields are
+the basic fields and need not be enumerated in (B).
+For RFC 5280 Appendix A ASN.1 module comments, a trailing comment of the form
+"-- If present, version MUST ..." belongs to the optional ASN.1 field on the
+same or immediately preceding module line, not to the version field itself.
+Thus the comments after issuerUniqueID/subjectUniqueID are faithfully scoped by
+the presence of those UniqueIdentifier fields, and the comment after extensions
+is faithfully scoped by the presence of extensions.
+For RFC 5280 CertificatePolicies UserNotice explicitText rows, `Conforming CAs
+SHOULD use the UTF8String encoding for explicitText` is advisory and applies
+to present UserNotice explicitText values. A lint.Warn when any explicitText
+DisplayText CHOICE uses another DisplayText encoding, with Pass when there is
+no explicitText or all explicitText values are UTF8String, EXPRESSES the row.
+The neighboring MAY IA5String and MUST NOT VisibleString/BMPString rows are
+separate normative rows and must not be imported into this SHOULD row.
+For CABF CA CertificatePolicies rows whose context says the section has
+separate No Policy Restrictions and Policy Restricted profiles, an exact-one
+Reserved Certificate Policy Identifier requirement belongs to the Policy
+Restricted profile. A CheckApplies condition that excludes anyPolicy is faithful
+to that profile signal, not an unrelated narrowing. In that same Policy
+Restricted CA profile, the source defines the Reserved Certificate Policy
+Identifier by reference to the Subscriber Certificate type directly or
+transitively issued by the CA certificate, so the CABF DV/OV/IV/EV reserved
+policy OID set expresses that row; do not reject it as the wrong OID set merely
+because the certificate being linted is a CA certificate.
+For CertificatePolicies policyQualifiers rows whose extracted text is the
+single advisory clause "`policyQualifiers` are NOT RECOMMENDED to be present",
+keep that advisory presence row separate from the neighboring hard constraint
+"If present, MUST contain only permitted policyQualifiers". A zlint warning
+when any policyQualifiers are present, and pass when none are present, EXPRESSES
+the NOT RECOMMENDED row. A CheckApplies guard requiring the CertificatePolicies
+extension to be present is faithful for this subfield row because no
+policyQualifiers subfield exists when the extension is absent. Do not call this
+a hard prohibition merely because the pass/recommended state has no
+policyQualifiers; lint.Warn is the advisory representation of "not
+recommended", and the permitted-qualifier allow-list is a separate row.
+For CABF rules that prohibit certificate Domain Names ending in an IP Reverse
+Zone Suffix, the concrete DNS reverse-zone suffixes are in-addr.arpa and
+ip6.arpa. A predicate that checks certificate Domain Names against those two
+suffixes expresses the source phrase "IP Reverse Zone Suffix".
+For CABF Subscriber subjectAltName rows about the FQDN or wildcard FQDN portion
+being composed entirely of P-Labels or Non-Reserved LDH Labels joined by U+002E,
+a predicate that applies the same label-composition test to each SAN dNSName
+and, for names beginning "*.", to the portion after the wildcard label,
+EXPRESSES the row.
+For CABF §7.1.4.3 Subscriber Certificate Common Name Attribute bullets, the
+phrase "the value" refers to the subject commonName attribute value being
+encoded. The preceding sentence saying commonName, if present, is one SAN value
+is a separate row-level requirement. Do not require an IPv4 textual-encoding
+bullet to also prove SAN membership or to check SAN iPAddress OCTET STRINGs;
+checking the subject commonName string's RFC 3986 IPv4Address dotted-decimal
+syntax expresses that bullet.
+Do not reject the IPv4 bullet as overbroad merely because the lint does not
+first prove the separate "commonName is one value from SAN" sentence; a
+certificate with a non-SAN commonName can violate that separate row and still
+be evaluated for whether its commonName IPv4 text uses the required textual
+encoding.
+For RFC 5280 Appendix B, the sign-bit sentence immediately follows "CAs MUST
+force the serialNumber to be a non-negative integer"; therefore "the INTEGER
+value" in that sentence is the certificate serialNumber INTEGER, not every
+INTEGER anywhere in a certificate.
+For ASN.1 module comments inside an extension value type, a final zlint lint
+may use CheckApplies(extension present) before checking that extension's
+subfields; no extension value exists when the extension is absent.
+For ASN.1 module comments under CRL structures such as CertificateList,
+TBSCertList, revokedCertificates, or crlExtensions, a generated certificate lint
+does NOT express the rule if it instead checks certificate fields.
 
 {profile_scope_block}
 === (A) RULE (original normative text) ===
@@ -668,6 +992,11 @@ def judge_expresses(rule_text: str, code_sem: str, *,
             f'or table titled "{profile_scope}". Treat this title as implicit '
             "background for interpreting terse table rows and omitted subjects "
             "(for example, a Common Name Attribute table row is about commonName). "
+            "This is the row-level predicate gate, so (B) does not need to "
+            "restate the profile scope in its prose; the final in-tree zlint "
+            "shipping gate separately checks CheckApplies/profile scope. Do "
+            "not mark (B) DOES_NOT_EXPRESS solely because it omits the profile "
+            "title while otherwise checking the right predicate. "
             "When the title is a certificate-profile title, a precondition in "
             "(B) that matches that profile EXPRESSES the scope faithfully and is "
             "NOT an extra narrowing condition. Examples: Root CA profile -> Root "
@@ -680,7 +1009,12 @@ def judge_expresses(rule_text: str, code_sem: str, *,
             "condition not entailed by that context. If RULE CONTEXT explicitly "
             "names a standard OID or identifier, use that identifier to interpret "
             "terse or truncated table cells in (A); do not ignore it merely "
-            "because the extracted row text is incomplete.\n"
+            "because the extracted row text is incomplete. If RULE CONTEXT is an "
+            "RFC field section title such as Issuer, Subject, Validity, or "
+            "Authority Information Access, treat that field title as implicit "
+            "scope for omitted subjects in (A). Do not reinterpret an Issuer or "
+            "Subject section row as a generic all-Name rule unless (A) explicitly "
+            "states that broader generic scope.\n"
         )
     else:
         psb = ""

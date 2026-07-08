@@ -91,15 +91,17 @@ keyIdentifier field" -- they are the same bytes after parsing.
 DN BYTE EQUALITY: c.RawSubject and c.RawIssuer are the DER-encoded
 distinguished names. A check like "bytes.Equal(c.RawSubject, c.RawIssuer)"
 EXPRESSES "subject DN MUST be byte-for-byte identical to issuer DN" or
-"the encoded `subject` MUST equal the encoded `issuer`" -- this is the
-direct mechanical encoding of the rule, not an approximation.
+"the encoded `subject` MUST equal the encoded `issuer`". It DOES NOT express
+"subject field MUST be encoded in the same way as it is encoded in the issuer
+field" when that rule is about matching attribute string encodings while
+allowing different DN values.
 
 SEVERITY EQUIVALENCE: The lint code may return one of three statuses on
-a violation: lint.Error, lint.Warn, lint.Notice. These map directly to
-the rule's prescriptive level:
+a violation. CICAS only treats Error/Warn as generated violation lints:
   lint.Error  <=> MUST / MUST NOT / SHALL / SHALL NOT / REQUIRED
   lint.Warn   <=> SHOULD / SHOULD NOT / RECOMMENDED / NOT RECOMMENDED
-  lint.Notice <=> MAY / OPTIONAL
+MAY / OPTIONAL are permissive/optional rows and should not be generated as
+violation lints.
 A code that returns lint.Warn for a SHOULD-level rule EXPRESSES the rule
 faithfully -- do NOT mark it DOES_NOT_EXPRESS just because the check is
 "only a Warn"; that's the correct severity for SHOULD/RECOMMENDED. A code

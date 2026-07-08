@@ -444,29 +444,23 @@ $$
 
 ### 8.4 证书检测
 
-把被判为同义的 lint 注入 zlint 二进制、检测证书，检验代码生成与同义判定；一条 lint 命中一张证书后，必须经独立结构审计确认，无法确认或被反驳的命中不计入有效发现。语料首先使用 zlint 自带 testdata：31 条发射 lint 扫描 1128 张可解析 testdata 证书，按有效发现口径得到 **72** 条 `cicasgen_` 命中。
+把最终严格同义的 91 条 `cicasgen_` lint 注入 zlint 二进制、检测证书，检验代码生成与同义判定。本文只把满足三项条件的命中计为有效问题：最终 zlint 代码语义已回到原文核对；证书运行产生非 pass 结果；独立结构审计能从 DER/openssl 重新推出同一缺陷。对外部语料，还要求没有原生 zlint lint 同时标记该证书，从而避免把已有工具覆盖误记为新生成 lint 的发现。表中计数单位为"证书 × lint" finding；若同一证书违反两条规则，计为两项问题。
 
-**表 4：证书级发现与严重性解释（31 lint / 1128 testdata 证书）**
+zlint 自带 testdata 用作门禁语料而非现实生态估计：1128 张可解析证书上产生 2627 条 `cicasgen_` 原始命中，其中 299 条经独立审计确认（251 条 Error、48 条 Warn），2328 条为 `NOCHECK`，不纳入可靠问题声称。外部语料包括 Tranco Top 1M 域名 TLS 握手链去重后的 47,791 张 PEM，以及近期 CT 日志样本去重后的 63,327 张 PEM。Tranco 上原始 `cicasgen_` 命中 44,020 条，经 no-upstream 独立审计后严格确认 6 条；CT 上原始命中 57,558 条，经同一口径严格确认 1 条。两份外部语料按来源相加为 7 条严格确认 finding；合并去重后为 6 个证书-lint finding、5 张唯一证书，其中 1 条 Root CA CRLDP 警告同时出现在 Tranco 与 CT。
 
-| 发现类型 | 命中数 | 严重性解释 | 本文证据边界 |
-|---|---:|---|---|
-| OV 证书携带 `givenName` | 2 | Error 级 profile 违规；合规严重，直接密码学安全后果间接 | 结构条件经独立审计确认；upstream zlint 缺少直接覆盖 |
-| Root CA 携带 CRLDP | 1 | Warn 级（建议性）；Root CA 的 profile 整洁性问题 | 结构条件经独立审计确认；不表述为严重安全漏洞 |
-| 其他经确认结构命中 | 69 | 不统一提升严重性 | 只证明结构真实性；不支持现实生态发生率估计，且部分受跨标准覆盖口径影响 |
+**表 4：三类证书语料中的严格确认问题（按严重度从高到低）**
 
-本文把严重性落到具体发现上解释：OV+givenName 属于合规上严重、直接密码学安全后果间接的问题；Root CA CRLDP 属于低一档的 Warn 级 profile 警告。
+| 严重度 | 问题类型与对应原文义务 | testdata 独立确认 | Tranco 严格确认 | CT 严格确认 | 外部合并去重 | 证据边界 |
+|---|---|---:|---:|---:|---:|---|
+| Error | 订户证书 Certificate Policies 必须包含 exactly one CABF Reserved Certificate Policy Identifier（BR §7.1.2.7.9） | 113 | 1 | 0 | 1 | Tranco 中 1 张 leaf 证书缺少 CABF reserved policy OID；无原生 zlint 重叠 |
+| Error | AKI 禁止出现 `authorityCertSerialNumber` / `authorityCertIssuer`（BR §7.1.2.11.1） | 32 | 2 | 0 | 2 | Tranco 中同一张 CA 证书同时违反两个 AKI 子字段约束；无原生 zlint 重叠 |
+| Error | 订户证书 Certificate Policies 禁止 `anyPolicy`（BR §7.1.2.7.9） | 26 | 0 | 0 | 0 | 仅在 testdata 夹具中确认 |
+| Error | IV/OV subject profile 字段约束：`surname`、`givenName`、`localityName` / `stateOrProvinceName` 条件出现或禁止出现（BR §7.1.2.7.3-§7.1.2.7.4） | 57 | 0 | 0 | 0 | 仅在 testdata 夹具中确认 |
+| Error | 其他结构性强制约束：SAN critical、`signatureAlgorithm` 与 `tbsCertificate.signature` 一致、订户 `pathLenConstraint` 禁止出现、空 Certificate Policies、v1 uniqueID 禁止出现（RFC 5280 / BR） | 23 | 0 | 0 | 0 | 仅在 testdata 夹具中确认 |
+| Warn | 仅含基本字段的证书版本 SHOULD 为 v1（RFC 5280 §4.1.2.1） | 47 | 0 | 0 | 0 | 建议性规则，作为 `lint.Warn` 报告；不表述为硬错误 |
+| Warn | Root CA Certificate SHOULD NOT 包含 CRL Distribution Points（BR §7.1.2.11.2） | 1 | 3 | 1 | 3 | 外部为 advisory profile 警告；CT 的 1 条与 Tranco 中同一 Root CA 证书重复 |
 
-**真实证书补充扫描。** 为检验这些发现是否只存在于人工构造的 testdata，本文进一步构造两个外部语料：Tranco Top 1M 域名的 TLS 握手证书链（去重后 47,791 张 PEM，其中 leaf 47,160、chain 631）与近期 CT 日志样本（去重后 63,327 张 PEM，其中 logged precert 58,082、logged x509 5,066、chain 179）。两者合计 **111,118** 张可解析证书。原始 `cicasgen_` 命中数量庞大：Tranco 上 128,439 条、CT 上 165,897 条；但这些命中不能直接视为缺陷，因为若生成 lint 丢失 profile scope、条件句或生效时间约束，独立结构审计仍可能只证明"证书满足了错误 lint 的触发条件"。因此本文对外部语料只作负向验证：它能暴露哪些 generated lint 仍不能写成真实缺陷结论，而不把 raw 命中率当作现实生态缺陷率。
-
-**表 5：真实 Tranco/CT 语料中被严格复核排除的候选发现**
-
-| 初筛候选 | 初筛命中 | 复核结论 | 排除原因 |
-|---|---:|---|---|
-| OV 订户证书缺少 `localityName` | 4 | 不计为真实缺陷 | CABF BR §7.1.2.7.4 对 `stateOrProvinceName` / `localityName` 是二选一条件：`localityName` 仅在 `stateOrProvinceName` 缺失时 MUST；4 张证书均含 `stateOrProvinceName`，生成 lint 丢失了该条件 |
-| OV 订户证书携带 `organizationalUnitName` | 11 | 不计为签发时缺陷 | 当前 BR 禁止 OU，但这 11 张证书均签发于 2022-09-01 的 OU 禁止生效日前；可说"不符合当前 profile"，不能说"签发时违规" |
-| AKI 含 `authorityCertIssuer` / `authorityCertSerialNumber` | 2（同一 CA 证书） | 不计为签发时缺陷 | 当前 BR §7.1.2.11.1 禁止这两个 AKI 子字段，但该链证书签发于 2007 年，早于 BR 原始生效日 2012-07-01 |
-
-同一外部扫描还暴露出若干更明显的 `cicasgen_` 高频误报：RFC 5280 A.1 的 `version MUST be v2` 片段被错误抽为证书 profile 规则，会把正常 v3 证书报错；RFC 5280 §4.1.2.6 的 `subjectAltName MUST be critical` 丢失了"subject 为空"前提；CABF BR §7.1.3.1.2 的 ECDSA 约束被误写成所有证书公钥算法均须为 `id-ecPublicKey`；若干 SubCA `anyPolicy` / NameConstraints 规则只用 `IsSubCA` 近似 profile scope，未区分 Cross-Certified、Technically Constrained TLS 与 Non-TLS 子配置档。这进一步支持表 1 的负向结论：即便 lint 可编译、可执行并在证书上命中，仍必须复查原文 scope、条件句和规则生效时间，不能把 raw 命中率当作真实合规缺陷率。
+因此，若按严格确认口径计数，testdata 中有 299 条夹具级问题，Tranco 中有 6 条真实证书问题，CT 中有 1 条真实证书问题；外部真实证书合并去重后为 6 条问题。raw 命中率只用于发现待审计候选，不用于论文中的缺陷数量结论。
 
 ## 9. 讨论
 

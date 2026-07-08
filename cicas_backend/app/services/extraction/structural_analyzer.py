@@ -1393,6 +1393,118 @@ class StructuralAnalyzer:
             obligation = obligation.value
         obligation_upper = (obligation or '').upper()
 
+        assertion_subject_initial = getattr(ir, 'assertion_subject', '')
+        if hasattr(assertion_subject_initial, 'value'):
+            assertion_subject_initial = assertion_subject_initial.value
+        if str(assertion_subject_initial or '').lower() == 'crossartifact':
+            ir.lintable = False
+            if not getattr(ir, 'non_lintable_reason', None):
+                ir.non_lintable_reason = (
+                    "Cross-artifact applicability or predicate is not decidable "
+                    "from one certificate's encoded bytes"
+                )
+            app_logger.info(
+                "[StructuralAnalyzer] CrossArtifact assertion preserved; "
+                "not eligible for single-artifact lintability rescue"
+            )
+            return
+
+        constraint = getattr(ir, 'constraint', None)
+        constraint_raw = getattr(constraint, 'raw_text', '') if constraint is not None else ''
+        constraint_value = getattr(constraint, 'value', '') if constraint is not None else ''
+        semantic_text_lower = " ".join(
+            part for part in (
+                description,
+                rule_text,
+                str(constraint_raw or ''),
+                str(constraint_value or ''),
+            )
+            if part
+        ).lower()
+
+        section_hint = " ".join(str(getattr(ir, attr, '') or '') for attr in (
+            'citation', 'section_scope', 'section_title', 'title'
+        ))
+        section_hint_lower = section_hint.lower()
+
+        # Signature AlgorithmIdentifier profile sections constrain the certificate
+        # signatureAlgorithm / TBSCertificate.signature fields, not SPKI.  The LLM
+        # sometimes maps bare "AlgorithmIdentifier" text to subjectPublicKeyInfo
+        # because nearby key AlgorithmIdentifier sections use the same ASN.1 type.
+        # Use the section/heading signal plus signature wording, never rule ids.
+        is_signature_algid_section = bool(re.search(r'\b7\.1\.3\.2(?:\.|$)', section_hint))
+        is_signature_algid_context = (
+            is_signature_algid_section
+            or 'signature algorithmidentifier' in section_hint_lower
+            or 'signature algorithmidentifier' in semantic_text_lower
+            or 'signature algorithms and encodings' in semantic_text_lower
+        )
+        if (
+            is_signature_algid_context
+            and (
+                'algorithmidentifier' in semantic_text_lower
+                or 'signature algorithms and encodings' in semantic_text_lower
+            )
+            and 'subjectpublickeyinfo' in subject_lower
+            and (
+                is_signature_algid_section
+                or 'signature' in semantic_text_lower
+                or 'signature' in section_hint_lower
+            )
+        ):
+            ir.subject = "signaturealgorithm"
+            if hasattr(ir, 'subject_ref') and ir.subject_ref:
+                ir.subject_ref.path = "signaturealgorithm"
+                ir.subject_ref.raw = "signatureAlgorithm"
+                ir.subject_ref.resolved = False
+            subject = "signaturealgorithm"
+            subject_lower = subject
+            ir.assertion_subject = "Certificate"
+            ir.verifiability = "observable"
+            ir.rule_category = "encoding_constraint"
+            ir.enforcement_phase = "Encoding"
+            app_logger.info(
+                "[StructuralAnalyzer] Signature AlgorithmIdentifier context "
+                "remapped subjectPublicKeyInfo.algorithm to signaturealgorithm"
+            )
+
+        # The ECDSA signature profile ties some rows to the issuer/signing key
+        # curve.  That applicability condition is not decidable from a single
+        # certificate without the issuer artifact, so keep it out of the zlint
+        # denominator through normal lintability recomputation.
+        if re.search(r'\bsigning key\b', text_lower):
+            ir.assertion_subject = "CrossArtifact"
+            ir.verifiability = "context_dependent"
+            ir.rule_category = "encoding_constraint"
+            ir.enforcement_phase = "Encoding"
+            ir.non_lintable_reason = (
+                "Signing-key applicability depends on issuer/key context outside "
+                "the single certificate"
+            )
+            if hasattr(ir, "_lintable_explicitly_set"):
+                delattr(ir, "_lintable_explicitly_set")
+            if hasattr(ir, "recompute_lintable"):
+                ir.recompute_lintable()
+            app_logger.info(
+                "[StructuralAnalyzer] signing-key condition detected; "
+                "assertion_subject=CrossArtifact and lintability recomputed"
+            )
+            return
+
+        from app.services.extraction.lintability_guard import has_cross_artifact_relationship
+        if has_cross_artifact_relationship(description, rule_text, constraint_raw, constraint_value):
+            ir.assertion_subject = "CrossArtifact"
+            ir.verifiability = "context_dependent"
+            if hasattr(ir, "_lintable_explicitly_set"):
+                delattr(ir, "_lintable_explicitly_set")
+            if hasattr(ir, "recompute_lintable"):
+                ir.recompute_lintable()
+            app_logger.info(
+                "[StructuralAnalyzer] Cross-artifact relationship detected; "
+                "assertion_subject=CrossArtifact and lintability recomputed"
+            )
+            return
+
         # === TARGETED NON-LINTABLE EXCEPTIONS ===
         # Some Table II gold rules are observable certificate-side statements, but they
         # remain non-lintable because the sentence is explanatory/example-style rather
@@ -1446,7 +1558,9 @@ class StructuralAnalyzer:
         current_category = getattr(ir, 'rule_category', '')
         if hasattr(current_category, 'value'):
             current_category = current_category.value
-        if has_encoding_keyword and has_encoding_verb and is_normative:
+        from app.services.extraction.lintability_guard import definitely_not_single_artifact_lintable
+        if (has_encoding_keyword and has_encoding_verb and is_normative
+                and not definitely_not_single_artifact_lintable(rule_text)):
             ir.lintable = True
             ir.non_lintable_reason = None
             ir.assertion_subject = "Certificate"
@@ -1487,6 +1601,8 @@ class StructuralAnalyzer:
         if (rescue_ok_category
                 and is_single_artifact_observable(predicate_lower, assertion_subject,
                                                   subject, obligation, rule_text)):
+            if as_l == 'ca':
+                ir.assertion_subject = 'Certificate'
             if ep_l in ('validation', 'processing'):
                 ir.enforcement_phase = 'Encoding'
             if (current_category or '') in ('clarification', 'definition'):

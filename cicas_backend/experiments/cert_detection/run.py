@@ -41,10 +41,12 @@ Run:
 Expected current use:
   Rerun coverage first so native-overlap rules are marked lint_covered=true and
   do not enter code generation.  This script then audits the generated-lint
-  findings that remain.  Strict reportable findings are additionally limited by
-  a conservative paper whitelist and CABF-BR effective-date filter; NOCHECK and
-  unresolved UNCERTAIN findings are retained in outputs but excluded from
-  reliable paper claims.
+  findings that remain.  Strict reportable findings are limited to independently
+  confirmed findings with no upstream zlint finding on the same certificate;
+  NOCHECK and unresolved UNCERTAIN findings are retained in outputs but excluded
+  from reliable paper claims.  External-corpus strict reportability does not drop
+  independently confirmed findings by issuance date; effective-date questions
+  are audit metadata, not a denominator/reporting filter.
 """
 import argparse
 import json
@@ -123,14 +125,10 @@ def _is_strict_reportable_finding(row: dict, certs_dir: Path | None, manifest: d
     if row.get("independent_verdict") != "CONFIRMED":
         return False
     lint = row.get("lint")
-    meta = manifest.get(lint, {})
     if row.get("upstream_also_flagged") is not False:
         return False
     if certs_dir is None:
         return False
-    if meta.get("source") == "CABF-BR" or row.get("standard") == "CABF-BR":
-        not_before = _cert_not_before(certs_dir / row.get("cert", ""))
-        return bool(not_before and not_before >= CABF_BR_EFFECTIVE)
     return True
 
 
@@ -151,9 +149,11 @@ def _strict_reportable_from_audit(audit: list[dict], manifest: dict, certs_dir: 
     return rows
 
 
-def _generated_finding_seed(detections: list[dict]) -> list[dict]:
+def _generated_finding_seed(detections: list[dict], *, only_no_upstream: bool = False) -> list[dict]:
     findings = []
     for d in detections:
+        if only_no_upstream and d["upstream"]:
+            continue
         for lint, result in d["ours"].items():
             findings.append({
                 "cert": d["cert"],
@@ -314,6 +314,19 @@ def run_external_corpus(args, manifest: dict):
     out_dir = (Path(args.output_dir) if args.output_dir
                else EXTERNAL_OUTPUTS / _default_external_output_name(certs_dir))
     out_dir.mkdir(parents=True, exist_ok=True)
+    for stale in (
+        "new_lint_findings.jsonl",
+        "strict_reportable_findings.jsonl",
+        "upstream_findings.jsonl",
+        "new_lint_by_lint.json",
+        "new_lint_findings.md",
+        "detection_summary.json",
+        "no_upstream_independent_audit.jsonl",
+        "no_upstream_independent_audit_summary.json",
+        "targeted_independent_audit.jsonl",
+        "targeted_independent_audit_summary.json",
+    ):
+        (out_dir / stale).unlink(missing_ok=True)
 
     print(f"[scan] {ZLINT.name} over external corpus {certs_dir} ...", flush=True)
     detections = scan.scan_corpus(
@@ -327,15 +340,36 @@ def run_external_corpus(args, manifest: dict):
 
     audit = []
     if generated_findings and not args.no_independent_audit:
-        print(f"[audit] independently verifying {len(generated_findings)} findings ...",
+        only_no_upstream = args.independent_audit_scope == "no-upstream"
+        audit_seed = _generated_finding_seed(detections, only_no_upstream=only_no_upstream)
+        print(f"[audit] independently verifying {len(audit_seed)} findings "
+              f"(scope={args.independent_audit_scope}) ...",
               flush=True)
-        audit = independent_verify.verify_findings(generated_findings, certs_dir, ZLINT)
+        audit = independent_verify.verify_findings(audit_seed, certs_dir, ZLINT)
     report_counts = write_new_lint_reports(out_dir, _default_external_output_name(certs_dir), detections,
                                            manifest, audit, certs_dir)
+    if audit:
+        audit_file = ("no_upstream_independent_audit.jsonl"
+                      if args.independent_audit_scope == "no-upstream"
+                      else "targeted_independent_audit.jsonl")
+        (out_dir / audit_file).write_text(_jsonl(audit))
+        audit_summary = {
+            "scope": args.independent_audit_scope,
+            "findings_audited": len(audit),
+            "verdicts": dict(Counter(a.get("indep") for a in audit if a.get("indep"))),
+        }
+        summary_file = ("no_upstream_independent_audit_summary.json"
+                        if args.independent_audit_scope == "no-upstream"
+                        else "targeted_independent_audit_summary.json")
+        (out_dir / summary_file).write_text(
+            json.dumps(audit_summary, indent=2, ensure_ascii=False))
     summary = {
         "mode": "external_corpus_report",
         "corpus": str(certs_dir),
         "total_certs": len(detections),
+        "independent_audit_scope": (
+            "none" if args.no_independent_audit else args.independent_audit_scope),
+        "independent_audit_findings": len(audit),
         **report_counts,
     }
     (out_dir / "detection_summary.json").write_text(
@@ -410,6 +444,10 @@ def main():
     ap.add_argument("--no-independent-audit", action="store_true",
                     help="for --certs mode, report raw zlint/new-lint findings without "
                          "per-finding structural re-verification")
+    ap.add_argument("--independent-audit-scope", choices=("all", "no-upstream"),
+                    default="all",
+                    help="for --certs mode, independently verify all generated findings "
+                         "or only generated findings on certs with no upstream zlint finding")
     args = ap.parse_args()
 
     if not ZLINT.exists():

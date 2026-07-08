@@ -185,6 +185,51 @@ RDN_TO_DN_NAME = {
     "jurisdictionCountryName":          "JurisdictionCountry",
 }
 
+# DN attribute type OIDs used when an encoding rule targets one named
+# AttributeTypeAndValue rather than the whole Subject/Issuer Name. This is
+# reference vocabulary (X.520/RFC 4519 plus CABF jurisdiction attributes), not
+# rule-specific logic. The renderer compares these dotted strings against the
+# parsed AttributeType OID in RawSubject/RawIssuer.
+DN_FIELD_TO_ATTR_NAME = {
+    "Country": "countryName",
+    "Organization": "organizationName",
+    "OrganizationalUnit": "organizationalUnitName",
+    "Locality": "localityName",
+    "Province": "stateOrProvinceName",
+    "StreetAddress": "streetAddress",
+    "PostalCode": "postalCode",
+    "DomainComponent": "domainComponent",
+    "EmailAddress": "emailAddress",
+    "CommonName": "commonName",
+    "SerialNumber": "serialNumber",
+    "GivenName": "givenName",
+    "Surname": "surname",
+    "OrganizationIDs": "organizationIdentifier",
+    "JurisdictionLocality": "jurisdictionLocalityName",
+    "JurisdictionProvince": "jurisdictionStateOrProvinceName",
+    "JurisdictionCountry": "jurisdictionCountryName",
+}
+
+DN_ATTR_OID_BY_NAME = {
+    "commonName": "2.5.4.3",
+    "surname": "2.5.4.4",
+    "serialNumber": "2.5.4.5",
+    "countryName": "2.5.4.6",
+    "localityName": "2.5.4.7",
+    "stateOrProvinceName": "2.5.4.8",
+    "streetAddress": "2.5.4.9",
+    "organizationName": "2.5.4.10",
+    "organizationalUnitName": "2.5.4.11",
+    "postalCode": "2.5.4.17",
+    "givenName": "2.5.4.42",
+    "domainComponent": "0.9.2342.19200300.100.1.25",
+    "emailAddress": "1.2.840.113549.1.9.1",
+    "organizationIdentifier": "2.5.4.97",
+    "jurisdictionLocalityName": "1.3.6.1.4.1.311.60.2.1.1",
+    "jurisdictionStateOrProvinceName": "1.3.6.1.4.1.311.60.2.1.2",
+    "jurisdictionCountryName": "1.3.6.1.4.1.311.60.2.1.3",
+}
+
 # ---------------------------------------------------------------------
 # CRL_FIELDS — fields of *x509.RevocationList (zcrypto), for the CRL lint
 # harness. The renderer's value emitters (_emit_field_*) are go_expr-based and
@@ -319,6 +364,8 @@ NAMED_REGEXES: dict[str, tuple[str, str]] = {
                                "string starts with http:// or ldap:// ONLY (excludes https / ldaps); use when rule cites RFC2616+RFC4516 schemes specifically"),
     "Re_Rfc3986Uri":          (r"^[a-zA-Z][a-zA-Z0-9+.\-]*:(//[^?#\s]*)?[^?#\s]*(\?[^#\s]*)?(#[^\s]*)?$",
                                "valid full RFC 3986 URI: scheme + optional authority/path/query/fragment, no whitespace; stricter than Re_AnyUri"),
+    "Re_IPv4AddressDottedDecimal": (r"^(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}$",
+                               "IPv4 dotted-decimal address: four decimal octets 0..255, no leading zero except the single digit 0"),
     # Character-set exclusion checks
     "Re_NoAtSign":            (r"^[^@]+$",
                                "string contains NO '@' character; use for PrintableString MUST NOT contain '@' rules (R4188)"),
@@ -352,6 +399,8 @@ NAMED_REGEXES: dict[str, tuple[str, str]] = {
     # R4718: no zero-length / empty labels (no consecutive dots, no trailing dot)
     "Re_NoConsecutiveDots":   (r"^[^.]+(\.[^.]+)*$",
                                "string with NO consecutive dots (..) and NO trailing dot; rejects '..', 'foo..bar', 'foo.'; use for 'root-zone zero-length label MUST NOT be included' (R4718)"),
+    "Re_NoTrailingDot":       (r"^.*[^.]$",
+                               "non-empty DNS name string that does NOT end with the root-zone trailing dot; use for rules that say the zero-length root label MUST NOT be included, e.g. example.com not example.com."),
     # R4038 + R4455: RFC 5321 Mailbox format — Local-part@Domain shape with
     # ASCII LDH (or P-Label) domain labels. Rejects: phrases, parenthesized
     # comments, angle-bracket wrapping, multiple addresses in one entry,

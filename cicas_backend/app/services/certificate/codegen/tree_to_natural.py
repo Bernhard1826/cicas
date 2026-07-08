@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 
 from . import dsl
+from . import vocab as V
 
 
 # ---------------------------------------------------------------------
@@ -41,6 +42,8 @@ REGEX_SEMANTIC_HINTS: dict[str, str] = {
         "is a single valid LDH label (no FQDN structure required)",
     "Re_PunyOrLDH_Hostname":
         "is composed of dot-joined LDH labels or ACE P-Labels, with P-Labels kept in xn-- form rather than converted to Unicode",
+    "Re_PunyOrLDH_Label":
+        "is one Domain Label from a Domain Name: either an ACE P-Label in xn-- form or a Non-Reserved LDH label",
     "Re_ReservedLDH_Excluded":
         "is an LDH label that is NOT in the IANA-reserved LDH label set",
     "Re_HttpOrLdapStrict":
@@ -128,6 +131,23 @@ def _oid_name(o) -> str:
     return _OID_FRIENDLY.get(o, str(o))
 
 
+def _eku_name(bit) -> str:
+    names = {
+        "Any": "anyExtendedKeyUsage (2.5.29.37.0)",
+        "ServerAuth": "id-kp-serverAuth / TLS Web Server Authentication (1.3.6.1.5.5.7.3.1)",
+        "ClientAuth": "id-kp-clientAuth / TLS Web Client Authentication (1.3.6.1.5.5.7.3.2)",
+        "CodeSigning": "id-kp-codeSigning (1.3.6.1.5.5.7.3.3)",
+        "EmailProtection": "id-kp-emailProtection (1.3.6.1.5.5.7.3.4)",
+        "TimeStamping": "id-kp-timeStamping (1.3.6.1.5.5.7.3.8)",
+        "OcspSigning": "id-kp-OCSPSigning (1.3.6.1.5.5.7.3.9)",
+        "PreCertificateSigningCertificate": (
+            "Precertificate Signing Certificate EKU (1.3.6.1.4.1.11129.2.4.4)"
+        ),
+        "TechnicallyConstrainedCA": "Technically Constrained CA EKU",
+    }
+    return names.get(str(bit), str(bit))
+
+
 _RESERVED_POLICY_OID_SETS = {
     frozenset({
         "OidPolicyDomainValidated",
@@ -152,7 +172,8 @@ def _atom(n) -> str:
     if isinstance(n, dsl.ExtPresent):
         return f"the extension with OID {n.oid} is present"
     if isinstance(n, dsl.HasAnyExtension):
-        return "the certificate contains at least one X.509 extension"
+        return ("the TBSCertificate extensions [3] field is present, i.e. the "
+                "certificate contains at least one X.509 extension")
     if isinstance(n, dsl.ExtCritical):
         return f"the extension with OID {n.oid} is marked critical"
     if isinstance(n, dsl.ExtNotCritical):
@@ -185,21 +206,96 @@ def _atom(n) -> str:
                 "(the outer Certificate.signatureAlgorithm field and the "
                 "TBSCertificate.signature field) are byte-for-byte identical "
                 f"to DER hex {n.hex_lit}; this is not a substring test")
+    if isinstance(n, dsl.SignatureAlgorithmIdentifiersInHexSet):
+        values = list(n.hex_lits)
+        return (
+            "the outer Certificate.signatureAlgorithm AlgorithmIdentifier DER "
+            "encoding is one of the permitted complete hex values, and the "
+            "TBSCertificate.signature AlgorithmIdentifier DER encoding is also "
+            "one of that same permitted set; this predicate does not require the "
+            "two fields to be byte-identical to each other. The permitted set is "
+            f"exactly these {len(values)} values: {values}; this is not a "
+            "substring test and no partial hexdump fragment is accepted"
+        )
     if isinstance(n, dsl.SPKIAlgorithmIdentifierEqualsHex):
         return ("the SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER "
                 f"encoding is byte-for-byte identical to hex {n.hex_lit}; "
                 "this is not a substring test")
+    if isinstance(n, dsl.SPKIECPointLengthAlgorithmIdentifierEqualsHex):
+        curve = {65: "P-256", 97: "P-384", 133: "P-521"}.get(n.point_len)
+        point_desc = f"{n.point_len}-byte"
+        if curve:
+            point_desc += f" ({curve} uncompressed)"
+        return ("if the SubjectPublicKeyInfo.subjectPublicKey BIT STRING "
+                f"contains a {point_desc} EC point, the "
+                "SubjectPublicKeyInfo.algorithm AlgorithmIdentifier DER "
+                f"encoding is byte-for-byte identical to hex {n.hex_lit}; "
+                "EC points of other lengths are outside this conditional clause")
+    if isinstance(n, dsl.SPKINamedCurveAlgorithmIdentifierEqualsHex):
+        curve = {
+            "06082a8648ce3d030107": "secp256r1 / P-256",
+            "06052b81040022": "secp384r1 / P-384",
+            "06052b81040023": "secp521r1 / P-521",
+        }.get(n.curve_oid_der_hex.lower(), f"DER hex {n.curve_oid_der_hex}")
+        return ("if the SubjectPublicKeyInfo.algorithm parameters namedCurve "
+                f"OID is {curve}, the SubjectPublicKeyInfo.algorithm "
+                "AlgorithmIdentifier DER encoding is byte-for-byte identical "
+                f"to hex {n.hex_lit}; other namedCurve values are outside "
+                "this conditional clause")
+    if isinstance(n, dsl.SPKIECPointOnCurveNamedCurveOIDEqualsHex):
+        curve = {
+            "06082a8648ce3d030107": "secp256r1 / P-256",
+            "06052b81040022": "secp384r1 / P-384",
+            "06052b81040023": "secp521r1 / P-521",
+        }.get(n.curve_oid_der_hex.lower(), n.curve_name)
+        return ("if the SubjectPublicKeyInfo.subjectPublicKey BIT STRING "
+                f"contains an EC point that lies on {n.curve_name}, the "
+                "SubjectPublicKeyInfo.algorithm parameters namedCurve OID DER "
+                f"element is byte-for-byte identical to {curve}; EC points "
+                f"that do not lie on {n.curve_name} are outside this "
+                "conditional clause")
+    if isinstance(n, dsl.SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex):
+        return ("if the SubjectPublicKeyInfo.subjectPublicKey BIT STRING "
+                "contains an ASN.1 RSAPublicKey SEQUENCE with modulus and "
+                "publicExponent INTEGERs, the SubjectPublicKeyInfo.algorithm "
+                "AlgorithmIdentifier DER encoding is byte-for-byte identical "
+                f"to hex {n.hex_lit}; non-RSA public-key bit strings are "
+                "outside this conditional clause")
+    if isinstance(n, dsl.SPKIRSAPublicKeyAlgorithmOIDEqualsHex):
+        return ("if the SubjectPublicKeyInfo.subjectPublicKey BIT STRING "
+                "contains an ASN.1 RSAPublicKey SEQUENCE with modulus and "
+                "publicExponent INTEGERs, the SubjectPublicKeyInfo.algorithm "
+                "AlgorithmIdentifier algorithm OID DER element is "
+                f"byte-for-byte identical to hex {n.oid_der_hex}; "
+                "AlgorithmIdentifier parameters are not checked by this "
+                "predicate, and non-RSA public-key bit strings are outside "
+                "this conditional clause")
     if isinstance(n, dsl.CommonNameFromSAN):
         return ("the subject commonName, if present, equals one of the "
                 "subjectAltName dNSName or iPAddress entries")
     if isinstance(n, dsl.SubjectCommonNameFQDNOrWildcardPortionMatchesRegex):
-        return ("all Domain Labels of the subject commonName Fully-Qualified Domain Name, "
-                "or of the FQDN portion of the subject commonName Wildcard Domain Name, "
-                f"{_regex_phrase(n.pattern)}")
+        return ("if the subject commonName is a Fully-Qualified Domain Name "
+                "or a Wildcard Domain Name, all Domain Labels of that FQDN, "
+                "or of the FQDN portion after the leading '*.' wildcard label, "
+                f"{_regex_phrase(n.pattern)}; non-FQDN/non-wildcard commonName "
+                "values are outside this conditional clause")
     if isinstance(n, dsl.SubjectCommonNameFQDNMatchesDNSNameSAN):
         return ("if the subject commonName is a Fully-Qualified Domain Name or "
                 "Wildcard Domain Name, then it is a character-for-character copy "
                 "of a subjectAltName dNSName entry")
+    if isinstance(n, dsl.StringFieldIfIPv4AddressUsesDottedDecimal):
+        if n.field == "Subject.CommonName":
+            return ("if the subject commonName attribute value is an IPv4 "
+                    "address, that commonName string is encoded using the "
+                    "RFC 3986 IPv4Address textual literal grammar (dotted "
+                    "decimal decimal-octets): exactly four decimal octets "
+                    "0..255 separated by dots, with no leading zero except "
+                    "the single digit 0")
+        return (f"if string field {n.field} is IPv4-address-like text, its string "
+                "value is encoded using the IPv4Address textual literal grammar "
+                "(dotted decimal decimal-octets), not the X.509 subjectAltName "
+                "iPAddress OCTET STRING form: exactly four decimal octets 0..255 "
+                "separated by dots, with no leading zero except the single digit 0")
     if isinstance(n, dsl.NotAfterIsNoExpirySentinel):
         return ("the notAfter date is the GeneralizedTime no-expiration sentinel "
                 "99991231235959Z (RFC 5280 §4.1.2.5)")
@@ -214,10 +310,10 @@ def _atom(n) -> str:
                 "any KeyUsage bit outside that allowed set is outside this "
                 "predicate's accepted set")
     if isinstance(n, dsl.ExtKeyUsageHas):
-        return f"the ExtendedKeyUsage extension asserts the {n.bit} usage"
+        return f"the ExtendedKeyUsage extension asserts {_eku_name(n.bit)}"
     if isinstance(n, dsl.ExtKeyUsageOnlyHasUsagesInSet):
         return (f"every asserted ExtendedKeyUsage KeyPurposeId is one of "
-                f"{list(n.bits)}; any ExtendedKeyUsage value outside that "
+                f"{[_eku_name(bit) for bit in n.bits]}; any ExtendedKeyUsage value outside that "
                 "allowed set, including an unknown EKU OID, is outside this "
                 "predicate's accepted set")
     if isinstance(n, dsl.FieldEq):
@@ -231,10 +327,19 @@ def _atom(n) -> str:
             return "the optional DER tbsCertificate.version field is absent"
         return f"field {n.field} is empty (absent)"
     if isinstance(n, dsl.FieldMatchesRegex):
+        fd = V.lookup_anyfield(n.field)
+        if fd is not None and fd.semantic == "string_list":
+            return f"every value in list field {n.field} {_regex_phrase(n.pattern)}"
         return f"field {n.field} {_regex_phrase(n.pattern)}"
     if isinstance(n, dsl.FieldNotMatchesRegex):
+        fd = V.lookup_anyfield(n.field)
+        if fd is not None and fd.semantic == "string_list":
+            return f"no value in list field {n.field} satisfies ({_regex_phrase(n.pattern)})"
         return f"field {n.field} does NOT satisfy ({_regex_phrase(n.pattern)})"
     if isinstance(n, dsl.FieldInSet):
+        if n.field == "Version":
+            vals = [_field_value_phrase(n.field, v) for v in n.values]
+            return "the certificate version is one of: " + "; ".join(vals)
         return f"field {n.field} is one of {list(n.values)}"
     if isinstance(n, dsl.FieldNotInSet):
         return f"field {n.field} is NOT one of {list(n.values)}"
@@ -297,6 +402,11 @@ def _atom(n) -> str:
                 f"ASN.1-encoded as {opts}; non-DirectoryString RFC 5280/X.520 "
                 f"exception attributes are skipped, including countryName, "
                 f"domainComponent, emailAddress, serialNumber, and dnQualifier")
+    if isinstance(n, dsl.DNAttributeValuesEncodedAs):
+        opts = " or ".join(n.types)
+        return (f"every present {n.attr} attribute value in the {n.dn} DN is "
+                f"actually DER-encoded as {opts}; certificates with no such "
+                f"attribute satisfy this encoding-only check")
     if isinstance(n, dsl.FieldContains):
         return f"field {n.field} contains the substring {n.substring!r}"
     if isinstance(n, dsl.CrossFieldEq):
@@ -353,9 +463,12 @@ def _atom(n) -> str:
         return f"OID list {n.field} contains {_oid_name(n.oid)}"
     if isinstance(n, dsl.OidListCountInSet):
         if _is_reserved_policy_oid_set(n.allowed_oids):
-            names = ("a member of the complete CABF Reserved Certificate Policy "
-                     "Identifier set: DV (2.23.140.1.2.1), OV (2.23.140.1.2.2), "
-                     "IV (2.23.140.1.2.3), or EV (2.23.140.1.1)")
+            names = (
+                "a CABF Reserved Certificate Policy Identifier for a Subscriber "
+                "Certificate type, where the policy OID itself is the "
+                "certificate-encoded type discriminator: DV (2.23.140.1.2.1), "
+                "OV (2.23.140.1.2.2), IV (2.23.140.1.2.3), or EV (2.23.140.1.1)"
+            )
         else:
             names = " or ".join(_oid_name(o) for o in n.allowed_oids)
         hi = "unbounded" if n.hi == "MAX_INT" else n.hi
@@ -513,9 +626,21 @@ def _atom(n) -> str:
                    8:"registeredID"}.get(n.tag, f"tag {n.tag}")
         return (f"the extension {n.oid} contains at least one GeneralName "
                 f"entry of CHOICE type {tagname}")
+    if isinstance(n, dsl.DNComponentOrderMatches):
+        if n.order_type == "dns_reverse":
+            return (
+                "when Subject DN domainComponent fields are present, they form "
+                "one sequence encoded in reverse order to the DNS on-wire "
+                "representation, with the Domain Label closest to the root "
+                "encoded first"
+            )
+        return f"Subject DN domainComponent fields match order {n.order_type}"
     if isinstance(n, dsl.DomainComponentOrdered):
-        return ("Subject DN's domainComponent fields appear as a single "
-                "contiguous ordered sequence")
+        return (
+            "when Subject DN domainComponent fields are present, they form one "
+            "single ordered sequence containing all Domain Labels from a "
+            "certificate Domain Name"
+        )
     if isinstance(n, dsl.AIAHasMethodOtherThan):
         oids = ", ".join(n.allowed_oids)
         return (f"the extension {n.ext_oid} contains at least one "
@@ -621,6 +746,17 @@ def _render(n) -> str:
     if isinstance(n, dsl.And):
         return " AND ".join(f"({_render(p)})" for p in n.parts)
     if isinstance(n, dsl.Or):
+        if n.parts and all(isinstance(p, dsl.SignatureAlgorithmIdentifiersEqualHex) for p in n.parts):
+            values = [p.hex_lit for p in n.parts]
+            return (
+                "both certificate signature AlgorithmIdentifier encodings "
+                "(the outer Certificate.signatureAlgorithm field and the "
+                "TBSCertificate.signature field) are byte-for-byte identical "
+                "to the same complete DER encoding, and that encoding is one "
+                f"of exactly these {len(values)} permitted hex values: {values}; "
+                "this is not a substring test and no partial hexdump fragment is "
+                "accepted"
+            )
         if len(n.parts) == 2:
             a, b = n.parts
             pair = (a, b)
@@ -672,13 +808,12 @@ def tree_to_natural(predicate, precondition=None) -> str:
 # Map RFC2119 obligation level -> generated-lint severity. A lint that returns
 # this severity on violation EXPRESSES a rule at that obligation level (see
 # binary_judge SEVERITY EQUIVALENCE). MUST/MUST NOT -> Error; SHOULD-family ->
-# Warn; MAY/OPTIONAL -> Notice.
+# Warn. MAY/OPTIONAL are permissive and are filtered before codegen.
 _OBLIGATION_SEVERITY = {
     "MUST": "Error", "MUST NOT": "Error", "SHALL": "Error", "SHALL NOT": "Error",
     "REQUIRED": "Error",
     "SHOULD": "Warn", "SHOULD NOT": "Warn",
     "RECOMMENDED": "Warn", "NOT RECOMMENDED": "Warn",
-    "MAY": "Notice", "OPTIONAL": "Notice",
 }
 
 
@@ -690,10 +825,10 @@ def obligation_aware_summary(predicate, precondition=None,
     which reads like a MUST even when the rule is SHOULD / NOT RECOMMENDED — the
     judge then (correctly) rejects it as not synonymous, because a hard check does
     NOT express a soft recommendation. A generated lint encodes obligation level
-    via its returned SEVERITY (lint.Error / lint.Warn / lint.Notice), not via the
+    via its returned SEVERITY (lint.Error / lint.Warn), not via the
     predicate tree. This wrapper makes that severity explicit so the judge compares
     like with like. MUST-family is rendered bare (the default, severity Error is the
-    judge's baseline assumption); SHOULD/MAY families get an explicit severity clause.
+    judge's baseline assumption); SHOULD-family rows get an explicit severity clause.
     """
     base = tree_to_natural(predicate, precondition)
     sev = _OBLIGATION_SEVERITY.get((obligation or "").strip().upper())
@@ -723,7 +858,7 @@ def tree_branches_to_natural(branches: list) -> str:
                      "lint.Notice": "Notice"}.get(sev, sev)
         sev_level = {"lint.Error": "MUST/MUST NOT",
                      "lint.Warn":  "SHOULD/SHOULD NOT/RECOMMENDED/NOT RECOMMENDED",
-                     "lint.Notice":"MAY/OPTIONAL"}.get(sev, "")
+                     "lint.Notice":"Notice"}.get(sev, "")
         label = br.get("label", "")
         sent = tree_to_natural(br["predicate"], br.get("precondition"))
         lines.append(
@@ -760,11 +895,17 @@ _SLUG_VERB: dict[str, str] = {
     "RSAModulusBitsInRange": "rsa_modulus_bits", "RSAPublicExponentInRange": "rsa_exponent",
     "SignatureAlgorithmIdentifiersEqualHex": "sigalg_hex",
     "SPKIAlgorithmIdentifierEqualsHex": "spki_algid_hex",
+    "SPKIECPointLengthAlgorithmIdentifierEqualsHex": "spki_ec_point_algid_hex",
+    "SPKINamedCurveAlgorithmIdentifierEqualsHex": "spki_namedcurve_algid_hex",
+    "SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex": "spki_rsa_algid_hex",
+    "SPKIRSAPublicKeyAlgorithmOIDEqualsHex": "spki_rsa_alg_oid_hex",
     "PublicKeyAlgorithmIs": "pubkey_alg", "DNEmpty": "dn_empty",
+    "DNComponentOrderMatches": "dn_component_order",
 }
 # Attribute that names the SUBJECT of the atom, in priority order.
 _SLUG_KEY_ATTRS = ("oid", "bit", "field", "scalar_field", "list_field",
-                   "algorithm", "holder", "value", "pattern", "date_field")
+                   "algorithm", "holder", "value", "pattern", "date_field",
+                   "order_type")
 # Atoms whose subject reads better BEFORE the verb (e.g. "aia_not_critical",
 # "serial_number_value") rather than after ("eku_has_server_auth").
 _SLUG_SUBJECT_FIRST = {

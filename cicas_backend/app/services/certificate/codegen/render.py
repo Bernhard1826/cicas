@@ -132,6 +132,21 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "return false",
         ])
 
+    if isinstance(n, dsl.StringFieldIfIPv4AddressUsesDottedDecimal):
+        f = V.lookup_anyfield(n.field)
+        if f is None or f.semantic != "string":
+            raise dsl.DSLError(
+                f"StringFieldIfIPv4AddressUsesDottedDecimal: unsupported string field {n.field!r}"
+            )
+        pat = _go_string(V.NAMED_REGEXES["Re_IPv4AddressDottedDecimal"][0])
+        return _iife_bool([
+            f"_v := strings.TrimSpace({f.go_expr})",
+            "if _v == \"\" { return true }",
+            "if strings.Count(_v, \".\") != 3 { return true }",
+            "if !regexp.MustCompile(`^[0-9.]+$`).MatchString(_v) { return true }",
+            f"return regexp.MustCompile({pat}).MatchString(_v)",
+        ])
+
     if isinstance(n, dsl.SigAlgMatchesTBSSignature):
         # Re-parse the cert DER and compare the signatureAlgorithm
         # AlgorithmIdentifier (in Certificate) byte-for-byte against the
@@ -171,6 +186,30 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "return bytes.Equal(certSigAlg, want) && bytes.Equal(tbsSigAlg, want)",
         ])
 
+    if isinstance(n, dsl.SignatureAlgorithmIdentifiersInHexSet):
+        entries = ", ".join(_hex_literal(v) for v in n.hex_lits)
+        return _iife_bool([
+            f"wants := [][]byte{{{entries}}}",
+            "input := cryptobyte.String(c.Raw)",
+            "var cert cryptobyte.String",
+            "if !input.ReadASN1(&cert, asn1.SEQUENCE) { return false }",
+            "var tbsCert cryptobyte.String",
+            "if !cert.ReadASN1(&tbsCert, asn1.SEQUENCE) { return false }",
+            "var certSigAlg cryptobyte.String",
+            "if !cert.ReadASN1(&certSigAlg, asn1.SEQUENCE) { return false }",
+            "if !tbsCert.SkipOptionalASN1(asn1.Tag(0).Constructed().ContextSpecific()) { return false }",
+            "if !tbsCert.SkipASN1(asn1.INTEGER) { return false }",
+            "var tbsSigAlg cryptobyte.String",
+            "if !tbsCert.ReadASN1(&tbsSigAlg, asn1.SEQUENCE) { return false }",
+            "inSet := func(got []byte) bool {",
+            "\tfor _, want := range wants {",
+            "\t\tif bytes.Equal(got, want) { return true }",
+            "\t}",
+            "\treturn false",
+            "}",
+            "return inSet(certSigAlg) && inSet(tbsSigAlg)",
+        ])
+
     if isinstance(n, dsl.SPKIAlgorithmIdentifierEqualsHex):
         lit = _hex_literal(n.hex_lit)
         return _iife_bool([
@@ -179,8 +218,137 @@ def _emit(n, *, in_item: bool, item_var) -> str:
             "var spki cryptobyte.String",
             "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
             "var alg cryptobyte.String",
-            "if !spki.ReadASN1(&alg, asn1.SEQUENCE) { return false }",
+            "var tag asn1.Tag",
+            "if !spki.ReadAnyASN1Element(&alg, &tag) { return false }",
             "return bytes.Equal(alg, want)",
+        ])
+
+    if isinstance(n, dsl.SPKIECPointLengthAlgorithmIdentifierEqualsHex):
+        lit = _hex_literal(n.hex_lit)
+        return _iife_bool([
+            f"want := {lit}",
+            "input := cryptobyte.String(c.RawSubjectPublicKeyInfo)",
+            "var spki cryptobyte.String",
+            "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
+            "var alg cryptobyte.String",
+            "var tag asn1.Tag",
+            "if !spki.ReadAnyASN1Element(&alg, &tag) { return false }",
+            "var point []byte",
+            "if !spki.ReadASN1BitStringAsBytes(&point) { return false }",
+            f"if len(point) != {int(n.point_len)} {{ return true }}",
+            "return bytes.Equal(alg, want)",
+        ])
+
+    if isinstance(n, dsl.SPKINamedCurveAlgorithmIdentifierEqualsHex):
+        curve_lit = _hex_literal(n.curve_oid_der_hex)
+        alg_lit = _hex_literal(n.hex_lit)
+        return _iife_bool([
+            f"wantCurve := {curve_lit}",
+            f"wantAlg := {alg_lit}",
+            "input := cryptobyte.String(c.RawSubjectPublicKeyInfo)",
+            "var spki cryptobyte.String",
+            "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
+            "var algElem cryptobyte.String",
+            "var algTag asn1.Tag",
+            "if !spki.ReadAnyASN1Element(&algElem, &algTag) { return false }",
+            "algInput := cryptobyte.String(algElem)",
+            "var algSeq cryptobyte.String",
+            "if !algInput.ReadASN1(&algSeq, asn1.SEQUENCE) { return false }",
+            "var algOID cryptobyte.String",
+            "var oidTag asn1.Tag",
+            "if !algSeq.ReadAnyASN1Element(&algOID, &oidTag) { return false }",
+            "var paramElem cryptobyte.String",
+            "var paramTag asn1.Tag",
+            "if !algSeq.ReadAnyASN1Element(&paramElem, &paramTag) { return true }",
+            "if !bytes.Equal(paramElem, wantCurve) { return true }",
+            "return bytes.Equal(algElem, wantAlg)",
+        ])
+
+    if isinstance(n, dsl.SPKIECPointOnCurveNamedCurveOIDEqualsHex):
+        curve_lit = _hex_literal(n.curve_oid_der_hex)
+        curve_expr = {
+            "P-256": "elliptic.P256()",
+            "P-384": "elliptic.P384()",
+            "P-521": "elliptic.P521()",
+        }.get(n.curve_name)
+        if curve_expr is None:
+            raise dsl.DSLError(
+                f"SPKIECPointOnCurveNamedCurveOIDEqualsHex: unsupported curve {n.curve_name!r}"
+            )
+        return _iife_bool([
+            f"wantCurve := {curve_lit}",
+            f"curve := {curve_expr}",
+            "input := cryptobyte.String(c.RawSubjectPublicKeyInfo)",
+            "var spki cryptobyte.String",
+            "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
+            "var algElem cryptobyte.String",
+            "var algTag asn1.Tag",
+            "if !spki.ReadAnyASN1Element(&algElem, &algTag) { return false }",
+            "var point []byte",
+            "if !spki.ReadASN1BitStringAsBytes(&point) { return false }",
+            "x, y := elliptic.Unmarshal(curve, point)",
+            "if x == nil {",
+            "\tx, y = elliptic.UnmarshalCompressed(curve, point)",
+            "}",
+            "if x == nil || !curve.IsOnCurve(x, y) { return true }",
+            "algInput := cryptobyte.String(algElem)",
+            "var algSeq cryptobyte.String",
+            "if !algInput.ReadASN1(&algSeq, asn1.SEQUENCE) { return false }",
+            "var algOID cryptobyte.String",
+            "var oidTag asn1.Tag",
+            "if !algSeq.ReadAnyASN1Element(&algOID, &oidTag) { return false }",
+            "var paramElem cryptobyte.String",
+            "var paramTag asn1.Tag",
+            "if !algSeq.ReadAnyASN1Element(&paramElem, &paramTag) { return false }",
+            "return bytes.Equal(paramElem, wantCurve)",
+        ])
+
+    if isinstance(n, dsl.SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex):
+        lit = _hex_literal(n.hex_lit)
+        return _iife_bool([
+            f"want := {lit}",
+            "input := cryptobyte.String(c.RawSubjectPublicKeyInfo)",
+            "var spki cryptobyte.String",
+            "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
+            "var alg cryptobyte.String",
+            "var tag asn1.Tag",
+            "if !spki.ReadAnyASN1Element(&alg, &tag) { return false }",
+            "var keyBytes []byte",
+            "if !spki.ReadASN1BitStringAsBytes(&keyBytes) { return false }",
+            "rsaKey := cryptobyte.String(keyBytes)",
+            "var seq cryptobyte.String",
+            "if !rsaKey.ReadASN1(&seq, asn1.SEQUENCE) { return true }",
+            "var modulus cryptobyte.String",
+            "if !seq.ReadASN1(&modulus, asn1.INTEGER) { return true }",
+            "var exponent cryptobyte.String",
+            "if !seq.ReadASN1(&exponent, asn1.INTEGER) { return true }",
+            "if !seq.Empty() || !rsaKey.Empty() { return true }",
+            "return bytes.Equal(alg, want)",
+        ])
+
+    if isinstance(n, dsl.SPKIRSAPublicKeyAlgorithmOIDEqualsHex):
+        lit = _hex_literal(n.oid_der_hex)
+        return _iife_bool([
+            f"wantOID := {lit}",
+            "input := cryptobyte.String(c.RawSubjectPublicKeyInfo)",
+            "var spki cryptobyte.String",
+            "if !input.ReadASN1(&spki, asn1.SEQUENCE) { return false }",
+            "var alg cryptobyte.String",
+            "if !spki.ReadASN1(&alg, asn1.SEQUENCE) { return false }",
+            "var oidElem cryptobyte.String",
+            "var oidTag asn1.Tag",
+            "if !alg.ReadAnyASN1Element(&oidElem, &oidTag) { return false }",
+            "var keyBytes []byte",
+            "if !spki.ReadASN1BitStringAsBytes(&keyBytes) { return false }",
+            "rsaKey := cryptobyte.String(keyBytes)",
+            "var seq cryptobyte.String",
+            "if !rsaKey.ReadASN1(&seq, asn1.SEQUENCE) { return true }",
+            "var modulus cryptobyte.String",
+            "if !seq.ReadASN1(&modulus, asn1.INTEGER) { return true }",
+            "var exponent cryptobyte.String",
+            "if !seq.ReadASN1(&exponent, asn1.INTEGER) { return true }",
+            "if !seq.Empty() || !rsaKey.Empty() { return true }",
+            "return bytes.Equal(oidElem, wantOID)",
         ])
 
     if isinstance(n, dsl.NotAfterIsNoExpirySentinel):
@@ -366,6 +534,8 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         return _emit_field_encoded_as(f, n.types)
     if isinstance(n, dsl.DNDirectoryStringValuesEncodedAs):
         return _emit_dn_directorystring_encoded_as(n.dn, n.types)
+    if isinstance(n, dsl.DNAttributeValuesEncodedAs):
+        return _emit_dn_attribute_values_encoded_as(n.dn, n.attr, n.types)
     if isinstance(n, dsl.FieldCount):
         f = _lookup_field(n.field)
         return _emit_field_count(f, n.lo, n.hi)
@@ -1538,11 +1708,46 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         ])
 
     if isinstance(n, dsl.DNComponentOrderMatches):
-        # DN components must match specified order
+        if n.order_type != "dns_reverse":
+            raise dsl.DSLError(f"DNComponentOrderMatches: unsupported order_type {n.order_type!r}")
         return _iife_bool([
-            f"// DNComponentOrderMatches: order_type={n.order_type!r}",
-            f"// Requires profile-specific order rules",
-            f"return true",
+            "_dc := []string{}",
+            "_inBlock := false",
+            "_doneBlock := false",
+            "for _, rdn := range c.Subject.OriginalRDNS {",
+            "\t_rdnDC := []string{}",
+            "\tfor _, atv := range rdn {",
+            "\t\tif atv.Type.String() != \"0.9.2342.19200300.100.1.25\" { continue }",
+            "\t\t_v, _ok := atv.Value.(string)",
+            "\t\tif !_ok { return false }",
+            "\t\t_rdnDC = append(_rdnDC, strings.ToLower(strings.TrimSpace(_v)))",
+            "\t}",
+            "\tif len(_rdnDC) > 0 {",
+            "\t\tif _doneBlock { return false }",
+            "\t\t_inBlock = true",
+            "\t\t_dc = append(_dc, _rdnDC...)",
+            "\t\tcontinue",
+            "\t}",
+            "\tif _inBlock { _doneBlock = true }",
+            "}",
+            "if len(_dc) == 0 { return true }",
+            "_names := append([]string{}, c.DNSNames...)",
+            "if c.Subject.CommonName != \"\" { _names = append(_names, c.Subject.CommonName) }",
+            "_matches := func(_name string, _stripWildcard bool) bool {",
+            "\t_s := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(_name)), \".\")",
+            "\tif _stripWildcard && strings.HasPrefix(_s, \"*.\") { _s = _s[2:] }",
+            "\tif _s == \"\" { return false }",
+            "\t_labels := strings.Split(_s, \".\")",
+            "\tif len(_dc) > len(_labels) { return false }",
+            "\tfor _i := range _dc {",
+            "\t\tif _dc[_i] != _labels[len(_labels)-1-_i] { return false }",
+            "\t}",
+            "\treturn true",
+            "}",
+            "for _, _name := range _names {",
+            "\tif _matches(_name, false) || _matches(_name, true) { return true }",
+            "}",
+            "return false",
         ])
 
     if isinstance(n, dsl.ExtAccessLocationMatchesType):
@@ -1770,32 +1975,50 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         ])
 
     if isinstance(n, dsl.DomainComponentOrdered):
-        # Walk c.Subject.OriginalRDNS (raw RDN sequence) checking domainComponent
-        # ordering. domainComponent OID = 0.9.2342.19200300.100.1.25 (RFC 4519).
-        # Valid ordering: all DC RDNs must form a single contiguous block.
-        # OriginalRDNS is []RelativeDistinguishedNameSET; each set is
-        # []AttributeTypeAndValue, so we iterate over both layers.
+        # Walk c.Subject.OriginalRDNS checking the domainComponent block and
+        # compare it with a certificate Domain Name. domainComponent OID =
+        # 0.9.2342.19200300.100.1.25 (RFC 4519).
         return _iife_bool([
-            "_prev := -1",
-            "for i, rdn := range c.Subject.OriginalRDNS {",
-            "    _isDC := false",
-            "    for _, atv := range rdn {",
-            '        if atv.Type.String() == "0.9.2342.19200300.100.1.25" {',
-            "            _isDC = true",
-            "            break",
-            "        }",
-            "    }",
-            "    if _isDC {",
-            "        if _prev == -1 {",
-            "            _prev = i",
-            "        } else if i != _prev+1 {",
-            "            return false",
-            "        }",
-            "    } else if _prev != -1 {",
-            "        return false",
-            "    }",
+            "_dc := []string{}",
+            "_inBlock := false",
+            "_doneBlock := false",
+            "for _, rdn := range c.Subject.OriginalRDNS {",
+            "\t_rdnDC := []string{}",
+            "\tfor _, atv := range rdn {",
+            "\t\tif atv.Type.String() != \"0.9.2342.19200300.100.1.25\" { continue }",
+            "\t\t_v, _ok := atv.Value.(string)",
+            "\t\tif !_ok { return false }",
+            "\t\t_rdnDC = append(_rdnDC, strings.ToLower(strings.TrimSpace(_v)))",
+            "\t}",
+            "\tif len(_rdnDC) > 0 {",
+            "\t\tif _doneBlock { return false }",
+            "\t\t_inBlock = true",
+            "\t\t_dc = append(_dc, _rdnDC...)",
+            "\t\tcontinue",
+            "\t}",
+            "\tif _inBlock { _doneBlock = true }",
             "}",
-            "return true",
+            "if len(_dc) == 0 { return true }",
+            "_names := append([]string{}, c.DNSNames...)",
+            "if c.Subject.CommonName != \"\" { _names = append(_names, c.Subject.CommonName) }",
+            "_matches := func(_name string, _stripWildcard bool) bool {",
+            "\t_s := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(_name)), \".\")",
+            "\tif _stripWildcard && strings.HasPrefix(_s, \"*.\") { _s = _s[2:] }",
+            "\tif _s == \"\" { return false }",
+            "\t_labels := strings.Split(_s, \".\")",
+            "\tif len(_labels) != len(_dc) { return false }",
+            "\t_counts := map[string]int{}",
+            "\tfor _, _label := range _labels { _counts[_label]++ }",
+            "\tfor _, _part := range _dc {",
+            "\t\t_counts[_part]--",
+            "\t\tif _counts[_part] < 0 { return false }",
+            "\t}",
+            "\treturn true",
+            "}",
+            "for _, _name := range _names {",
+            "\tif _matches(_name, false) || _matches(_name, true) { return true }",
+            "}",
+            "return false",
         ])
 
     # ---- New extension-aware atoms ----
@@ -2680,6 +2903,51 @@ def _emit_dn_directorystring_encoded_as(dn: str, types: tuple) -> str:
     ])
 
 
+def _emit_dn_attribute_values_encoded_as(dn: str, attr: str, types: tuple) -> str:
+    """Every present value of one DN AttributeType is encoded with an allowed tag.
+
+    Sound + general: walks RawSubject/RawIssuer DER, matches AttributeType by a
+    closed standard OID table, and checks the actual AttributeValue universal
+    tag. Absence of the named attribute is true because presence constraints are
+    separate atoms/rules."""
+    raw = "c.RawSubject" if dn.lower() == "subject" else "c.RawIssuer"
+    oid = V.DN_ATTR_OID_BY_NAME.get(attr)
+    if not oid:
+        raise dsl.DSLError(f"DNAttributeValuesEncodedAs: unknown DN attr {attr!r}")
+    tags = sorted({_ASN1_STRING_TAG[t] for t in types if t in _ASN1_STRING_TAG})
+    if not tags:
+        raise dsl.DSLError(f"DNAttributeValuesEncodedAs: no ASN.1 string tag for {types}")
+    cases = ", ".join(str(t) for t in tags)
+    return _iife_bool([
+        f"if len({raw}) == 0 {{ return true }}",
+        f"_targetOID := {_go_string(oid)}",
+        "var _outer asn1.RawValue",
+        f"if _, _e := asn1.Unmarshal({raw}, &_outer); _e != nil {{ return false }}",
+        "_rest := _outer.Bytes",
+        "for len(_rest) > 0 {",
+        "\tvar _rdn asn1.RawValue",
+        "\tvar _e error",
+        "\t_rest, _e = asn1.Unmarshal(_rest, &_rdn)",
+        "\tif _e != nil { return false }",
+        "\t_inner := _rdn.Bytes",
+        "\tfor len(_inner) > 0 {",
+        "\t\tvar _atv asn1.RawValue",
+        "\t\t_inner, _e = asn1.Unmarshal(_inner, &_atv)",
+        "\t\tif _e != nil { return false }",
+        "\t\tvar _typ asn1.ObjectIdentifier",
+        "\t\t_r2, _e2 := asn1.Unmarshal(_atv.Bytes, &_typ)",
+        "\t\tif _e2 != nil { return false }",
+        "\t\tif _typ.String() != _targetOID { continue }",
+        "\t\tvar _val asn1.RawValue",
+        "\t\tif _, _e3 := asn1.Unmarshal(_r2, &_val); _e3 != nil { return false }",
+        "\t\tif _val.Class != asn1.ClassUniversal { return false }",
+        f"\t\tswitch _val.Tag {{ case {cases}: default: return false }}",
+        "\t}",
+        "}",
+        "return true",
+    ])
+
+
 def _emit_list_iter(field_name: str, predicate, semantic: str) -> str:
     """semantic = 'all' or 'any'."""
     f = V.lookup_anyfield(field_name)
@@ -2824,12 +3092,20 @@ def _walk_imports(n, imps: set[str]):
         imps.add("bytes")
         imps.add("golang.org/x/crypto/cryptobyte")
         imps.add("golang.org/x/crypto/cryptobyte/asn1")
-    if isinstance(n, dsl.SignatureAlgorithmIdentifiersEqualHex):
+    if isinstance(n, (dsl.SignatureAlgorithmIdentifiersEqualHex,
+                      dsl.SignatureAlgorithmIdentifiersInHexSet)):
         imps.add("bytes")
         imps.add("golang.org/x/crypto/cryptobyte")
         imps.add("golang.org/x/crypto/cryptobyte/asn1")
-    if isinstance(n, dsl.SPKIAlgorithmIdentifierEqualsHex):
+    if isinstance(n, (dsl.SPKIAlgorithmIdentifierEqualsHex,
+                      dsl.SPKIECPointLengthAlgorithmIdentifierEqualsHex,
+                      dsl.SPKINamedCurveAlgorithmIdentifierEqualsHex,
+                      dsl.SPKIECPointOnCurveNamedCurveOIDEqualsHex,
+                      dsl.SPKIRSAPublicKeyAlgorithmIdentifierEqualsHex,
+                      dsl.SPKIRSAPublicKeyAlgorithmOIDEqualsHex)):
         imps.add("bytes")
+        if isinstance(n, dsl.SPKIECPointOnCurveNamedCurveOIDEqualsHex):
+            imps.add("crypto/elliptic")
         imps.add("golang.org/x/crypto/cryptobyte")
         imps.add("golang.org/x/crypto/cryptobyte/asn1")
 
@@ -2845,7 +3121,9 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, (dsl.FieldContains, dsl.WildcardFilter,
                       dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex,
                       dsl.DNSOnionNamesHaveValidTorV3Address,
-                      dsl.DomainNamesDoNotEndWithIPReverseZoneSuffix)):
+                      dsl.DomainNamesDoNotEndWithIPReverseZoneSuffix,
+                      dsl.DomainComponentOrdered,
+                      dsl.DNComponentOrderMatches)):
         imps.add("strings")
     if isinstance(n, dsl.DNSNamesFQDNOrWildcardPortionMatchesRegex):
         imps.add("regexp")
@@ -2855,6 +3133,9 @@ def _walk_imports(n, imps: set[str]):
         imps.add("strings")
     if isinstance(n, dsl.SubjectCommonNameFQDNMatchesDNSNameSAN):
         imps.add("net")
+        imps.add("strings")
+    if isinstance(n, dsl.StringFieldIfIPv4AddressUsesDottedDecimal):
+        imps.add("regexp")
         imps.add("strings")
     if isinstance(n, dsl.WildcardFilter):
         # WildcardFilter wraps an inner predicate (often Item* atoms);
@@ -2898,6 +3179,9 @@ def _walk_imports(n, imps: set[str]):
 
     if isinstance(n, dsl.DNDirectoryStringValuesEncodedAs):
         # per-attribute DN encoded-as walks the RDNSequence DER via encoding/asn1.
+        imps.add("encoding/asn1")
+    if isinstance(n, dsl.DNAttributeValuesEncodedAs):
+        # named DN attribute encoded-as walks the RDNSequence DER via encoding/asn1.
         imps.add("encoding/asn1")
     if isinstance(n, (dsl.DNHasRDNSequence, dsl.RDNHasSingleAttribute, dsl.RDNSequenceHasCountryBefore)):
         imps.add("encoding/asn1")
@@ -3017,6 +3301,9 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, dsl.FieldEncodedAs):
         bump(out, "fields")
         for t in n.types: bump(out, "asn1_types")
+    elif isinstance(n, dsl.DNAttributeValuesEncodedAs):
+        bump(out, "fields")
+        for t in n.types: bump(out, "asn1_types")
     elif isinstance(n, dsl.DateAfter):
         bump(out, "dates")
         bump(out, "dates")
@@ -3031,6 +3318,8 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, dsl.IPListAllOctetCount):
         bump(out, "fields")
     elif isinstance(n, dsl.IPListVersionAllOctetCount):
+        bump(out, "fields")
+    elif isinstance(n, dsl.StringFieldIfIPv4AddressUsesDottedDecimal):
         bump(out, "fields")
     elif isinstance(n, dsl.OidListContains):
         bump(out, "fields")

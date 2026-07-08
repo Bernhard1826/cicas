@@ -113,7 +113,7 @@ A <Tree> is recursively:
 Severity rule (auto-assignable from rule level):
   MUST / MUST NOT / SHALL / SHALL NOT / REQUIRED          -> "lint.Error"
   SHOULD / SHOULD NOT / RECOMMENDED / NOT RECOMMENDED     -> "lint.Warn"
-  MAY / OPTIONAL                                          -> "lint.Notice"
+  MAY / OPTIONAL                                          -> no codegen; these are filtered by lintability C1
 """
 
 
@@ -259,7 +259,8 @@ HARD RULES (MUST follow):
     rule is COMPLIED with. "X MUST be present" -> FieldNonEmpty(X);
     "X MUST NOT be present" -> Not(FieldNonEmpty(X)) or FieldEmpty(X).
  8. SHOULD / RECOMMENDED -> severity "lint.Warn". MUST -> "lint.Error".
-    MAY -> "lint.Notice". Do NOT use Error for SHOULD/RECOMMENDED rules.
+    MAY/OPTIONAL rows should not reach codegen. Do NOT use Error for
+    SHOULD/RECOMMENDED rules.
  9. AIA caIssuers / OCSP — zcrypto pre-flattens AIA into:
        c.IssuingCertificateURL  (caIssuers URI list)
        c.OCSPServer             (OCSP URI list)
