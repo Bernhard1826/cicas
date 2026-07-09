@@ -443,6 +443,75 @@ def _shipping_gate(row: dict) -> str | None:
     return "EXPRESSES" if int(syn.get("n_expresses") or 0) >= min_expresses else "UNCERTAIN"
 
 
+def _shipping_unanimous(row: dict) -> bool:
+    syn = row.get("ship_synonymy") or {}
+    if syn.get("verdict") != "EXPRESSES":
+        return False
+    k = int(syn.get("k") or 0)
+    return (
+        k > 0
+        and int(syn.get("n_expresses") or 0) == k
+        and int(syn.get("n_dne") or 0) == 0
+        and int(syn.get("n_err") or 0) == 0
+    )
+
+
+_LOGICAL_OPS = {"And", "Or", "Not", "When"}
+
+
+def _walk_atom_ops(obj) -> Iterable[str]:
+    """Yield atomic DSL op names from a cached tree/precondition JSON object."""
+    if isinstance(obj, dict):
+        op = obj.get("op")
+        if op and op not in _LOGICAL_OPS:
+            yield str(op)
+        for item in obj.get("args") or []:
+            yield from _walk_atom_ops(item)
+        for key in ("inner", "cond", "main", "predicate", "precondition"):
+            if key in obj:
+                yield from _walk_atom_ops(obj[key])
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _walk_atom_ops(item)
+
+
+def _atom_genericity_summary(rows: list[dict]) -> dict:
+    buckets = Counter()
+    non_generic_freq = Counter()
+    unknown_freq = Counter()
+    for row in rows:
+        atoms = set(_walk_atom_ops(row.get("tree")))
+        atoms.update(_walk_atom_ops(row.get("precondition")))
+        generic = {a for a in atoms if a in dsl.GENERIC_ATOMS}
+        non_generic = {a for a in atoms if a in dsl.NON_GENERIC_ATOMS}
+        unknown = atoms - generic - non_generic
+        for atom in non_generic:
+            non_generic_freq[atom] += 1
+        for atom in unknown:
+            unknown_freq[atom] += 1
+        if unknown:
+            buckets["unknown"] += 1
+        elif non_generic and generic:
+            buckets["generic_and_non_generic"] += 1
+        elif non_generic:
+            buckets["non_generic_only"] += 1
+        else:
+            buckets["generic_only"] += 1
+    return {
+        "definition": (
+            "final-shipping strict EXPRESS rows; counts atomic DSL ops in tree "
+            "and precondition; logical combinators And/Or/Not/When are excluded"
+        ),
+        "total": len(rows),
+        "generic_only": buckets["generic_only"],
+        "generic_and_non_generic": buckets["generic_and_non_generic"],
+        "non_generic_only": buckets["non_generic_only"],
+        "unknown": buckets["unknown"],
+        "non_generic_atom_frequency": dict(sorted(non_generic_freq.items())),
+        "unknown_atom_frequency": dict(sorted(unknown_freq.items())),
+    }
+
+
 # ---------------------------------------------------------------------------
 # summary
 # ---------------------------------------------------------------------------
@@ -477,6 +546,17 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         r for r in ship_judged
         if _shipping_gate(r) == "UNCERTAIN"
     ]
+    ship_with_rejudge_error = [r for r in ship_judged if r.get("ship_rejudge_error")]
+    ship_clean_judged = [r for r in ship_judged if not r.get("ship_rejudge_error")]
+    ship_clean_expresses = [
+        r for r in ship_clean_judged
+        if _shipping_gate(r) == "EXPRESSES"
+    ]
+    ship_unanimous = [r for r in ship_judged if _shipping_unanimous(r)]
+    ship_clean_unanimous = [
+        r for r in ship_clean_judged
+        if _shipping_unanimous(r)
+    ]
     errors = [r for r in scoped_latest.values() if r.get("error")]
 
     by_source = {}
@@ -499,6 +579,12 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             if _shipping_gate(r) == "EXPRESSES"
         ]
         src_ship_uncertain = [r for r in src_ship_judged if _shipping_gate(r) == "UNCERTAIN"]
+        src_ship_with_rejudge_error = [r for r in src_ship_judged if r.get("ship_rejudge_error")]
+        src_ship_clean_judged = [r for r in src_ship_judged if not r.get("ship_rejudge_error")]
+        src_ship_clean_exp = [
+            r for r in src_ship_clean_judged
+            if _shipping_gate(r) == "EXPRESSES"
+        ]
         by_source[source] = {
             "domain_total": len(ids),
             "completed": len(src_rows),
@@ -509,6 +595,12 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             "final_shipping_strict_uncertain": len(src_ship_uncertain),
             "final_shipping_strict_rate_over_generated": _rate(len(src_ship_exp), len(src_gen)),
             "final_shipping_strict_rate_over_domain": _rate(len(src_ship_exp), len(ids)),
+            "final_shipping_rejudge_error_rows": len(src_ship_with_rejudge_error),
+            "final_shipping_clean_judged": len(src_ship_clean_judged),
+            "final_shipping_clean_expresses": len(src_ship_clean_exp),
+            "final_shipping_clean_rate_over_domain": _rate(len(src_ship_clean_exp), len(ids)),
+            "final_shipping_unanimous_expresses": sum(1 for r in src_ship_judged if _shipping_unanimous(r)),
+            "final_shipping_clean_unanimous_expresses": sum(1 for r in src_ship_clean_judged if _shipping_unanimous(r)),
             "diagnostic_row_level": {
                 "judged": len(src_judged),
                 "not_judged": len(src_gen) - len(src_judged),
@@ -550,7 +642,8 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         "generation_failure_by_reason": dict(sorted(by_reason.items())),
         "final_shipping_strict_definition": (
             "final emitted in-tree zlint lint semantics vs original rule text/context; "
-            "row-fragment synonymy is diagnostic only"
+            "row-fragment synonymy is diagnostic only; gate is verdict=EXPRESSES "
+            "and at least ceil(0.8*k) EXPRESS votes"
         ),
         "final_shipping_strict_judged": len(ship_judged),
         "final_shipping_strict_not_judged": generated_count - len(ship_judged),
@@ -559,6 +652,15 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         "final_shipping_strict_uncertain": len(ship_uncertain),
         "final_shipping_strict_rate_over_generated": _rate(len(ship_expresses), generated_count),
         "final_shipping_strict_rate_over_domain": _rate(len(ship_expresses), total),
+        "final_shipping_rejudge_error_rows": len(ship_with_rejudge_error),
+        "final_shipping_clean_judged": len(ship_clean_judged),
+        "final_shipping_clean_expresses": len(ship_clean_expresses),
+        "final_shipping_clean_rate_over_generated": _rate(len(ship_clean_expresses), generated_count),
+        "final_shipping_clean_rate_over_domain": _rate(len(ship_clean_expresses), total),
+        "final_shipping_unanimous_expresses": len(ship_unanimous),
+        "final_shipping_unanimous_rate_over_domain": _rate(len(ship_unanimous), total),
+        "final_shipping_clean_unanimous_expresses": len(ship_clean_unanimous),
+        "final_shipping_clean_unanimous_rate_over_domain": _rate(len(ship_clean_unanimous), total),
         "diagnostic_row_level": {
             "judged": len(judged),
             "not_judged": generated_count - len(judged),
@@ -587,6 +689,7 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             }
             for method, count in sorted(by_method.items())
         },
+        "atom_genericity": _atom_genericity_summary(ship_expresses),
         "code_eq_ir_certified": sum(1 for r in generated if r.get("code_eq_ir_certified")),
         "rule_errors": len(errors),
         "pending": total - len(scoped_latest),
@@ -634,8 +737,8 @@ def _write_rendered(rendered: dict, out_root: Path) -> str | None:
     return str(path)
 
 
-def _write_expresses_index(run_dir: Path, latest: dict[int, dict],
-                           domain_ids: set[int] | None = None) -> list[dict]:
+def _write_row_level_expresses_index(run_dir: Path, latest: dict[int, dict],
+                                     domain_ids: set[int] | None = None) -> list[dict]:
     rows = []
     for row in latest.values():
         rid = row.get("rule_id")
@@ -657,10 +760,10 @@ def _write_expresses_index(run_dir: Path, latest: dict[int, dict],
             }
         )
     rows.sort(key=lambda r: (str(r.get("source")), str(r.get("section")), int(r.get("rule_id") or 0)))
-    (run_dir / "synonymous_lints_manifest.json").write_text(
+    (run_dir / "diagnostic_row_level_lints_manifest.json").write_text(
         json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    with (run_dir / "synonymous_lints_manifest.jsonl").open("w", encoding="utf-8") as f:
+    with (run_dir / "diagnostic_row_level_lints_manifest.jsonl").open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     return rows
@@ -672,8 +775,8 @@ def _write_shipping_index(run_dir: Path, latest: dict[int, dict],
 
     Only rows whose final in-tree zlint semantics have been separately judged
     synonymous with the available original rule context may appear here.  The
-    older ``synonymous_lints_manifest`` is intentionally left as a row-fragment
-    diagnostic artifact and must not drive real-corpus scans.
+    ``synonymous_lints_manifest`` filename is kept as a compatibility alias for
+    this paper-facing final-shipping strict manifest.
     """
     rows = []
     for row in latest.values():
@@ -711,6 +814,12 @@ def _write_shipping_index(run_dir: Path, latest: dict[int, dict],
     with (run_dir / "shipping_lints_manifest.jsonl").open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    (run_dir / "synonymous_lints_manifest.json").write_text(
+        json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    with (run_dir / "synonymous_lints_manifest.jsonl").open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
     return rows
 
 
@@ -719,7 +828,7 @@ def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = Non
     summary_path = run_dir / "codegen_synonymy_summary.json"
     latest = load_done(ledger)
     domain_ids = {int(r["id"]) for r in domain} if domain is not None else None
-    rows = _write_expresses_index(run_dir, latest, domain_ids)
+    rows = _write_row_level_expresses_index(run_dir, latest, domain_ids)
     ship_rows = _write_shipping_index(run_dir, latest, domain_ids)
     expected_files = {r.get("filename") for r in rows if r.get("filename")}
     expected_files.update(r.get("filename") for r in ship_rows if r.get("filename"))
@@ -735,6 +844,11 @@ def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = Non
             summary = {}
         summary["synonymous_lints_manifest"] = str(run_dir / "synonymous_lints_manifest.json")
         summary["shipping_lints_manifest"] = str(run_dir / "shipping_lints_manifest.json")
+        summary["diagnostic_row_level_lints_manifest"] = str(
+            run_dir / "diagnostic_row_level_lints_manifest.json"
+        )
+        summary["diagnostic_row_level_lints_manifest_count"] = len(rows)
+        summary["synonymous_lints_manifest_count"] = len(ship_rows)
         summary["shipping_lints_manifest_count"] = len(ship_rows)
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -1241,6 +1355,7 @@ def rejudge_shipping(domain: list[dict], run_dir: Path, k: int,
                 ship_syn["execute_semantics_source"] = "cached_code_semantics"
             rec["ship_code_semantics"] = ship_sem
             rec["ship_synonymy"] = ship_syn
+            rec.pop("ship_rejudge_error", None)
             n_rejudged += 1
             print(
                 f"  shipping R{rid}: {cur or 'UNJUDGED'} -> {ship_syn['verdict']} "
@@ -1312,7 +1427,9 @@ def main() -> int:
         for path in (ledger, summary_path, run_dir / "synonymous_lints_manifest.json",
                      run_dir / "synonymous_lints_manifest.jsonl",
                      run_dir / "shipping_lints_manifest.json",
-                     run_dir / "shipping_lints_manifest.jsonl"):
+                     run_dir / "shipping_lints_manifest.jsonl",
+                     run_dir / "diagnostic_row_level_lints_manifest.json",
+                     run_dir / "diagnostic_row_level_lints_manifest.jsonl"):
             if path.exists():
                 path.unlink()
         if rendered_root.exists():

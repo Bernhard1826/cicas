@@ -1,6 +1,6 @@
 # §8.5 — certificate detection as a SAIV gate
 
-- synonymous lints shipped into the zlint binary: **91**
+- synonymous lints shipped into the zlint binary: **90**
 - testdata certificates scanned: **1128**
 - cicasgen_ findings: **2627**
 

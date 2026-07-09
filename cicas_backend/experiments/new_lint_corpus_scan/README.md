@@ -43,8 +43,12 @@ Input corpus convention: a flat directory of `*.pem` certificates. For CT or
 Tranco collection, keep acquisition metadata outside this directory or in a
 parallel manifest so the scanner sees only PEM files.
 
-Retained input/output pairs have been rerun with the current 91-lint strict
-shipping manifest and the compiled in-tree `cicasgen_` zlint binary:
+Retained input/output pairs were produced with the previous 91-lint shipping
+binary. After the lintability re-adjudication, R31068 is no longer in the
+codegen denominator or shipping manifest, leaving 90 shipped lints. R31068 has
+no hits in the retained Tranco/CT outputs, so the strict reportable finding
+counts below are unchanged; rerun the corpus scans to refresh raw
+`new_lint_findings` counts under the 90-lint binary.
 
 - `inputs/ct_recent/` -> `outputs/ct_recent/`
 - `inputs/tranco_1m/` -> `outputs/tranco_1m/`

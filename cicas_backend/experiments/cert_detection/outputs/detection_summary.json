@@ -4,7 +4,7 @@
   "SPURIOUS": 133,
   "UNCERTAIN": 25,
   "total_certs": 1128,
-  "n_shipped_lints": 91,
+  "n_shipped_lints": 90,
   "uncertain_verified": {
     "REMAINS_UNCERTAIN": 23,
     "CONFIRMED_REAL": 2

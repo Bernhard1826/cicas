@@ -19,12 +19,15 @@ From `outputs/full_current_db/codegen_synonymy_summary.json`:
 
 | metric | value |
 |---|---:|
-| codegen domain | 91 |
-| generated | 91 / 91 = 100.0% |
+| codegen domain | 90 |
+| generated | 90 / 90 = 100.0% |
 | deterministic generated | 87 |
-| LLM generated | 4 |
-| final-shipping strict EXPRESS | 91 / 91 = 100.0% |
+| LLM generated | 3 |
+| final-shipping strict EXPRESS | 90 / 90 = 100.0% |
+| final-shipping strict DOES_NOT_EXPRESS | 0 |
 | final-shipping strict uncertain | 0 |
+| final-shipping rejudge errors | 0 |
+| final-shipping unanimous EXPRESS | 84 / 90 = 93.3% |
 | generation failures | 0 |
 
 By source:
@@ -32,13 +35,28 @@ By source:
 | source | domain | generated | final-shipping strict EXPRESS |
 |---|---:|---:|---:|
 | CABF-BR | 64 | 64 | 64 |
-| RFC5280 | 27 | 27 | 27 |
+| RFC5280 | 26 | 26 | 26 |
 
-`final-shipping strict` is the paper-facing synonymy metric: the final emitted
-in-tree zlint lint (`CheckApplies` + `Execute` + severity/date metadata) is
-judged against the original rule text plus source-owned context. Row-fragment
-synonymy is not a paper-facing metric; it is retained only in the JSON ledger as
-a diagnostic for extraction/codegen debugging.
+Atom genericity over final-shipping strict EXPRESS rows:
+
+| atom usage | rules |
+|---|---:|
+| GENERIC-only | 53 |
+| GENERIC + NON_GENERIC | 5 |
+| NON_GENERIC-only | 32 |
+| unknown | 0 |
+
+`final-shipping strict` is the current paper-facing synonymy gate: the final
+emitted in-tree zlint lint (`CheckApplies` + `Execute` + severity/date metadata)
+is judged against the original rule text plus source-owned context, and passes
+when at least `ceil(0.8*k)` judge votes are EXPRESS. It is not a unanimity
+metric. Row-fragment synonymy is retained only in the JSON ledger as a diagnostic
+for extraction/codegen debugging.
+
+`shipping_lints_manifest.*` and the compatibility alias
+`synonymous_lints_manifest.*` both list the 90 paper-facing final-shipping
+strict lints. Row-level diagnostic EXPRESS rows are written separately to
+`diagnostic_row_level_lints_manifest.*` and are not a synonymy numerator.
 
 ## Run
 
@@ -92,8 +110,11 @@ python3 cicas_backend/experiments/codegen_metrics/run_codegen_synonymy.py \
 
 ## Residuals
 
-There are no current final-shipping strict residuals in the codegen domain:
-91/91 generated lints are strict-synonymous with the original rule text/context.
+There are no current final-shipping strict residuals in the codegen domain.
+R31068 (RFC5280 §4.2.1.6) was re-adjudicated through the lintability path as not
+lintable: the rule requires recognizing that a semantic Internet mail address
+should have been encoded as the `rfc822Name` GeneralName choice, while a single
+certificate only exposes the tag that was chosen and its value.
 
 Any future denominator reduction must come from re-extraction and lintability
 re-adjudication, not from local metric filters. In particular, non-single-

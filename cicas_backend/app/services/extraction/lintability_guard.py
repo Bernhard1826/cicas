@@ -315,6 +315,15 @@ _IP_NETWORK_BYTE_ORDER_RE = re.compile(
     r"network byte order",
     re.I,
 )
+_SAN_SEMANTIC_IDENTITY_CHOICE_RE = re.compile(
+    r"\bsubjectAltName\b.{0,100}\bcontains?\b.{0,100}\b"
+    r"(?:Internet\s+mail\s+address|domain\s+name\s+system\s+label|"
+    r"DNS\s+representation\s+for\s+Internet\s+mail\s+addresses)\b"
+    r".{0,160}\b(?:MUST|SHALL)\b.{0,80}\b"
+    r"(?:stored|encoded)\s+in\s+(?:the\s+)?"
+    r"(?:rfc822Name|dNSName|uniformResourceIdentifier|iPAddress)\b",
+    re.I | re.S,
+)
 
 
 def context_lintability_assertion_subject(reason: str | None) -> str:
@@ -473,6 +482,15 @@ def non_single_artifact_lintability_reason(rule_text) -> str | None:
             "GeneralName iPAddress is already a network-order address value, "
             "so the stated obligation is not independently decidable from one "
             "certificate"
+        )
+    if _SAN_SEMANTIC_IDENTITY_CHOICE_RE.search(text):
+        return (
+            "rule requires a semantic identity in subjectAltName, such as an "
+            "Internet mail address or DNS label, to be encoded using a specific "
+            "GeneralName choice; a single certificate exposes the chosen "
+            "GeneralName tag and value, but not the issuer's external identity "
+            "intent before that choice was made, so strict equivalence is not "
+            "decidable from one certificate's encoded bytes"
         )
     if _OPEN_ENDED_ENUMERATION_RE.search(text):
         return (

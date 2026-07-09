@@ -8,10 +8,10 @@ experiment directories are self-contained: script entry point, `inputs/`,
 
 | Paper (`Paper_Unified_PKI_E2E.md`) | directory | what it produces |
 |---|---|---|
-| **§8.2** lint coverage analysis (Table 2) | [`coverage_analysis/`](coverage_analysis/) | native zlint coverage over 249 lint-able rules -> 158 full / 91 codegen domain / 0 pending |
-| **system metric** code generation + synonymy | [`codegen_metrics/`](codegen_metrics/) | over the 91 uncovered rules -> 91 generated / 91 final-shipping strict synonymous |
+| **§8.2** lint coverage analysis (Table 2) | [`coverage_analysis/`](coverage_analysis/) | native zlint coverage over 248 lint-able rules -> 158 full / 90 codegen domain / 0 pending |
+| **system metric** code generation + synonymy | [`codegen_metrics/`](codegen_metrics/) | over the 90 uncovered rules -> 90 generated / 90 final-shipping strict EXPRESS / 0 residuals |
 | **§8.3** lintability external validation (TABLE III) | [`external_validation/`](external_validation/) | CICAS vs zlint-maintainer CABF BR sheets (1.4.8 / 2.0.2) -> recall / kappa / P / F1 |
-| **§8.4** certificate detection gate | [`cert_detection/`](cert_detection/) | zlint testdata gate over 91 shipped lints -> 299 independently confirmed fixture findings / 0 strict reportable testdata findings |
+| **§8.4** certificate detection gate | [`cert_detection/`](cert_detection/) | zlint testdata gate over 90 shipped lints -> 299 independently confirmed fixture findings / 0 strict reportable testdata findings |
 | **§8.4** external certificate corpus scan | [`new_lint_corpus_scan/`](new_lint_corpus_scan/) | Tranco / CT report-only scans -> 6 Tranco and 1 CT strict confirmed no-upstream findings |
 
 Coverage-specific backend reference snapshots live with the coverage experiment

@@ -10,7 +10,7 @@ zlint from the current strict shipping manifest:
 
 | metric | value |
 |---|---:|
-| shipped `cicasgen_` lints | 91 |
+| shipped `cicasgen_` lints | 90 |
 | zlint testdata certs scanned | 1128 |
 | `cicasgen_` findings | 2627 |
 | triage REAL | 2469 |

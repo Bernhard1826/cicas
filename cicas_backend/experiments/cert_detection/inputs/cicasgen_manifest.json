@@ -2,7 +2,7 @@
   "zlint_v3": "/home/bernhard/projects/cicas/cicas_backend/zlint/v3",
   "source_manifest": "/home/bernhard/projects/cicas/cicas_backend/experiments/codegen_metrics/outputs/full_current_db/shipping_lints_manifest.json",
   "manifest_source": "shipping",
-  "count": 91,
+  "count": 90,
   "lints": [
     {
       "lint_name": "cicasgen_domain_names_do_not_end_with_ipreverse_zone_suffix_29019",
@@ -1137,20 +1137,6 @@
       "manifest_source": "shipping",
       "pkg": "rfc",
       "file": "lints/rfc/lint_cicasgen_when_subject_alt_name_present_and_not_dn_empty_subject_31067.go"
-    },
-    {
-      "lint_name": "cicasgen_ext_has_general_name_with_tag_subject_alternate_name_31068",
-      "rule_id": 31068,
-      "source": "RFC5280",
-      "section": "4.2.1.6",
-      "rule_text": "When the subjectAltName extension contains an Internet mail address, the address MUST be stored in the rfc822Name",
-      "method": "llm",
-      "severity": "lint.Error",
-      "synonymy_verdict": "EXPRESSES",
-      "shipping_gate_verdict": "EXPRESSES",
-      "manifest_source": "shipping",
-      "pkg": "rfc",
-      "file": "lints/rfc/lint_cicasgen_ext_has_general_name_with_tag_subject_alternate_name_31068.go"
     },
     {
       "lint_name": "cicasgen_iplist_version_all_octet_count_ipaddresses_31069",

@@ -10,18 +10,18 @@
     },
     {
       "source": "RFC5280",
-      "lintable": 79,
-      "checked": 79,
+      "lintable": 78,
+      "checked": 78,
       "full": 52,
-      "uncovered": 27,
+      "uncovered": 26,
       "pending": 0
     }
   ],
   "total": {
-    "lintable": 249,
-    "checked": 249,
+    "lintable": 248,
+    "checked": 248,
     "full": 158,
-    "uncovered": 91,
+    "uncovered": 90,
     "pending": 0
   },
   "zlint_reference": {
