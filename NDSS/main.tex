@@ -1,0 +1,164 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% NDSS 2026 submission --- IEEEtran conference format.
+%
+% "From PKI Standards to Compliance-Checking Code: An End-to-End Framework
+%  for Rule Extraction, Lintability Determination, and Verifiable Code
+%  Generation."
+%
+% Packages and the author block live in the project's own packages.tex and
+% authors.tex (\input below); this file only adds the paper-specific macros,
+% theorem environments, and document structure. The section content
+% (0_abstract, 1_introduction ... 10_conclusion, appendix, algorithms/) is the
+% same as the USENIX version, included unchanged --- no typewriter markup was
+% added and existing bold was left as-is.
+%
+% Build on Overleaf (IEEEtran.cls and IEEEtran.bst are provided by the system;
+% do NOT ship a local IEEEtran.cls --- an empty one shadows the built-in class):
+%     pdflatex main ; bibtex main ; pdflatex main ; pdflatex main
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Packages + comment/shorthand macros (project file, merged: algorithmic ->
+% algpseudocode, and amsthm/bbm/booktabs/multirow/dblfloatfix added there).
+\input{packages}
+
+% IEEE: restore multiline-equation page breaks (amsmath sets this to 10000).
+\interdisplaylinepenalty=2500
+
+% Extra float slots --- this paper has many full-width table*/algorithm* floats.
+\extrafloats{64}
+
+\pagestyle{plain}   % show page numbers (NDSS submission)
+
+%-------------------------------------------------------------------------------
+% Theorem-like environments (amsthm is loaded in packages.tex).
+%-------------------------------------------------------------------------------
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+
+%-------------------------------------------------------------------------------
+% Paper-specific math shorthands used across the section files.
+%-------------------------------------------------------------------------------
+\newcommand{\ind}{\mathbbm{1}}                 % indicator function
+\newcommand{\code}{\mathrm{Code}}
+\newcommand{\ir}{\mathrm{IR}}
+\newcommand{\spec}{\mathrm{Spec}}
+\newcommand{\CodeEqIR}{\ensuremath{\code\equiv\ir}}
+\newcommand{\CodeEqSpec}{\ensuremath{\code\equiv\spec}}
+\newcommand{\Rkw}{\mathcal{R}_{\mathrm{kw}}}
+\newcommand{\smech}{\sigma_{\mathrm{mech}}}
+\newcommand{\Tv}{\mathcal{T}_{\mathcal{V}}}
+\newcommand{\Lrec}{\mathcal{L}_{\mathrm{recall}}}
+\newcommand{\Lcode}{\mathcal{L}_{\mathrm{code}}}
+\newcommand{\Ltot}{\mathcal{L}_{\mathrm{total}}}
+\newcommand{\Nviol}{N_{\mathrm{viol}}}
+\newcommand{\RL}{\mathcal{R}_L}
+\newcommand{\RLcov}{\mathcal{R}_L^{\mathrm{cov}}}
+\newcommand{\RLunc}{\mathcal{R}_L^{\mathrm{uncov}}}
+\newcommand{\RN}{\mathcal{R}_N}
+\newcommand{\RU}{\mathcal{R}_U}
+
+%-------------------------------------------------------------------------------
+% Fixed-width table column types (L/C/R) used in the methodology/appendix tables
+% (array is loaded in packages.tex). \ie/\eg and the review macros come from
+% packages.tex, so they are not redefined here.
+%-------------------------------------------------------------------------------
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+%-------------------------------------------------------------------------------
+% \cicasfig{path}{fallback caption text}
+% Uses the real figure if figures/<name> exists; otherwise draws a labeled
+% placeholder box so the project always compiles (even before the PNGs are added).
+%-------------------------------------------------------------------------------
+\newcommand{\cicasfig}[2]{%
+  \IfFileExists{#1}{%
+    \includegraphics[width=\linewidth]{#1}%
+  }{%
+    \fbox{\parbox[c][3.2cm][c]{0.94\linewidth}{\centering
+      \textit{[figure placeholder --- add:}\\[0.2em]
+      {\ttfamily\footnotesize \detokenize{#1}}\textit{]}\\[0.5em]
+      \footnotesize #2}}%
+  }%
+}
+
+%-------------------------------------------------------------------------------
+\begin{document}
+%-------------------------------------------------------------------------------
+
+\title{From PKI Standards to Compliance-Checking Code:\\
+  An End-to-End Framework for Rule Extraction, Lintability Determination,\\
+  and Verifiable Code Generation}
+
+% Author block (project file --- fill in the real names/affiliations there).
+\input{authors}
+
+% NDSS 2026 pubid banner (from bare_conf_NDSS2026.tex).
+\makeatletter\def\@IEEEpubidpullup{6.5\baselineskip}\makeatother
+\IEEEpubid{\parbox{\columnwidth}{
+    Network and Distributed System Security (NDSS) Symposium 2026\\
+    23 - 27 February 2026 , San Diego, CA, USA\\
+    ISBN 979-8-9919276-8-0\\
+    https://dx.doi.org/10.14722/ndss.2026.[23$|$24]xxxx\\
+    www.ndss-symposium.org
+}
+\hspace{\columnsep}\makebox[\columnwidth]{}}
+
+\maketitle
+\IEEEpubidadjcol
+
+%-------------------------------------------------------------------------------
+\begin{abstract}
+%-------------------------------------------------------------------------------
+\input{0_abstract}
+\end{abstract}
+
+\input{1_introduction}
+\input{2_background}
+\input{3_methodology}
+\input{06_codegen}
+\input{08_evaluation}
+\input{09_discussion}
+\input{10_conclusion}
+
+%-------------------------------------------------------------------------------
+% Required venue sections (kept verbatim from the source paper).
+%-------------------------------------------------------------------------------
+\section*{Ethical Considerations}
+This work analyzes only publicly available material: the text of open PKI
+specifications (RFC~5280, the CA/Browser Forum Baseline Requirements) and
+publicly observable certificates (TLS handshakes to the Tranco top-1M domains
+and samples drawn from public Certificate Transparency logs). No private data,
+credentials, or human subjects are involved, and no live system is probed or
+attacked. The generated lints are analysis artifacts run offline against
+certificate bytes; the paper deliberately reports structural findings without
+overstating them as ecosystem-wide misissuance rates, and every
+certificate-level finding is gated behind an independent structural audit
+before being reported. We see no foreseeable harm from releasing the method,
+the generated checks, or the aggregate statistics.
+
+\section*{Open Science}
+In line with the venue's open-science policy, we will make available the
+artifacts needed to reproduce our results: the specification-to-IR extraction
+pipeline, the frozen typed vocabulary $\mathcal{V}$ and the finite
+atomic-template set $\mathcal{A}$, the deterministic renderer and mechanical
+translator, the generated cicasgen\_* lints, the coverage-alignment
+and synonymy-judgment harnesses, and the evaluation corpora manifests (the
+zlint maintainer scope-mapping sheets and the certificate hashes used for the
+Tranco/CT scans). Deterministic components (recall conservation, lintability
+gating, coverage aggregation, certificate-level execution verification) can be
+recomputed exactly from the released inputs.
+
+\appendix
+\input{appendix}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

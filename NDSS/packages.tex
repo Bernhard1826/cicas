@@ -1,0 +1,30 @@
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode} % paper algorithms use algpseudocode (algorithmicx) syntax: \State, \Require, \Repeat ...
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{xurl}
+\usepackage{placeins}
+
+% Additional packages required by this paper's content:
+\usepackage{amsthm}      % theorem/proposition environments (appendix)
+\usepackage{bbm}         % \mathbbm{1} indicator function (\ind)
+\usepackage{booktabs}    % \toprule / \midrule / \bottomrule in tables
+\usepackage{tabularx}    % width-constrained tables (X column absorbs slack)
+\usepackage{multirow}    % multirow table cells
+\usepackage{dblfloatfix} % allow full-width (starred) floats at the page bottom
+
+\newif\ifshowcomments
+\showcommentsfalse
+\newcommand{\zmm}[1]{\ifshowcomments{\color{purple}{\{zmm: #1\}}}\fi}
+\newcommand{\zmmmod}[1]{{\color{teal}{#1}}}
+\newcommand{\revise}[1]{{\color{black}{#1}}}
+\newcommand{\todo}[1]{{\color{red}{\{Todo: #1\}}}}
+
+\newcommand{\ignore}[1]{}
+\newcommand{\etal}{et al. }
+\newcommand{\ie}{i.e., }
+\newcommand{\eg}{e.g., }

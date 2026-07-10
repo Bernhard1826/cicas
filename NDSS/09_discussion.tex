@@ -1,0 +1,119 @@
+%-------------------------------------------------------------------------------
+\section{Discussion}
+\label{sec:discussion}
+%-------------------------------------------------------------------------------
+
+\subsection{Applicability Across PKIs}
+\label{subsec:applicability}
+
+The framework's core mechanism is not specific to PKI: Layer~1's RFC~2119
+keyword set can be reconfigured to another ecosystem's deontic keywords (e.g.,
+ISO's shall/should/may). The method applies to specification sources that
+jointly satisfy three conditions: \textbf{(1)} they express mandatory/recommended
+levels with recognizable formal deontic keywords; \textbf{(2)} the constrained
+target is a structured, machine-parsable artifact (certificate, protocol
+message, configuration file); and \textbf{(3)} they have a hierarchical section
+structure that supports a knowledge graph and scope inheritance. This gives the
+methodology value beyond PKI alone.
+
+\subsection{Recommendations for Specification Authors and Tool Maintainers}
+\label{subsec:recommendations}
+
+For \textbf{specification authors}, three drafting principles reduce extraction
+ambiguity: one obligation per sentence, referring to fields precisely by ASN.1
+path rather than pronoun, and normalizing cross-document references with a fixed
+pattern. For \textbf{lint maintainers}, we suggest writing the description
+directly as a code\_summary that explicitly gives the field
+path/assertion type/value/severity and cites the specification clause---we find
+that many lint descriptions are neither specification citations nor faithful
+implementation summaries, forcing the coverage analysis to first compute a
+code\_summary before aligning, adding overhead and adjudication noise.
+
+\subsection{Cross-Standard Coverage and Source Partitioning}
+\label{subsec:crossstd}
+
+The coverage analysis also exposes a scoping issue: of the 31 lints in the
+emitted set, \textbf{9} have specification text from CABF BR yet are already
+implemented by existing \textbf{RFC~5280} lints in zlint. A rule-by-rule check
+against the zlint v3 source confirms the following.
+
+\begin{table*}[tb]
+\centering
+\footnotesize
+\caption{Nine emitted lints whose CABF BR text is already implemented by native
+RFC~5280 lints in zlint.}
+\label{tab:crossstd}
+\begin{tabular}{@{}p{5.5cm}r p{9cm}@{}}
+\toprule
+CABF BR rule (source of generated lint) & \# & zlint lint that implements it \\
+\midrule
+issuerUniqueID / subjectUniqueID MUST NOT be present
+  (7.1.2.1/2/8) & 6 &
+  e\_cert\_contains\_unique\_identifier (RFC~5280:4.1.2.8) \\
+signatureAlgorithm byte-for-byte matches
+  tbsCertificate.signature (7.1.2.2) & 1 &
+  e\_cert\_sig\_alg\_not\_match\_tbs\_sig\_alg (RFC~5280:4.1.1.2) \\
+Subscriber/OCSP pathLenConstraint MUST NOT be present (7.1.2.7.8/8.4) &
+  2 & e\_path\_len\_constraint\_improperly\_included
+  (RFC~5280:4.2.1.9) \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The cause is cross-standard inheritance of compliance scope: CABF BR~\S7.1.2
+opens by declaring that its certificate profile ``incorporate, and are derived
+from RFC~5280,'' and the normative requirements RFC~5280 imposes also apply. The
+uniqueID prohibition, signatureAlgorithm consistency, and pathLenConstraint
+restriction are originally RFC~5280 requirements, restated by CABF BR in
+profile-table form. zlint implements the corresponding lints per RFC~5280 (their
+Source field is RFC5280), but the coverage determination of
+\S\ref{subsec:coverage} narrows candidates by rule source; a CABF BR rule is
+compared only against lints with the CABF-BR source and never enters the
+RFC~5280 lint candidate pool, so these 9 are judged none, wrongly enter the
+codegen domain, and are eventually emitted.
+
+\subsection{Limitations and Threats to Validity}
+\label{subsec:limitations}
+
+Our conclusions are strictly limited by the input representation used (structured
+IR), the restricted code space, and the verification pipeline; they suit static
+constraints that close within a single-document context and should not be
+extrapolated to ``all PKI specifications can be fully automated.'' We note seven
+boundaries.
+
+\begin{itemize}
+\item \textbf{(i) Method expressiveness.} The synonymy-judgment endpoint is still
+  implemented by an LLM, and the 79 atomic templates still have gaps for
+  byte-level encoding, host-unexposed fields, dynamic constraints, and the like.
+\item \textbf{(ii) Component necessity not ablated.} The support for the
+  knowledge graph / restricted DSL / SAIV is respectively an engineering
+  trade-off, an architectural argument, and an un-ablated item; we do not claim
+  quantitative superiority of graph retrieval over ordinary RAG.
+\item \textbf{(iii) Missing modern-LLM baseline.} A direct-Go-generation
+  comparison is not done, but certificate-level execution verification is
+  independent of the specific generator, making it well-defined future work.
+\item \textbf{(iv) Coverage and generalization boundary.} The lintable total 336
+  and the codegen target 204 are different scopes, and for cross-ecosystem
+  generalization we give only a mechanistic argument.
+\item \textbf{(v) End-to-end scope.} ``Code $\equiv$ specification'' holds only
+  for the emitted set (Table~\ref{tab:snapshot}, \S\ref{subsec:certdetect}), and
+  the lintability label has not been exhaustively manually audited over all 336
+  rules.
+\item \textbf{(vi) Synonymy-endpoint blind spot.} ``code\_summary $\equiv$
+  specification'' is given by an LLM judge comparing the code\_summary
+  with the source text, not a model-independent check like certificate-level
+  execution verification, and its ``source text'' is taken from the
+  rule\_text recorded verbatim at extraction time (a field inside the
+  IR) rather than re-read from the specification source; so if the original
+  fragment or the IR has already dropped semantics, the synonymy judge may not
+  independently detect it.
+\item \textbf{(vii) Coverage determination partitions candidates by source.}
+  \S\ref{subsec:coverage} retrieves only CABF-BR-source zlint lints for CABF BR
+  rules, severing cross-standard inheritance of coverage: at least 9 rules
+  originating in CABF BR but actually implemented by existing RFC~5280 lints in
+  zlint are thereby misjudged as uncovered and wrongly enter the codegen domain
+  (\S\ref{subsec:crossstd}). This underestimates the tools' true coverage and
+  inflates the coverage-gap count. In addition, generated lints carry the
+  cicasgen\_* prefix and are mutually rejected with zlint on both sides
+  to prevent ``covering oneself.''
+\end{itemize}

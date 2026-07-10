@@ -1,0 +1,53 @@
+% Algorithm 2 -- zlint coverage-alignment determination for lintable rules.
+% Included from sections/08_evaluation.tex via \input{algorithms/alg_coverage}.
+\begin{algorithm*}[tb]
+\caption{zlint coverage-alignment determination for lintable rules
+(rule-indexed).}
+\label{alg:coverage}
+\small
+\begin{algorithmic}[1]
+\Require lintable rule set $B=\{b_1,\dots,b_m\}$ (each with IR four-tuple
+  $\langle$subject, obligation, predicate, constraint$\rangle$, source,
+  section); zlint lint set $L=\{\ell_1,\dots,\ell_n\}$ (each with
+  description/citation/severity metadata and Pass/Error tests); offline code
+  summarizer $M_{\mathrm{summ}}$, field-level judge $M_{\mathrm{judge}}$
+  (temperature $=0$)
+\Ensure per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
+  none}\}$, covered set, and codegen domain $\phi_G$
+\Statex \textit{// Stage-0 (offline, cached): summarize each lint into a reverse
+  IR}
+\ForAll{$\ell \in L$}
+  \State $\ell.\mathit{ir} \gets M_{\mathrm{summ}}(\ell.\mathrm{src},
+    \ell.\mathrm{tests}, \ell.\mathrm{meta})$
+    \Comment{four-tuple $+$ code\_summary}
+\EndFor
+\State pre-split candidate pools by Source: $L_{\mathrm{RFC}}\gets$ RFC lints,\;
+  $L_{\mathrm{CABF}}\gets$ CABF lints
+\ForAll{$b \in B$}
+  \State \textit{// Stage-1: deterministic candidate retrieval}
+  \If{$b.\mathrm{source}=\mathrm{RFC}$}
+    \State $C(b)\gets\{\ell\in L_{\mathrm{RFC}}:
+      \textsc{SectionPrefixMatch}(b.\mathrm{section},\ell.\mathrm{citedSections})\}$
+  \ElsIf{$b.\mathrm{source}=\mathrm{CABF}$}
+    \State $C(b)\gets L_{\mathrm{CABF}}$ \Comment{CABF sections drift $\Rightarrow$ take all}
+  \Else
+    \State $C(b)\gets\emptyset$
+  \EndIf
+  \State \textit{// Stage-2: field-level judge, compare four-tuple, best across candidates}
+  \State $(v,\ell^{*})\gets M_{\mathrm{judge}}(b.\mathit{ir}, C(b))$
+    \Comment{$v\in\{\text{full},\text{partial},\text{none}\}$}
+  \State \textit{// Stage-3: deterministic wrong-field consistency gate (downgrade only)}
+  \If{$v\in\{\text{full},\text{partial}\} \wedge
+      \mathrm{Family}(b.\mathrm{subject})\neq\emptyset \wedge
+      \mathrm{Family}(\ell^{*}.\mathrm{subject})\neq\emptyset \wedge
+      \mathrm{Family}(b.\mathrm{subject})\neq\mathrm{Family}(\ell^{*}.\mathrm{subject})$}
+    \State $v\gets\text{none}$ \Comment{concrete but different subject family $\Rightarrow$ wrong-field FP}
+  \EndIf
+  \State $\mathrm{verdict}(b)\gets v$
+\EndFor
+\State \textit{// Stage-4: deterministic aggregation, coverage counts full only}
+\State $\mathit{covered}\gets\{b\in B:\mathrm{verdict}(b)=\text{full}\}$;\quad
+  $\phi_G\gets B\setminus \mathit{covered}$
+\State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \mathit{covered},\ \phi_G)$
+\end{algorithmic}
+\end{algorithm*}

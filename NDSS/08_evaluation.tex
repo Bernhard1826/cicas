@@ -1,0 +1,289 @@
+%-------------------------------------------------------------------------------
+\section{Experimental Evaluation}
+\label{sec:eval}
+%-------------------------------------------------------------------------------
+
+This section runs experiments with the methods and framework above and draws
+quantitative conclusions. Besides the internal layered metrics
+(the end-to-end result snapshot below and the lint-coverage analysis of
+\S\ref{subsec:coverage}), it provides \textbf{two
+mutually independent external validations}, each checking one half of the
+framework: \S\ref{subsec:lintability-ext} externally validates \textbf{rule
+extraction and lintability determination} against the zlint maintainers' manual
+gold standard, and \S\ref{subsec:certdetect} externally validates \textbf{code
+generation and synonymy judgment} by execution on real certificates.
+
+\subsection*{Experimental Setup and Result Snapshot}
+
+Evaluation is performed on full-corpus re-extraction results of the two standard
+sources RFC~5280 and CABF BR. The LLM used in the experiments is GPT-5.4.
+
+\begin{table*}[tb]
+\centering
+\footnotesize
+\caption{Current end-to-end result snapshot (RFC~5280 $+$ CABF BR).}
+\label{tab:snapshot}
+\begin{tabular}{@{}p{4.4cm}r p{10.4cm}@{}}
+\toprule
+Metric & Count & Scope / notes \\
+\midrule
+Total recalled rules & 2080 & RFC~5280 640 $+$ CABF BR 1440 \\
+\textbf{lintable (single-cert observable)} & \textbf{248} &
+  current re-extraction / re-adjudication: CABF 170 $+$ RFC~5280 78; the negative
+  gate excludes process, cross-certificate, runtime, external-semantic, and
+  MAY/OPTIONAL classes; CRL document rules are outside this scope \\
+zlint coverage (full; existing cognate lint) & 158 &
+  the rule is fully implemented by some cognate zlint certificate lint; a CABF
+  rule may be covered by an inherited RFC~5280 lint \\
+\textbf{uncovered lintable (codegen domain)} & \textbf{90} &
+  needs the system to generate its own lint ($248 - 158$); CABF 64 $+$ RFC~5280
+  26, the target set of downstream code generation $\phi_G$ \\
+\textbf{can generate compilable lint} & \textbf{90} &
+  deterministic path 87 $+$ LLM fallback path 3, both gated by ``render and
+  pass go build''; \textbf{generation rate $= 90/90 = 100.0\%$} \\
+cannot generate (no tree / not compiling / abstain) & 0 &
+  no generation failure in the current codegen domain \\
+\textbf{final-shipping strict synonymous (\CodeEqSpec)} & \textbf{90} &
+  the final in-tree zlint lint (\texttt{CheckApplies} $+$ \texttt{Execute} $+$
+  severity/date metadata) judged against the original rule text and context;
+  \textbf{strict synonymy rate $= 90/90 = 100.0\%$} \\
+final-shipping not synonymous (DNE) & 0 &
+  no final-shipping residual in the current codegen domain \\
+emitted lints' atom templates touched & 52 &
+  28 GENERIC $+$ 24 NON\_GENERIC of the 136 registered atoms; by rule, 53
+  GENERIC-only / 5 mixed / 32 NON\_GENERIC-only \\
+\emph{(collateral) certificate-level execution verification \CodeEqIR} &
+  \emph{37} &
+  \emph{model-independent IR-level faithfulness, not a synonymy numerator; the
+  paper-facing synonymy rate uses only the final emitted code versus the source
+  rule} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Under the current codegen domain there is no non-generable compilable lint and no
+final-shipping non-synonymous residual (both counts are 0). The 37 rules
+certified \CodeEqIR{} by certificate-level execution verification are reported
+only as collateral IR-level evidence: \CodeEqIR{} is model-independent and
+deterministic, yet it does not by itself imply \CodeEqSpec, so the paper-facing
+synonymy rate is taken solely from the final emitted code judged against the
+source rule. Any reduction of the denominator therefore comes from re-extraction
+and lintability re-adjudication rather than from local metric filters; e.g.,
+R31068 (RFC~5280~\S4.2.1.6) was re-adjudicated as not lintable because a single
+certificate exposes only the chosen GeneralName tag and its value, not the
+issuer's pre-encoding intent.
+
+The first-layer quality signal is G1 conservation (Theorem~\ref{thm:recall},
+Appendix~\ref{subsec:targets}): the total number of keyword-recalled rules should
+neither increase nor decrease in any downstream classification step. Under the
+current snapshot, conservation holds strictly:
+\[
+  \underbrace{2080}_{\text{recall}} \;=\; \underbrace{529}_{\text{noise}} +
+  \underbrace{1551}_{\text{genuine}}, \quad
+  \underbrace{1551}_{\text{genuine}} \;=\; \underbrace{248}_{\text{lintable}} +
+  \underbrace{1303}_{\text{not lintable}}.
+\]
+Both identities hold term by term, i.e., the G1 residual $\Lrec = 0$ and the top
+two layers of conservation are closed (deterministically recomputable). The 248
+lintable rules split by standard source
+into 170 CABF and 78 RFC~5280; of these zlint fully covers 158, leaving
+\textbf{90}---the domain of downstream code generation $\phi_G$.
+
+\subsection{Lint Coverage Analysis}
+\label{subsec:coverage}
+
+Answering ``how many lintable rules do existing tools cover'' hinges on using
+the right criterion. We use ``whether the lintable rule is genuinely implemented
+by some cognate zlint lint'' as the criterion: for each rule we retrieve
+candidate zlint lints, then compare field by field (subject / obligation /
+predicate / constraint), giving a three-level verdict full (fully implemented) /
+partial (partially implemented) / none (not implemented).
+
+Algorithm~\ref{alg:coverage} formalizes this determination: summarize a lint
+into a reverse IR, then align field by field; candidate retrieval is by
+source/section (Stage-1: RFC section numbers are stable and narrowed by prefix,
+while CABF section numbers drift across versions so all CABF lints are taken),
+with an added ``wrong-field'' consistency gate (Stage-3, only downgrades), and
+coverage counts only full (Stage-4; partial/none go to $\phi_G$).
+
+\input{algorithms/alg_coverage}
+
+Here \textsc{SectionPrefixMatch} is true when the rule's section number shares a
+common prefix with a lint's cited section number; $\mathrm{Family}(\cdot)$ maps a
+subject path to a concrete field family, returning $\emptyset$ for a
+vague/unresolved subject rather than downgrading (so genuine matches on coarse
+subjects are preserved). The algorithm calls the LLM only in Stage-0 and Stage-2
+(the judge at temperature $=0$, its prompt containing three kinds of
+positive/negative examples: direction reversal, field misplacement, and
+constraint-type confusion); summaries are cached offline, the full CABF
+candidate set is sent to the judge in batches, and the rest is deterministic.
+
+Of the 248 lintable rules, \textbf{zlint fully covers 158 and leaves 90
+uncovered} (Table~\ref{tab:coverage}); the 90 uncovered are the domain of code
+generation $\phi_G$.
+
+\begin{table}[tb]
+\centering
+\small
+\caption{zlint cognate lint counts and their coverage of the 248 lintable
+rules, by standard source.}
+\label{tab:coverage}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Item & CABF & RFC~5280 & Total \\
+\midrule
+\emph{zlint cognate lints, total (ref.)} & \emph{172} & \emph{123} & \emph{295} \\
+\quad\emph{— of which cert.\ lints} & \emph{166} & \emph{115} & \emph{281} \\
+\quad\emph{— of which CRL lints} & \emph{6} & \emph{8} & \emph{14} \\
+full (full coverage) & 106 & 52 & \textbf{158} \\
+uncovered (codegen domain) & 64 & 26 & \textbf{90} \\
+lintable total & 170 & 78 & \textbf{248} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The first three rows (italic) are lint counts computed directly from the
+project's built-in v3 source by zlint's Source metadata field (unit:
+lints; the 14 CRL lints are identified via RegisterRevocationListLint
+and fall outside our single-cert scope); the remaining rows are the coverage
+verdicts of our lintable rules (unit: rules). ``full'' counts ``whether one of
+our rules is fully implemented by some cognate zlint lint''; it does not form a
+simple ratio with the total zlint lint count, mainly because one lint can hit
+multiple rules.
+
+\subsection{Lintability External Validation: Rule Extraction and Lintability
+Determination}
+\label{subsec:lintability-ext}
+
+The first half of the framework---rule extraction and lintability
+determination---needs an independent external reference. For this we bring in
+the CABF BR mapping table published by zlint
+maintainers~\cite{zlint-mapping-sheet}: this table is manually annotated rule by rule
+by zlint experts as to ``whether a BR requirement can be expressed by a static
+lint,'' unaware of our extractor, IR, and lintability decider. Each Yes/No label
+in the table corresponds exactly to our joint output ``extract this rule $+$
+decide whether it is lintable'' for the same rule; agreement indicates that our
+rule extraction and lintability determination match human experts. The table
+covers two versions, BR~1.4.8~\cite{cabf-br148-md} and BR~2.0.2~\cite{cabf-br202-md}, compared version-for-version against
+our CABF-Server-1.4.8 backend (422 rules) and CABF-Server-2.0.2
+backend (1024 rules) extracted by the same two-layer
+pipeline.
+
+\begin{table}[tb]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Version-for-version external validation on BR~1.4.8 / BR~2.0.2.}
+\label{tab:extval}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Version & Sheet rows (Yes/No) & \textbf{Match cov.} & Agreement &
+  \textbf{Cohen's $\kappa$} & F1 \\
+\midrule
+\textbf{BR~1.4.8} & 122 (75/47) & \textbf{86.9\%} & 91.5\% & \textbf{0.823} & 0.930 \\
+\textbf{BR~2.0.2} & 250 (17/233) & \textbf{86.8\%} & 96.8\% & 0.616 & 0.632 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A small number of sheet rows fall outside our scope---title-case or lowercase descriptors such as ``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing correctly skips, and, on the BR~2.0.2 sheet, cross-references or chapter anchors with no matching backend clause---so match coverage is near 87\% on both versions. On BR~2.0.2 the matched positive class is very small (12 of 217 matched pairs, 5.5\%), so a naive all-No baseline already attains 94.5\% agreement; thus $\kappa = 0.616$ is the more meaningful figure, and the positive-class metrics ($P = 0.857$, $R = 0.50$, $n = 12$) carry correspondingly wide confidence intervals. BR~1.4.8 has more balanced classes (69 of 106 matched pairs positive, 65\%) and yields $\kappa = 0.823$ with positive-class $F_1 = 0.930$ and zero false positives, a tighter estimate of system quality.
+
+\textbf{This external validation checks the first half of the system.} On
+BR~1.4.8, $\kappa = 0.823$ and Yes recall 87.0\% indicate that our rule
+extraction (identifying which of the 422/1024 backend items are genuine
+normative requirements) and lintability determination (the four-condition
+conjunction, \S\ref{sec:lintability}) agree strongly with zlint experts'
+independent manual judgment; the 50.0\% Yes recall on BR~2.0.2 indicates a clear
+false-negative margin remaining in the newer BR version. This validation does
+not check downstream code generation and synonymy; those are checked
+additionally on real certificates by the certificate detection of
+\S\ref{subsec:certdetect}.
+
+\subsection{Certificate Detection}
+\label{subsec:certdetect}
+
+Injecting the 90 final-shipping-strict lints into the zlint binary and scanning
+certificates checks code generation and synonymy judgment. We count a hit as a
+valid finding only when three conditions hold: the final zlint code's semantics
+have been checked back to the source text, the certificate yields a non-pass
+result, and an independent structural audit re-derives the same defect from the
+DER / \texttt{openssl}; on external corpora we additionally require that no native
+zlint lint flags the same certificate, so that existing coverage is not
+miscredited to a generated lint. The unit is a (certificate $\times$ lint)
+finding. The corpus first uses zlint's own testdata as a gate rather than an
+ecosystem estimate: on 1128 parsable certificates the 90 lints raise 2627 raw
+cicasgen\_ hits, of which \textbf{299} are independently confirmed (251 Error $+$
+48 Warn) and 2328 are \texttt{NOCHECK} and hence not claimed.
+
+\begin{table*}[tb]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\caption{Strictly confirmed findings across the three certificate corpora
+(highest severity first; 90 shipped lints). ``ext.\ merged'' is the Tranco/CT
+union after cross-corpus de-duplication.}
+\label{tab:certfind}
+\begin{tabular}{@{}l p{5.9cm} r r r r p{3.3cm}@{}}
+\toprule
+Sev. & Finding type / governing obligation & testdata & Tranco & CT &
+  ext.\ merged & Evidence boundary \\
+\midrule
+Error & Subscriber-cert Certificate Policies must contain exactly one CABF
+  Reserved Certificate Policy Identifier (BR~\S7.1.2.7.9) & 113 & 1 & 0 & 1 &
+  one Tranco leaf lacks the reserved policy OID; no native zlint overlap \\
+Error & AKI must not contain authorityCertSerialNumber / authorityCertIssuer
+  (BR~\S7.1.2.11.1) & 32 & 2 & 0 & 2 & one Tranco CA cert violates both AKI
+  subfields; no native zlint overlap \\
+Error & Subscriber-cert Certificate Policies must not contain anyPolicy
+  (BR~\S7.1.2.7.9) & 26 & 0 & 0 & 0 & confirmed only in testdata fixtures \\
+Error & IV/OV subject-profile constraints on surname, givenName, and
+  localityName / stateOrProvinceName (BR~\S7.1.2.7.3--\S7.1.2.7.4) & 57 & 0 & 0 &
+  0 & testdata fixtures only \\
+Error & Other structural constraints: SAN critical, signatureAlgorithm matches
+  tbsCertificate.signature, subscriber pathLenConstraint forbidden, empty
+  Certificate Policies, v1 uniqueID forbidden (RFC~5280 / BR) & 23 & 0 & 0 & 0 &
+  testdata fixtures only \\
+Warn & A certificate carrying only basic fields SHOULD be v1
+  (RFC~5280~\S4.1.2.1) & 47 & 0 & 0 & 0 & advisory, reported as lint.Warn \\
+Warn & Root CA Certificate SHOULD NOT contain CRL Distribution Points
+  (BR~\S7.1.2.11.2) & 1 & 3 & 1 & 3 & advisory profile warning; the CT finding
+  duplicates the same Root CA as one Tranco finding \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The testdata column sums to 299 confirmed fixture findings (251 Error $+$ 48
+Warn); Tranco contributes 6 and CT 1, i.e., 7 findings by source. We read
+severity conservatively: the Certificate-Policies and AKI violations are
+Error-level profile faults whose direct cryptographic consequence is indirect,
+while the Root CA CRLDP finding is a lower, Warn-level advisory.
+
+\textbf{Supplementary scan on real certificates.} To test whether these findings
+exist only in hand-constructed testdata, we scan two external corpora: the
+TLS-handshake certificate chains of the Tranco Top~1M domains (47,791
+deduplicated PEMs) and a recent sample of CT logs (63,327 deduplicated PEMs). The
+raw cicasgen\_ hit counts are large---44,020 on Tranco and 57,558 on CT---but
+cannot be taken as defects: if a generated lint loses profile scope, a
+conditional clause, or an effective-date constraint, an independent audit may
+still only prove that the certificate satisfies the trigger of the wrong lint. We
+therefore treat the external corpora only as negative validation. Under the
+strict no-upstream audit these raw hits reduce to 6 confirmed on Tranco and 1 on
+CT; summed by source that is 7 findings, and after cross-corpus de-duplication it
+is 6 (certificate $\times$ lint) findings over 5 unique certificates, because one
+Root CA CRLDP warning is confirmed on the same Comodo ``AAA Certificate
+Services'' root in both corpora.
+
+Raw hit rates therefore serve only to surface audit candidates, never as
+defect-count conclusions. This supports the negative message of
+Table~\ref{tab:snapshot}: even when a lint compiles, executes, and fires on a
+certificate, one must still re-check the source-text scope, its conditional
+clauses, and rule effective dates before calling it a defect. Concretely,
+several high-frequency cicasgen\_ hits are excluded on exactly these
+grounds---an OV/IV localityName requirement that dropped its
+``stateOrProvinceName absent'' precondition (all such certs carry
+stateOrProvinceName); an organizationalUnitName or AKI-subfield prohibition
+applied to certificates issued before the requirement's effective date; the
+RFC~5280 A.1 ``version MUST be v2'' fragment mis-extracted as a profile rule that
+flags normal v3 certificates; and SubCA anyPolicy / NameConstraints rules that
+approximate profile scope with IsSubCA alone. Hence the raw hit rate must not be
+read as the real compliance-defect rate.
