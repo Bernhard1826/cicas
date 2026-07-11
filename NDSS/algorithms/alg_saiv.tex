@@ -1,17 +1,18 @@
 % Algorithm 1 -- Stage-Aware Iterative Verification (SAIV).
 % Included from the SAIV section of appendix.tex via \input{algorithms/alg_saiv}.
-\begin{algorithm*}[tb]
-\caption{Stage-Aware Iterative Verification (SAIV); an automatic gate handles
+\begin{figure*}[tb]
+\caption{Algorithmic listing for Stage-Aware Iterative Verification (SAIV);
+an automatic gate handles
 in-loop acceptance.}
 \label{alg:saiv}
 \small
 \begin{algorithmic}[1]
-\Require standard documents $D$, threshold $\theta$, max iterations $K$
-\Ensure final code set $C^{*}$ and termination status
+\Statex \textbf{Input:} standard documents $D$, threshold $\theta$, max iterations $K$
+\Statex \textbf{Output:} final code set $C^{*}$ and termination status
 \State $\Rkw \gets \phi_R(D)$;\quad $(\RN,\RL,\RU)\gets \psi_C(\Rkw)$
   \Comment{$\RU=$ not lintable}
 \State $(\RLcov,\RLunc)\gets \textsc{Coverage}(\RL)$
-  \Comment{Alg.~\ref{alg:coverage}}
+  \Comment{Fig.~\ref{alg:coverage}}
 \State $C \gets \{\phi_G(r): r\in \RLunc\}$
 \State $t\gets 0$
 \Repeat
@@ -44,4 +45,4 @@ in-loop acceptance.}
 \State \textbf{return} $(C,\ \mathit{status}\in\{\textsc{closed},\textsc{dry},
   \textsc{max\_iter}\})$
 \end{algorithmic}
-\end{algorithm*}
+\end{figure*}

@@ -32,7 +32,7 @@ code\_summary before aligning, adding overhead and adjudication noise.
 \subsection{Cross-Standard Coverage and Source Partitioning}
 \label{subsec:crossstd}
 
-The coverage analysis also exposes a scoping issue: of the 31 lints in the
+The coverage analysis also exposes a scoping issue: of the 90 lints in the
 emitted set, \textbf{9} have specification text from CABF BR yet are already
 implemented by existing \textbf{RFC~5280} lints in zlint. A rule-by-rule check
 against the zlint v3 source confirms the following.
@@ -83,7 +83,7 @@ boundaries.
 
 \begin{itemize}
 \item \textbf{(i) Method expressiveness.} The synonymy-judgment endpoint is still
-  implemented by an LLM, and the 79 atomic templates still have gaps for
+  implemented by an LLM, and the 136 atomic templates still have gaps for
   byte-level encoding, host-unexposed fields, dynamic constraints, and the like.
 \item \textbf{(ii) Component necessity not ablated.} The support for the
   knowledge graph / restricted DSL / SAIV is respectively an engineering
@@ -92,12 +92,12 @@ boundaries.
 \item \textbf{(iii) Missing modern-LLM baseline.} A direct-Go-generation
   comparison is not done, but certificate-level execution verification is
   independent of the specific generator, making it well-defined future work.
-\item \textbf{(iv) Coverage and generalization boundary.} The lintable total 336
-  and the codegen target 204 are different scopes, and for cross-ecosystem
+\item \textbf{(iv) Coverage and generalization boundary.} The lintable total 248
+  and the codegen target 90 are different scopes, and for cross-ecosystem
   generalization we give only a mechanistic argument.
 \item \textbf{(v) End-to-end scope.} ``Code $\equiv$ specification'' holds only
   for the emitted set (Table~\ref{tab:snapshot}, \S\ref{subsec:certdetect}), and
-  the lintability label has not been exhaustively manually audited over all 336
+  the lintability label has not been exhaustively manually audited over all 248
   rules.
 \item \textbf{(vi) Synonymy-endpoint blind spot.} ``code\_summary $\equiv$
   specification'' is given by an LLM judge comparing the code\_summary

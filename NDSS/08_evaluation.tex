@@ -33,11 +33,11 @@ Total recalled rules & 2080 & RFC~5280 640 $+$ CABF BR 1440 \\
   gate excludes process, cross-certificate, runtime, external-semantic, and
   MAY/OPTIONAL classes; CRL document rules are outside this scope \\
 zlint coverage (full; existing cognate lint) & 158 &
-  the rule is fully implemented by some cognate zlint certificate lint; a CABF
-  rule may be covered by an inherited RFC~5280 lint \\
+  the rule is fully implemented by some cognate zlint certificate lint; residual
+  cross-standard inheritance gaps are analyzed in \S\ref{subsec:crossstd} \\
 \textbf{uncovered lintable (codegen domain)} & \textbf{90} &
-  needs the system to generate its own lint ($248 - 158$); CABF 64 $+$ RFC~5280
-  26, the target set of downstream code generation $\phi_G$ \\
+  enters the current codegen domain ($248 - 158$); CABF 64 $+$ RFC~5280 26, the
+  target set of downstream code generation $\phi_G$ \\
 \textbf{can generate compilable lint} & \textbf{90} &
   deterministic path 87 $+$ LLM fallback path 3, both gated by ``render and
   pass go build''; \textbf{generation rate $= 90/90 = 100.0\%$} \\
@@ -47,7 +47,7 @@ cannot generate (no tree / not compiling / abstain) & 0 &
   the final in-tree zlint lint (\texttt{CheckApplies} $+$ \texttt{Execute} $+$
   severity/date metadata) judged against the original rule text and context;
   \textbf{strict synonymy rate $= 90/90 = 100.0\%$} \\
-final-shipping not synonymous (DNE) & 0 &
+final-shipping not synonymous (does not express) & 0 &
   no final-shipping residual in the current codegen domain \\
 emitted lints' atom templates touched & 52 &
   28 GENERIC $+$ 24 NON\_GENERIC of the 136 registered atoms; by rule, 53
@@ -99,7 +99,7 @@ candidate zlint lints, then compare field by field (subject / obligation /
 predicate / constraint), giving a three-level verdict full (fully implemented) /
 partial (partially implemented) / none (not implemented).
 
-Algorithm~\ref{alg:coverage} formalizes this determination: summarize a lint
+Fig.~\ref{alg:coverage} formalizes this determination: summarize a lint
 into a reverse IR, then align field by field; candidate retrieval is by
 source/section (Stage-1: RFC section numbers are stable and narrowed by prefix,
 while CABF section numbers drift across versions so all CABF lints are taken),
@@ -119,8 +119,8 @@ constraint-type confusion); summaries are cached offline, the full CABF
 candidate set is sent to the judge in batches, and the rest is deterministic.
 
 Of the 248 lintable rules, \textbf{zlint fully covers 158 and leaves 90
-uncovered} (Table~\ref{tab:coverage}); the 90 uncovered are the domain of code
-generation $\phi_G$.
+uncovered under this coverage procedure} (Table~\ref{tab:coverage}); the 90
+uncovered are the domain of code generation $\phi_G$.
 
 \begin{table}[tb]
 \centering

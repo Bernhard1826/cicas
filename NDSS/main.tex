@@ -12,13 +12,11 @@
 % same as the USENIX version, included unchanged --- no typewriter markup was
 % added and existing bold was left as-is.
 %
-% Build on Overleaf (IEEEtran.cls and IEEEtran.bst are provided by the system;
-% do NOT ship a local IEEEtran.cls --- an empty one shadows the built-in class):
+% Build with the IEEEtran.cls used by the NDSS template:
 %     pdflatex main ; bibtex main ; pdflatex main ; pdflatex main
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
 
 % Packages + comment/shorthand macros (project file, merged: algorithmic ->
 % algpseudocode, and amsthm/bbm/booktabs/multirow/dblfloatfix added there).
@@ -27,10 +25,10 @@
 % IEEE: restore multiline-equation page breaks (amsmath sets this to 10000).
 \interdisplaylinepenalty=2500
 
-% Extra float slots --- this paper has many full-width table*/algorithm* floats.
+% Extra float slots --- this paper has many full-width table*/figure* floats.
 \extrafloats{64}
 
-\pagestyle{plain}   % show page numbers (NDSS submission)
+\pagestyle{plain}   % show page numbers after the title page (NDSS submission)
 
 %-------------------------------------------------------------------------------
 % Theorem-like environments (amsthm is loaded in packages.tex).
@@ -98,6 +96,7 @@
 \input{authors}
 
 % NDSS 2026 pubid banner (from bare_conf_NDSS2026.tex).
+\IEEEoverridecommandlockouts
 \makeatletter\def\@IEEEpubidpullup{6.5\baselineskip}\makeatother
 \IEEEpubid{\parbox{\columnwidth}{
     Network and Distributed System Security (NDSS) Symposium 2026\\
@@ -109,13 +108,14 @@
 \hspace{\columnsep}\makebox[\columnwidth]{}}
 
 \maketitle
-\IEEEpubidadjcol
 
 %-------------------------------------------------------------------------------
 \begin{abstract}
 %-------------------------------------------------------------------------------
 \input{0_abstract}
 \end{abstract}
+
+\IEEEpeerreviewmaketitle
 
 \input{1_introduction}
 \input{2_background}

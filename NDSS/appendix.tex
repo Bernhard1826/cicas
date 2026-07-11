@@ -110,9 +110,9 @@ $\mathcal{V}$ and the typed signature $\mathrm{sig}(a)$ of each atomic template
 \end{proposition}
 
 \textbf{Representative atomic templates.} The atomic-template set $\mathcal{A}$
-($|\mathcal{A}|=79$) is organized by semantic cluster, each with a typed
+($|\mathcal{A}|=136$) is organized by semantic cluster, each with a typed
 signature $\mathrm{sig}(a)$ (\S\ref{subsec:tv}). Table~\ref{tab:atoms} excerpts
-key atomic templates by cluster (all 79 are released with the code and data).
+key atomic templates by cluster (all 136 are released with the code and data).
 
 \begin{table*}[tb]
 \centering
@@ -161,7 +161,7 @@ This grading is fixed in code as the two sets GENERIC\_ATOMS /
 NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
 deterministically recomputable.
 
-Of the 79 atomic templates in $\mathcal{A}$, \textbf{62 are GENERIC and 17 are
+Of the 136 atomic templates in $\mathcal{A}$, \textbf{82 are GENERIC and 54 are
 NON\_GENERIC}. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
 examples; the full list is released with the code and data.
 
@@ -197,9 +197,9 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 
 NON\_GENERIC atomic templates are allowed into code generation (they correspond
 to real PKI constructs, not padding to inflate the corpus), but must be
-explicitly marked and their proportion disclosed: \textbf{among the 113
-synonymous emitted lints, the vast majority consist entirely of GENERIC atomic
-templates, and only a few rely on at least one NON\_GENERIC atomic template}.
+explicitly marked and their proportion disclosed: \textbf{among the 90
+final-shipping strict lints, 53 use only GENERIC atomic templates, 5 mix GENERIC
+and NON\_GENERIC templates, and 32 use only NON\_GENERIC atomic templates}.
 
 \textbf{Rendering and metadata binding.} After $\rho$ renders them, all DSL trees
 are embedded into a fixed zlint Go shell (registration via
@@ -324,7 +324,7 @@ $\phi_G$ (restricted to the DSL code space $\Tv$ of \S\ref{sec:codegen})
 synthesizes checking code, and the verification module $\phi_V$ (the three-layer
 semantic alignment of \S\ref{sec:codegen}) handles acceptance. Here $\phi_C$ is
 the \textbf{single-rule} lintability predicate defined in \S\ref{sec:lintability}
-($r \mapsto \{0,1\}$); the $\psi_C$ appearing in Algorithm~\ref{alg:saiv} is its
+($r \mapsto \{0,1\}$); the $\psi_C$ appearing in Fig.~\ref{alg:saiv} is its
 \textbf{set-level} lift: it first removes Layer-1 false positives from the
 keyword-recall set $\Rkw$ to obtain the noise set $\RN$, then applies $\phi_C$
 rule by rule to the remaining genuine rules, outputting the three-way partition
@@ -351,7 +351,7 @@ following conservation relation holds:
 \end{equation}
 \end{theorem}
 \noindent where $\mathcal{D}$ is the standard-document corpus (written D in
-ASCII inside the Algorithm~\ref{alg:saiv} listing), $\RN$ is noise (containing
+ASCII inside the Fig.~\ref{alg:saiv} listing), $\RN$ is noise (containing
 RFC~2119 keywords but not genuine rules), $\RL$ the lintable rules, and $\RU$
 the not-lintable rules. The executable class $\RL$ is further split by ``whether
 it is already implemented by an existing external lint tool'':
@@ -463,7 +463,7 @@ accepted only when the metric decreases.
 \subsection{Iteration Algorithm and Termination Conditions}
 \label{subsec:algo}
 
-Algorithm~\ref{alg:saiv} gives the full procedure.
+Fig.~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
@@ -549,7 +549,7 @@ and it is accepted, then after one round $\Nviol$ strictly decreases to $0$.
 \begin{proof}
 Let $\mathrm{cov}_{\mathcal{T}}(r) \in \{\text{full}, \text{partial},
 \text{none}\}$ be the coverage tier of rule $r$ by the external tool (zlint)
-(Algorithm~\ref{alg:coverage}, \S\ref{subsec:coverage}), and $\phi_C$ the
+(Fig.~\ref{alg:coverage}, \S\ref{subsec:coverage}), and $\phi_C$ the
 lintability predicate of \S\ref{sec:lintability}. Let the violation set be
 $\mathcal{W} = \{r : \mathrm{cov}_{\mathcal{T}}(r) \in \{\text{full},
 \text{partial}\} \wedge \phi_C(r) \neq \mathrm{lintable}\}$ (using $\mathcal{W}$

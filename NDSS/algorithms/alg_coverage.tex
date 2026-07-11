@@ -1,18 +1,18 @@
 % Algorithm 2 -- zlint coverage-alignment determination for lintable rules.
 % Included from sections/08_evaluation.tex via \input{algorithms/alg_coverage}.
-\begin{algorithm*}[tb]
-\caption{zlint coverage-alignment determination for lintable rules
+\begin{figure*}[tb]
+\caption{Algorithmic listing for zlint coverage-alignment determination
 (rule-indexed).}
 \label{alg:coverage}
 \small
 \begin{algorithmic}[1]
-\Require lintable rule set $B=\{b_1,\dots,b_m\}$ (each with IR four-tuple
+\Statex \textbf{Input:} lintable rule set $B=\{b_1,\dots,b_m\}$ (each with IR four-tuple
   $\langle$subject, obligation, predicate, constraint$\rangle$, source,
   section); zlint lint set $L=\{\ell_1,\dots,\ell_n\}$ (each with
   description/citation/severity metadata and Pass/Error tests); offline code
   summarizer $M_{\mathrm{summ}}$, field-level judge $M_{\mathrm{judge}}$
   (temperature $=0$)
-\Ensure per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
+\Statex \textbf{Output:} per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
   none}\}$, covered set, and codegen domain $\phi_G$
 \Statex \textit{// Stage-0 (offline, cached): summarize each lint into a reverse
   IR}
@@ -50,4 +50,4 @@
   $\phi_G\gets B\setminus \mathit{covered}$
 \State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \mathit{covered},\ \phi_G)$
 \end{algorithmic}
-\end{algorithm*}
+\end{figure*}
