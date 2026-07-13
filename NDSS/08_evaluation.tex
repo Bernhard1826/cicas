@@ -6,12 +6,12 @@
 This section runs experiments with the methods and framework above and draws
 quantitative conclusions. Besides the internal layered metrics
 (the end-to-end result snapshot below and the lint-coverage analysis of
-\S\ref{subsec:coverage}), it provides \textbf{two
-mutually independent external validations}, each checking one half of the
-framework: \S\ref{subsec:lintability-ext} externally validates \textbf{rule
-extraction and lintability determination} against the zlint maintainers' manual
-gold standard, and \S\ref{subsec:certdetect} externally validates \textbf{code
-generation and synonymy judgment} by execution on real certificates.
+\S\ref{subsec:coverage}), it provides two
+mutually independent external validations, each checking one half of the
+framework: \S\ref{subsec:lintability-ext} externally validates rule
+extraction and lintability determination against the zlint maintainers' manual
+gold standard, and \S\ref{subsec:certdetect} externally validates code
+generation and synonymy judgment by execution on real certificates.
 
 \subsection*{Experimental Setup and Result Snapshot}
 
@@ -28,25 +28,25 @@ sources RFC~5280 and CABF BR. The LLM used in the experiments is GPT-5.4.
 Metric & Count & Scope / notes \\
 \midrule
 Total recalled rules & 2080 & RFC~5280 640 $+$ CABF BR 1440 \\
-\textbf{lintable (single-cert observable)} & \textbf{248} &
+lintable (single-cert observable) & 248 &
   current re-extraction / re-adjudication: CABF 170 $+$ RFC~5280 78; the negative
   gate excludes process, cross-certificate, runtime, external-semantic, and
   MAY/OPTIONAL classes; CRL document rules are outside this scope \\
 zlint coverage (full; existing cognate lint) & 158 &
   the rule is fully implemented by some cognate zlint certificate lint; residual
   cross-standard inheritance gaps are analyzed in \S\ref{subsec:crossstd} \\
-\textbf{uncovered lintable (codegen domain)} & \textbf{90} &
+uncovered lintable (codegen domain) & 90 &
   enters the current codegen domain ($248 - 158$); CABF 64 $+$ RFC~5280 26, the
   target set of downstream code generation $\phi_G$ \\
-\textbf{can generate compilable lint} & \textbf{90} &
+can generate compilable lint & 90 &
   deterministic path 87 $+$ LLM fallback path 3, both gated by ``render and
-  pass go build''; \textbf{generation rate $= 90/90 = 100.0\%$} \\
+  pass go build''; generation rate $= 90/90 = 100.0\%$ \\
 cannot generate (no tree / not compiling / abstain) & 0 &
   no generation failure in the current codegen domain \\
-\textbf{final-shipping strict synonymous (\CodeEqSpec)} & \textbf{90} &
+final-shipping strict synonymous (\CodeEqSpec) & 90 &
   the final in-tree zlint lint (\texttt{CheckApplies} $+$ \texttt{Execute} $+$
   severity/date metadata) judged against the original rule text and context;
-  \textbf{strict synonymy rate $= 90/90 = 100.0\%$} \\
+  strict synonymy rate $= 90/90 = 100.0\%$ \\
 final-shipping not synonymous (does not express) & 0 &
   no final-shipping residual in the current codegen domain \\
 emitted lints' atom templates touched & 52 &
@@ -74,7 +74,7 @@ certificate exposes only the chosen GeneralName tag and its value, not the
 issuer's pre-encoding intent.
 
 The first-layer quality signal is G1 conservation (Theorem~\ref{thm:recall},
-Appendix~\ref{subsec:targets}): the total number of keyword-recalled rules should
+\S\ref{subsec:targets}): the total number of keyword-recalled rules should
 neither increase nor decrease in any downstream classification step. Under the
 current snapshot, conservation holds strictly:
 \[
@@ -87,7 +87,7 @@ Both identities hold term by term, i.e., the G1 residual $\Lrec = 0$ and the top
 two layers of conservation are closed (deterministically recomputable). The 248
 lintable rules split by standard source
 into 170 CABF and 78 RFC~5280; of these zlint fully covers 158, leaving
-\textbf{90}---the domain of downstream code generation $\phi_G$.
+90---the domain of downstream code generation $\phi_G$.
 
 \subsection{Lint Coverage Analysis}
 \label{subsec:coverage}
@@ -118,8 +118,8 @@ positive/negative examples: direction reversal, field misplacement, and
 constraint-type confusion); summaries are cached offline, the full CABF
 candidate set is sent to the judge in batches, and the rest is deterministic.
 
-Of the 248 lintable rules, \textbf{zlint fully covers 158 and leaves 90
-uncovered under this coverage procedure} (Table~\ref{tab:coverage}); the 90
+Of the 248 lintable rules, zlint fully covers 158 and leaves 90
+uncovered under this coverage procedure (Table~\ref{tab:coverage}); the 90
 uncovered are the domain of code generation $\phi_G$.
 
 \begin{table}[tb]
@@ -135,9 +135,9 @@ Item & CABF & RFC~5280 & Total \\
 \emph{zlint cognate lints, total (ref.)} & \emph{172} & \emph{123} & \emph{295} \\
 \quad\emph{— of which cert.\ lints} & \emph{166} & \emph{115} & \emph{281} \\
 \quad\emph{— of which CRL lints} & \emph{6} & \emph{8} & \emph{14} \\
-full (full coverage) & 106 & 52 & \textbf{158} \\
-uncovered (codegen domain) & 64 & 26 & \textbf{90} \\
-lintable total & 170 & 78 & \textbf{248} \\
+full (full coverage) & 106 & 52 & 158 \\
+uncovered (codegen domain) & 64 & 26 & 90 \\
+lintable total & 170 & 78 & 248 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -177,18 +177,18 @@ pipeline.
 \label{tab:extval}
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
-Version & Sheet rows (Yes/No) & \textbf{Match cov.} & Agreement &
-  \textbf{Cohen's $\kappa$} & F1 \\
+Version & Sheet rows (Yes/No) & Match cov. & Agreement &
+  Cohen's $\kappa$ & F1 \\
 \midrule
-\textbf{BR~1.4.8} & 122 (75/47) & \textbf{86.9\%} & 91.5\% & \textbf{0.823} & 0.930 \\
-\textbf{BR~2.0.2} & 250 (17/233) & \textbf{86.8\%} & 96.8\% & 0.616 & 0.632 \\
+BR~1.4.8 & 122 (75/47) & 86.9\% & 91.5\% & 0.823 & 0.930 \\
+BR~2.0.2 & 250 (17/233) & 86.8\% & 96.8\% & 0.616 & 0.632 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 A small number of sheet rows fall outside our scope---title-case or lowercase descriptors such as ``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing correctly skips, and, on the BR~2.0.2 sheet, cross-references or chapter anchors with no matching backend clause---so match coverage is near 87\% on both versions. On BR~2.0.2 the matched positive class is very small (12 of 217 matched pairs, 5.5\%), so a naive all-No baseline already attains 94.5\% agreement; thus $\kappa = 0.616$ is the more meaningful figure, and the positive-class metrics ($P = 0.857$, $R = 0.50$, $n = 12$) carry correspondingly wide confidence intervals. BR~1.4.8 has more balanced classes (69 of 106 matched pairs positive, 65\%) and yields $\kappa = 0.823$ with positive-class $F_1 = 0.930$ and zero false positives, a tighter estimate of system quality.
 
-\textbf{This external validation checks the first half of the system.} On
+This external validation checks the first half of the system. On
 BR~1.4.8, $\kappa = 0.823$ and Yes recall 87.0\% indicate that our rule
 extraction (identifying which of the 422/1024 backend items are genuine
 normative requirements) and lintability determination (the four-condition
@@ -212,7 +212,7 @@ zlint lint flags the same certificate, so that existing coverage is not
 miscredited to a generated lint. The unit is a (certificate $\times$ lint)
 finding. The corpus first uses zlint's own testdata as a gate rather than an
 ecosystem estimate: on 1128 parsable certificates the 90 lints raise 2627 raw
-cicasgen\_ hits, of which \textbf{299} are independently confirmed (251 Error $+$
+cicasgen\_ hits, of which 299 are independently confirmed (251 Error $+$
 48 Warn) and 2328 are \texttt{NOCHECK} and hence not claimed.
 
 \begin{table*}[tb]

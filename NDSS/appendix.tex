@@ -2,6 +2,45 @@
 % Technical appendices A--F (English translation of the source appendices).
 %-------------------------------------------------------------------------------
 
+\section{Knowledge-Graph Relation Types and Retrieval Admissibility}
+\label{app:kg}
+
+GraphRAG retrieval (\S\ref{sec:method-graphrag}) builds context around a set of
+core relations and explicitly distinguishes ``relations admissible into
+retrieval'' from ``relations used only in post-processing.'' The retrieval stage
+obeys four constraints (GR-1 to GR-4): no inferred normative rule may enter
+retrieval; only raw specification nodes may enter retrieval; no inferential
+relation may enter retrieval; and all context must be traceable to a
+specification source.
+
+\begin{table}[tb]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Knowledge-graph relation types and retrieval admissibility.}
+\label{tab:kgrel}
+\begin{tabularx}{\columnwidth}{@{}l l X c@{}}
+\toprule
+Type & Relation & Role & In retrieval \\
+\midrule
+core & CONTAINS & containment hierarchy among specs, sections, rules & Yes \\
+core & DEFINES & link from a term/field/definition passage to its defined
+  object & Yes \\
+core & REFERENCES & explicit reference to another spec/section/algorithm & Yes \\
+core & APPLIES TO & link from a rule to the abstract concept it constrains
+  & Yes \\
+aux & AFFECTS & link from a rule to the concrete certificate field it affects
+  (used by the field resolver) & No \\
+aux & DERIVED FROM & provenance link from a derived rule to its source section
+  & No \\
+inferred & OVERRIDES & a more specific rule overrides a general one (produced by
+  the rule engine) & No \\
+inferred & CONFLICTS WITH & potential conflict between rules (produced by the
+  rule engine) & No \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
 \section{Key Fields of the Structured IR}
 \label{app:ir}
 
@@ -40,45 +79,6 @@ context\_nodes & key ext. & definition, field metadata, or cited
   context nodes from GraphRAG retrieval \\
 \bottomrule
 \end{tabular}
-\end{table}
-
-\section{Knowledge-Graph Relation Types and Retrieval Admissibility}
-\label{app:kg}
-
-GraphRAG retrieval (\S\ref{sec:method-graphrag}) builds context around a set of
-core relations and explicitly distinguishes ``relations admissible into
-retrieval'' from ``relations used only in post-processing.'' The retrieval stage
-obeys four constraints (GR-1 to GR-4): no inferred normative rule may enter
-retrieval; only raw specification nodes may enter retrieval; no inferential
-relation may enter retrieval; and all context must be traceable to a
-specification source.
-
-\begin{table}[tb]
-\centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\caption{Knowledge-graph relation types and retrieval admissibility.}
-\label{tab:kgrel}
-\begin{tabularx}{\columnwidth}{@{}l l X c@{}}
-\toprule
-Type & Relation & Role & In retrieval \\
-\midrule
-core & CONTAINS & containment hierarchy among specs, sections, rules & Yes \\
-core & DEFINES & link from a term/field/definition passage to its defined
-  object & Yes \\
-core & REFERENCES & explicit reference to another spec/section/algorithm & Yes \\
-core & APPLIES TO & link from a rule to the abstract concept it constrains
-  & Yes \\
-aux & AFFECTS & link from a rule to the concrete certificate field it affects
-  (used by the field resolver) & No \\
-aux & DERIVED FROM & provenance link from a derived rule to its source section
-  & No \\
-inferred & OVERRIDES & a more specific rule overrides a general one (produced by
-  the rule engine) & No \\
-inferred & CONFLICTS WITH & potential conflict between rules (produced by the
-  rule engine) & No \\
-\bottomrule
-\end{tabularx}
 \end{table}
 
 \section{Construction Details of the Restricted Code Space $\Tv$}
@@ -149,11 +149,11 @@ classical propositional logic.
 
 \textbf{Generality grading of atomic templates (GENERIC / NON\_GENERIC).} Atomic
 templates are graded by two orthogonal criteria (independent of the number of
-parameters): an atomic template is \textbf{GENERIC} iff (1) it expresses a
+parameters): an atomic template is GENERIC iff (1) it expresses a
 \emph{general} PKI concept---a class of certificate-attribute judgments reusable
 across rules---and (2) it is parameterized over fields/values and bound to no
 specific rule\_id or corpus-specific OID/single clause; otherwise it is
-\textbf{NON\_GENERIC} (its logic specialized to the internal structure of some
+NON\_GENERIC (its logic specialized to the internal structure of some
 extension or a single RFC/CABF clause, its semantics fixed to that construct even
 when parameterized). A zero-parameter atomic template may belong to either class
 (IsCA is GENERIC, NotAfterIsNoExpirySentinel is NON\_GENERIC).
@@ -161,8 +161,8 @@ This grading is fixed in code as the two sets GENERIC\_ATOMS /
 NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
 deterministically recomputable.
 
-Of the 136 atomic templates in $\mathcal{A}$, \textbf{82 are GENERIC and 54 are
-NON\_GENERIC}. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
+Of the 136 atomic templates in $\mathcal{A}$, 82 are GENERIC and 54 are
+NON\_GENERIC. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
 examples; the full list is released with the code and data.
 
 \begin{table*}[tb]
@@ -197,9 +197,9 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 
 NON\_GENERIC atomic templates are allowed into code generation (they correspond
 to real PKI constructs, not padding to inflate the corpus), but must be
-explicitly marked and their proportion disclosed: \textbf{among the 90
+explicitly marked and their proportion disclosed: among the 90
 final-shipping strict lints, 53 use only GENERIC atomic templates, 5 mix GENERIC
-and NON\_GENERIC templates, and 32 use only NON\_GENERIC atomic templates}.
+and NON\_GENERIC templates, and 32 use only NON\_GENERIC atomic templates.
 
 \textbf{Rendering and metadata binding.} After $\rho$ renders them, all DSL trees
 are embedded into a fixed zlint Go shell (registration via
@@ -280,14 +280,14 @@ Description/Citation/Name are not generated by the LLM
 but bound deterministically by the post-processor $\Phi_{\mathrm{post}}$.
 
 The full prompt of each call is the concatenation of four segments in order:
-\textbf{Segment~A (Rule Context)}---source ID, section number, rule ID, verbatim
-rule\_text, and source metadata; \textbf{Segment~B (Structured
-IR)}---the flattened IR four-/five-tuple; \textbf{Segment~C (DSL Schema)}---the
+Segment~A (Rule Context)---source ID, section number, rule ID, verbatim
+rule\_text, and source metadata; Segment~B (Structured
+IR)---the flattened IR four-/five-tuple; Segment~C (DSL Schema)---the
 implementation's $\mathcal{V}$ and $\mathcal{A}$ catalog (a field-name list
 grouped by component and an atomic-template signature table grouped by semantic
 cluster, each atomic template annotated with a one-line PKI semantics; the
 paper's Appendix~\ref{app:tv} lists only representative examples);
-\textbf{Segment~D (Output Protocol)}---the exact schema of the two legal JSON
+Segment~D (Output Protocol)---the exact schema of the two legal JSON
 forms and one minimal positive example.
 
 %-------------------------------------------------------------------------------
@@ -300,10 +300,10 @@ forms and one minimal positive example.
 \label{sec:saiv}
 
 To coordinate the modules and safeguard their output quality without manual
-ground truth, we propose the \textbf{Stage-Aware Iterative Verification} (SAIV)
+ground truth, we propose the Stage-Aware Iterative Verification (SAIV)
 framework. The basic idea: predefine several quantifiable objectives, measure
 the gap between the current and ideal states by each objective's computable
-\textbf{residual}, and when a residual has not reached its threshold, use the
+residual, and when a residual has not reached its threshold, use the
 residual signal to locate the offending module and apply the corresponding
 repair, then proceed to the next iteration, until all residuals converge
 simultaneously.
@@ -312,20 +312,20 @@ simultaneously.
 \label{subsec:saiv-formal}
 
 The whole pipeline $\Pi$ is the composition of four modules chained in
-sequence---\textbf{extraction $\to$ classification $\to$ generation $\to$
-verification}:
-\[
+sequence---extraction $\to$ classification $\to$ generation $\to$
+verification:
+\begin{equation}\label{eq:pipeline}
   \Pi = \phi_V \circ \phi_G \circ \phi_C \circ \phi_R
-\]
+\end{equation}
 where the extraction module $\phi_R$ produces the intermediate representation,
 the classification module $\phi_C$ (the four-condition lintability decision of
 \S\ref{sec:lintability}) filters out the lintable rules, the generation module
 $\phi_G$ (restricted to the DSL code space $\Tv$ of \S\ref{sec:codegen})
 synthesizes checking code, and the verification module $\phi_V$ (the three-layer
 semantic alignment of \S\ref{sec:codegen}) handles acceptance. Here $\phi_C$ is
-the \textbf{single-rule} lintability predicate defined in \S\ref{sec:lintability}
+the single-rule lintability predicate defined in \S\ref{sec:lintability}
 ($r \mapsto \{0,1\}$); the $\psi_C$ appearing in Fig.~\ref{alg:saiv} is its
-\textbf{set-level} lift: it first removes Layer-1 false positives from the
+set-level lift: it first removes Layer-1 false positives from the
 keyword-recall set $\Rkw$ to obtain the noise set $\RN$, then applies $\phi_C$
 rule by rule to the remaining genuine rules, outputting the three-way partition
 $(\RN, \RL, \RU)$. SAIV uses the computable signals these modules produce to
@@ -382,13 +382,13 @@ the objective is a violation count $\Nviol = 0$.
 
 \medskip
 On top of these labels, SAIV formalizes three kinds of quality signals as
-computable residuals: the \textbf{recall-conservation residual} $\Lrec$
-(Appendix~\ref{app:saiv}, Eq.~\eqref{eq:recall-res}) measures, by symmetric
+computable residuals: the recall-conservation residual $\Lrec$
+(\S\ref{app:saiv}, Eq.~\eqref{eq:recall-res}) measures, by symmetric
 normalization, the degree to which the ideal identity of Theorem~\ref{thm:recall}
-is violated; the \textbf{code-faithfulness residual} $\Lcode$
-(Appendix~\ref{app:saiv}, Eq.~\eqref{eq:code-res}) is the average gap of
+is violated; the code-faithfulness residual $\Lcode$
+(\S\ref{app:saiv}, Eq.~\eqref{eq:code-res}) is the average gap of
 correctness labels over the lintable set; the two are weighted into the
-\textbf{total loss} $\Ltot$ (Appendix~\ref{app:saiv}, Eq.~\eqref{eq:total},
+total loss $\Ltot$ (\S\ref{app:saiv}, Eq.~\eqref{eq:total},
 default $w_R = w_C = 0.5$). The third is the dual-verdict-source consistency
 residual $\Nviol$ (\S\ref{subsec:algo}).
 
@@ -474,15 +474,15 @@ leaving it unchanged), then $\Ltot$ is non-increasing each round; the actual
 system uses a ``stop when no decrease'' policy, so it guarantees finite-round
 termination but not global optimality (see \S\ref{sec:eval}).
 
-\section{Formalization of SAIV Residuals and Stage Routing}
+\subsection{Formalization of SAIV Residuals and Stage Routing}
 \label{app:saiv}
 
-This appendix collects the exact mathematical formalizations referenced in
-Appendix~\ref{sec:saiv} (\S\ref{subsec:repair}--\S\ref{subsec:algo}), for readers who need to
+This subsection collects the exact mathematical formalizations referenced above
+(\S\ref{subsec:repair}--\S\ref{subsec:algo}), for readers who need to
 check them formally.
 
 \textbf{Exact forms of SAIV's core residuals} (intuition and definitions in
-Appendix~\ref{sec:saiv}, \S\ref{subsec:repair}--\S\ref{subsec:algo}).
+\S\ref{subsec:repair}--\S\ref{subsec:algo}).
 
 Code-correctness label (Eq.~\eqref{eq:corrlabel}). Let $t_r$ be the DSL tree
 synthesized for rule $r$ and $\mathrm{code}(r) = \rho(t_r)$ its rendered Go code;
@@ -492,9 +492,11 @@ structural-completeness score, $\mathrm{syn}(\cdot,\cdot) \in \{0,1\}$ is the
 synonymy-judge output, $\smech(t_r)$ is the code\_summary
 (\S\ref{subsec:mech}), and $\mathrm{spec}(r)$ is rule $r$'s specification text:
 \begin{equation}\label{eq:corrlabel}
-  \lambda_{\mathrm{code}}(r) = \ind[\mathrm{compile}(\mathrm{code}(r))] \cdot
-  s_{\mathrm{struct}}(\mathrm{code}(r)) \cdot
-  \mathrm{syn}(\smech(t_r),\, \mathrm{spec}(r))
+  \begin{split}
+    \lambda_{\mathrm{code}}(r) = {}&\ind[\mathrm{compile}(\mathrm{code}(r))] \cdot
+      s_{\mathrm{struct}}(\mathrm{code}(r)) \\
+    &{}\cdot \mathrm{syn}(\smech(t_r),\, \mathrm{spec}(r))
+  \end{split}
 \end{equation}
 
 Recall-conservation residual (Eq.~\eqref{eq:recall-res}):
@@ -516,7 +518,6 @@ Total loss (Eq.~\eqref{eq:total}, $w_R + w_C = 1$):
 \textbf{The four-branch rule of stage routing} (exact conditions in
 \S\ref{subsec:algo}):
 \begin{equation}\label{eq:route}
-\small
 \mathrm{Stage}^{(t)} = \begin{cases}
   \phi_R, & \Lrec^{(t)} > \tau_R \\[2pt]
   \phi_C, & \Lrec^{(t)} \leq \tau_R \,\wedge\, p_{\mathrm{fail}}^{(t)} >

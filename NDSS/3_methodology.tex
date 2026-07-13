@@ -65,7 +65,7 @@ It then assembles LLM context by relation-type priority and provides term defini
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}L{0.27\linewidth} L{0.30\linewidth} L{0.33\linewidth}@{}}
 \hline
-\textbf{Tier} & \textbf{Keywords} & \textbf{Semantics} \\
+Tier & Keywords & Semantics \\
 \hline
 Mandatory      & MUST, SHALL, REQUIRED   & Absolute requirement; a violation is non-compliance \\
 Prohibition    & MUST NOT, SHALL NOT     & Absolute prohibition \\
@@ -83,7 +83,7 @@ Optional       & MAY, OPTIONAL           & Fully optional \\
 \footnotesize
 \begin{tabular}{@{}L{0.18\linewidth} L{0.74\linewidth}@{}}
 \hline
-\textbf{Field} & \textbf{Meaning} \\
+Field & Meaning \\
 \hline
 subject    & Certificate field path (e.g., extensions.\allowbreak subjectAltName.\allowbreak dNSName), resolved by FieldResolver \\
 obligation & RFC~2119 keyword (MUST/SHALL/SHOULD/\dots) \\
@@ -145,7 +145,7 @@ Appendix~\ref{app:ir} provides the category definitions, correction rules, and t
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{@{}l l L{0.36\linewidth} L{0.30\linewidth}@{}}
 \hline
-\textbf{ID} & \textbf{IR field} & \textbf{Value domain} & \textbf{Condition} \\
+ID & IR field & Value domain & Condition \\
 \hline
 $C_1$      & obligation         & MUST, SHALL, REQUIRED, SHOULD, RECOMMENDED, MUST NOT, SHALL NOT, SHOULD NOT, MAY, OPTIONAL & obligation $\notin$ \{MAY, OPTIONAL\} \\
 $C_2$      & assertion\_subject & Certificate, CA, CrossArtifact & assertion\_subject $=$ Certificate \\

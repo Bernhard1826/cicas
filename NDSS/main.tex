@@ -19,7 +19,7 @@
 \documentclass[conference]{IEEEtran}
 
 % Packages + comment/shorthand macros (project file, merged: algorithmic ->
-% algpseudocode, and amsthm/bbm/booktabs/multirow/dblfloatfix added there).
+% algpseudocode, and amsthm/dsfont/booktabs/multirow/stfloats added there).
 \input{packages}
 
 % IEEE: restore multiline-equation page breaks (amsmath sets this to 10000).
@@ -40,7 +40,7 @@
 %-------------------------------------------------------------------------------
 % Paper-specific math shorthands used across the section files.
 %-------------------------------------------------------------------------------
-\newcommand{\ind}{\mathbbm{1}}                 % indicator function
+\newcommand{\ind}{\mathds{1}}                 % indicator function
 \newcommand{\code}{\mathrm{Code}}
 \newcommand{\ir}{\mathrm{IR}}
 \newcommand{\spec}{\mathrm{Spec}}
@@ -153,7 +153,7 @@ Tranco/CT scans). Deterministic components (recall conservation, lintability
 gating, coverage aggregation, certificate-level execution verification) can be
 recomputed exactly from the released inputs.
 
-\appendix
+\appendices
 \input{appendix}
 
 \bibliographystyle{IEEEtran}

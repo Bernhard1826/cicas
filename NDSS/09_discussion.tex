@@ -9,20 +9,20 @@
 The framework's core mechanism is not specific to PKI: Layer~1's RFC~2119
 keyword set can be reconfigured to another ecosystem's deontic keywords (e.g.,
 ISO's shall/should/may). The method applies to specification sources that
-jointly satisfy three conditions: \textbf{(1)} they express mandatory/recommended
-levels with recognizable formal deontic keywords; \textbf{(2)} the constrained
+jointly satisfy three conditions: (1) they express mandatory/recommended
+levels with recognizable formal deontic keywords; (2) the constrained
 target is a structured, machine-parsable artifact (certificate, protocol
-message, configuration file); and \textbf{(3)} they have a hierarchical section
+message, configuration file); and (3) they have a hierarchical section
 structure that supports a knowledge graph and scope inheritance. This gives the
 methodology value beyond PKI alone.
 
 \subsection{Recommendations for Specification Authors and Tool Maintainers}
 \label{subsec:recommendations}
 
-For \textbf{specification authors}, three drafting principles reduce extraction
+For specification authors, three drafting principles reduce extraction
 ambiguity: one obligation per sentence, referring to fields precisely by ASN.1
 path rather than pronoun, and normalizing cross-document references with a fixed
-pattern. For \textbf{lint maintainers}, we suggest writing the description
+pattern. For lint maintainers, we suggest writing the description
 directly as a code\_summary that explicitly gives the field
 path/assertion type/value/severity and cites the specification clause---we find
 that many lint descriptions are neither specification citations nor faithful
@@ -33,8 +33,8 @@ code\_summary before aligning, adding overhead and adjudication noise.
 \label{subsec:crossstd}
 
 The coverage analysis also exposes a scoping issue: of the 90 lints in the
-emitted set, \textbf{9} have specification text from CABF BR yet are already
-implemented by existing \textbf{RFC~5280} lints in zlint. A rule-by-rule check
+emitted set, 9 have specification text from CABF BR yet are already
+implemented by existing RFC~5280 lints in zlint. A rule-by-rule check
 against the zlint v3 source confirms the following.
 
 \begin{table*}[tb]
