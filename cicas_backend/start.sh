@@ -12,8 +12,8 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
 # 激活虚拟环境（如果存在）
-if [ -d "env" ]; then
-    source env/bin/activate
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
     echo -e "${GREEN}[INFO]${NC} 已激活虚拟环境"
 fi
 
@@ -42,7 +42,7 @@ cleanup() {
 
     # 清理数据库中卡住的任务状态
     echo -e "${YELLOW}[INFO]${NC} 清理卡住的任务状态..."
-    if [ -d "env" ]; then
+    if [ -d ".venv" ]; then
         python -c "
 from app.core.database import SessionLocal
 from app.models.models import CTScanTask
