@@ -1,0 +1,57 @@
+%-------------------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+%-------------------------------------------------------------------------------
+
+The Public Key Infrastructure (PKI) forms the trust foundation of the Internet, enabling identity authentication and encrypted communication through digital certificates issued by Certificate Authorities (CAs).
+Correct certificate issuance is therefore critical to Web PKI integrity: certificates that violate technical requirements directly undermine browser trust and weaken the reliability of secure communication.
+
+Recent incidents demonstrate that these failures are not merely theoretical.
+In 2024, both Chrome and Mozilla announced that they would distrust Entrust as a publicly trusted CA after a series of unresolved compliance incidents~\cite{mozilla2024entrust,chrome2024entrust}.
+Earlier, in 2020, Let's Encrypt revoked approximately three million certificates after a CAA-validation defect~\cite{letsencrypt2020caa}.
+These incidents have already translated into ecosystem-wide policy changes.
+The CA/Browser Forum mandated pre-issuance linting for all publicly trusted CAs beginning March~15,~2025~\cite{cabf-sc75-2024}.
+Subsequently, Ballot~SC-081v3~\cite{cabf-sc081v3} introduced a progressive reduction of TLS certificate validity periods to 47~days, substantially increasing certificate issuance frequency and the operational demand for automated compliance verification.
+
+Currently, certificate compliance analysis relies primarily on static certificate linting tools, such as ZLint~\cite{kumar2018tracking}, pkilint~\cite{pkilint}, certlint~\cite{certlint}, and x509lint~\cite{x509lint}, which are widely integrated into Certificate Transparency (CT) monitoring and CA issuance pipelines.
+However, these tools depend heavily on manual rule engineering: compliance checks must be individually implemented and continuously maintained by PKI experts as Web PKI normative sources are revised.
+As certificate issuance volume and specification complexity continue to grow, this approach becomes increasingly difficult to scale.
+
+More fundamentally, the PKI ecosystem lacks a systematic framework for translating normative text into compliance logic enforceable via static certificate lint checks.
+This gap matters as linting becomes increasingly critical to PKI governance: specifications still do not distinguish normative rules that admit static lint checks from those that require evidence not contained in the certificate.
+
+\noindent \textbf{Research goal and challenges.}
+We aim to develop a general framework that automatically extracts normative rules from Web PKI normative sources, determines whether each rule can be enforced through static certificate linting, and generates the corresponding lint code.
+This task faces three key challenges, one at each stage.
+
+First, rule extraction must be accurate yet reproducible. Web PKI normative sources contain numerous cross-document references and indirect constraints: CABF~BR~\S7.1 inherits normative rules from RFC~5280, while CABF~BR~\S7.1.2.7.12 strengthens RFC~5280~\S4.2.1.6 by requiring the subjectAltName extension in every Subscriber Certificate, so isolated document analysis is insufficient. Large Language Models (LLMs) offer a promising basis for such semantic understanding, but their non-determinism and hallucination risks conflict with the reproducibility required for compliance analysis, so extraction cannot rely on end-to-end black-box inference.
+
+Second, lintability determination\footnote{Lintability in this study denotes the extent to which a normative rule can be implemented as a static certificate lint check without dependence on external context or runtime behavior.} is itself non-trivial. The presence of RFC~2119 keywords (e.g., MUST, SHALL, or SHOULD) does not by itself indicate that a normative rule can be translated into a deterministic static check, since many keyword-bearing rules depend on external context or runtime behavior not contained in the certificate. This calls for an explicit, checkable characterization of lintability rather than a keyword heuristic.
+
+Third, code generation must be trustworthy. Producing checking code directly with an LLM faces hallucination (e.g., referencing a nonexistent or semantically unrelated certificate field) and output instability (the same prompt yielding different code across calls, guaranteed neither to compile nor to be correct), which are unacceptable when the generated lint decides certificate compliance.
+
+\noindent \textbf{Our study.}
+We design a pipeline that automatically extracts lintable normative rules from Web PKI normative sources, decides their lintability, and generates verified lint code, addressing the three challenges in turn.
+
+To address the first challenge, we build a Dual Layer Extraction Pipeline (DLEP). We first construct a knowledge graph over Web PKI normative sources---representing sections, definitions, certificate fields, and cross-document inheritance relations---and design a deterministic retrieval mechanism that assembles context via bounded traversal over explicit reference edges, giving traceable context for extraction. DLEP then extracts rules in two layers: Layer~1 uses deterministic rule recall (RFC~2119 keyword filtering and regex matching) to surface candidate rules, and Layer~2 uses an LLM for constrained semantic parsing into a JSON-serialized Intermediate Representation (IR). This confines the LLM to schema-bounded interpretation grounded in the source text, keeping extraction auditable and reproducible.
+
+To address the second challenge, we formalize lintability as a four-condition framework (\S\ref{sec:method-lintability}) evaluated over IR attributes, turning the lintability decision into a traceable and reproducible check rather than a keyword heuristic.
+
+To address the third challenge, we restrict code generation to a finite, closed DSL-tree space: each rule's checking logic is a tree in this space that a deterministic function renders into Go lint code, with an LLM fallback only when the deterministic path yields nothing, and every candidate gated by ``render and pass \texttt{go build}.'' This removes hallucination and output instability from the generated lints.
+
+\noindent \textbf{Evaluation and Analysis.}
+We evaluate the full pipeline on the two standard sources RFC~5280 and CABF~BR, using GPT-5.4 as the LLM.
+Of 2,080 keyword-recalled candidates, 1,551 are genuine normative rules, of which only 248 (16.0\%) are lintable as single-certificate static checks; existing zlint lints fully cover 158 of them, leaving 90 (36.3\%) uncovered and revealing a substantial gap between deployed tooling and the normative specifications.
+Over these 90 uncovered rules, our restricted generator emits compilable lints for all 90 (100.0\%), all of which pass the final-shipping strict synonymy gate against the specification.
+
+We further run two independent external validations, one for each half of the framework.
+Against the zlint maintainers' manually annotated CABF~BR mapping sheet, our rule extraction and lintability determination reach Cohen's $\kappa = 0.823$ with Yes-class $F_1 = 0.930$ on BR~1.4.8.
+Injecting the synonymy-passing lints into zlint then surfaces genuine profile violations---such as an OV certificate carrying givenName (Error-level)---confirmed by independent structural audit on 1,128 testdata certificates and stress-tested against 111,118 real certificates from the Tranco Top~1M and Certificate Transparency logs.
+
+\noindent\textbf{Contributions.}
+This paper makes three contributions.
+\begin{itemize}
+    \item We design DLEP, a dual-layer pipeline that automatically extracts normative rules from natural-language Web PKI sources while confining the LLM to schema-bounded semantic parsing, making the extraction reproducible and auditable.
+    \item We propose a four-condition framework that formalizes lintability and determines whether an extracted normative rule can be enforced as a static certificate lint check.
+    \item We develop a restricted code-generation method that confines each rule's checking logic to a finite, closed DSL-tree space, yielding deterministic and verifiable lint code free of LLM hallucination and output instability.
+\end{itemize}
