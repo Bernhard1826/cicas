@@ -21,6 +21,7 @@ Method (as described in §8.2):
     the bundled zlint v3 Go source (Source metadata field).
 
 Inputs (snapshot written to inputs/ by --snapshot):
+  inputs/extraction_rules.jsonl  recalled rules with noise/lintability labels
   inputs/lintable_rules.jsonl   lint-able rules with their stored verdict
   inputs/zlint_lint_catalog.json zlint v3 lint counts by Source (reference row)
 
@@ -34,9 +35,9 @@ Run:
   python3 cicas_backend/experiments/coverage_analysis/run.py --snapshot # also refresh inputs/
 
 Expected (current refreshed snapshot):
-  lint-able 249 = CABF 170 + RFC5280  79
-  full      158 = CABF 106 + RFC5280  52
-  uncovered  91 = CABF  64 + RFC5280  27   (= judged code-generation domain phi_G)
+  lint-able 275 = CABF 188 + RFC5280  87
+  full      174 = CABF 112 + RFC5280  62
+  uncovered 101 = CABF  76 + RFC5280  25   (= judged code-generation domain phi_G)
   pending     0 = CABF   0 + RFC5280   0
   native zlint cert reference: CABF 164 lints, RFC5280 115 lints
 
@@ -158,10 +159,21 @@ def render_md(table):
 
 
 def snapshot_inputs():
-    """Archive the experiment inputs (lint-able rules + zlint catalog)."""
+    """Archive the experiment inputs (extraction labels + lint-able rules + catalog)."""
     INPUTS.mkdir(exist_ok=True)
     with _conn() as c:
         cur = c.cursor()
+        cur.execute(
+            "select id, standard_id, "
+            "case when standard_id=1 then 'RFC' when standard_id=19 then 'CABF-BR' else standard_id::text end as source, "
+            "is_noise, lintable "
+            "from rules order by standard_id, id"
+        )
+        cols = [d[0] for d in cur.description]
+        with open(INPUTS / "extraction_rules.jsonl", "w") as f:
+            for row in cur.fetchall():
+                f.write(json.dumps(dict(zip(cols, row)), default=str, ensure_ascii=False) + "\n")
+
         cur.execute(
             "select id, standard_id, section, subsection, title, text, "
             "lint_covered, lint_name, lint_coverage "
@@ -173,6 +185,7 @@ def snapshot_inputs():
                 f.write(json.dumps(dict(zip(cols, row)), default=str, ensure_ascii=False) + "\n")
     (INPUTS / "zlint_lint_catalog.json").write_text(
         json.dumps(zlint_source_counts(), indent=2, ensure_ascii=False))
+    print(f"  wrote {INPUTS/'extraction_rules.jsonl'}")
     print(f"  wrote {INPUTS/'lintable_rules.jsonl'}")
     print(f"  wrote {INPUTS/'zlint_lint_catalog.json'}")
 

@@ -261,6 +261,7 @@ def deterministic_tree(rule_id: int, ir: dict, section: Optional[str] = None) ->
                 atom = _app_dsl.When(cond=cond_atom, main=atom)
         except Exception:
             pass  # fall through without wrapping
+    atom = _drop_circular_basicconstraints_ca_guard(atom)
     try:
         tree = tv_dsl.parse(_app_to_tv_json(atom))
     except Exception:
@@ -292,6 +293,60 @@ def _is_vacuous_when(tree) -> bool:
         return cond is not None and main is not None and cond == main
     except Exception:
         return False
+
+
+def _is_basicconstraints_presence(node: object) -> bool:
+    return (
+        type(node).__name__ == "ExtPresent"
+        and getattr(node, "oid", None) in {"BasicConstraintsOID", "BasicConstOID"}
+    )
+
+
+def _is_isca_atom(node: object) -> bool:
+    return type(node).__name__ == "IsCA"
+
+
+def _strip_isca_from_conjunction(node: object) -> tuple[object | None, bool]:
+    """Remove circular IsCA guards from a conjunction, preserving other guards.
+
+    IsCA is parsed from BasicConstraints in zcrypto.  When the consequent is
+    BasicConstraints presence, keeping IsCA in the antecedent makes the lint
+    unable to fire on the very missing-extension case it must detect.  We only
+    strip IsCA when another independent guard remains; a bare "CA certificate"
+    antecedent is not silently widened.
+    """
+    if _is_isca_atom(node):
+        return None, True
+    if type(node).__name__ == "And" and hasattr(node, "parts"):
+        from app.services.certificate.dsl import dsl as _app_dsl
+        changed = False
+        parts = []
+        for part in getattr(node, "parts") or ():
+            new_part, part_changed = _strip_isca_from_conjunction(part)
+            changed = changed or part_changed
+            if new_part is not None:
+                parts.append(new_part)
+        if not changed:
+            return node, False
+        if not parts:
+            return None, True
+        if len(parts) == 1:
+            return parts[0], True
+        return _app_dsl.And(parts=tuple(parts)), True
+    return node, False
+
+
+def _drop_circular_basicconstraints_ca_guard(atom: object) -> object:
+    """Anti-circularity normalization for BasicConstraints presence checks."""
+    if type(atom).__name__ != "When" or not hasattr(atom, "cond") or not hasattr(atom, "main"):
+        return atom
+    if not _is_basicconstraints_presence(atom.main):
+        return atom
+    new_cond, changed = _strip_isca_from_conjunction(atom.cond)
+    if not changed or new_cond is None:
+        return atom
+    from app.services.certificate.dsl import dsl as _app_dsl
+    return _app_dsl.When(cond=new_cond, main=atom.main)
 
 
 def _replace_main_preserving_when(current: object, replacement: object) -> object:
@@ -806,8 +861,15 @@ def _extract_basic_constraints_keycertsign_presence_atom(ir: dict) -> Optional[o
         return None
     if "validat" not in key or "signature" not in key or "certificates" not in key:
         return None
+    # Do not guard a BasicConstraints-presence check with IsCA: zcrypto derives
+    # c.IsCA from the same BasicConstraints extension, which would make the lint
+    # vacuous when that extension is absent.  keyCertSign is the independent
+    # certificate-encoded signal for "public keys used to validate signatures on
+    # certificates"; the separate cA/keyUsage consistency rules cover non-CA
+    # misuse.  This is a general anti-circularity rule for BasicConstraints
+    # presence, not a rule-id exception.
     return tv_dsl.When(
-        cond=tv_dsl.And(parts=(tv_dsl.IsCA(), tv_dsl.KeyUsageHas("CertSign"))),
+        cond=tv_dsl.KeyUsageHas("CertSign"),
         main=tv_dsl.ExtPresent("BasicConstraintsOID"),
     )
 

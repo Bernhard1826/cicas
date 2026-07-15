@@ -216,10 +216,27 @@ def apply_ir_field_guard(result, ir: Dict[str, Any]) -> Tuple[Dict, Dict]:
             ir_subject_fields=set(), go_code="", error="no code to check"
         )
 
+    metadata = dict(result.metadata or {})
+    if metadata.get("generation_method") == "atomic_template":
+        metadata["ir_field_guard"] = {
+            "ok": True,
+            "violations": [],
+            "referenced_fields": [],
+            "ir_subject_fields": [],
+            "skipped": "atomic_template",
+        }
+        result.metadata = metadata
+        return result, FieldGuardResult(
+            ok=True,
+            violations=[],
+            referenced_fields=set(),
+            ir_subject_fields=set(),
+            go_code=result.go_code,
+        )
+
     guard = check_ir_field_guard(result.go_code, ir)
 
     # 把守卫结果注入 metadata
-    metadata = dict(result.metadata or {})
     metadata["ir_field_guard"] = {
         "ok": guard.ok,
         "violations": [

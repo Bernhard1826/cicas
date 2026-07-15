@@ -10,9 +10,9 @@ From `outputs/coverage_table.{json,md}`:
 
 | | CABF | RFC 5280 | total |
 |---|---:|---:|---:|
-| lint-able rules | 170 | 78 | **248** |
-| full native zlint coverage | 106 | 52 | **158** |
-| judged uncovered (= codegen domain) | 64 | 26 | **90** |
+| lint-able rules | 188 | 87 | **275** |
+| full native zlint coverage | 112 | 62 | **174** |
+| judged uncovered (= codegen domain) | 76 | 25 | **101** |
 | pending coverage | 0 | 0 | **0** |
 | *native zlint certificate lints (reference denominator)* | *164* | *115* | *279* |
 | *CRL lints (outside denominator)* | *6* | *7* | *13* |
@@ -38,6 +38,8 @@ reference counts directly from the bundled zlint v3 Go source
 Locally generated `cicasgen_*` lints are excluded from the native zlint reference row.
 
 ## Inputs (`inputs/`)
+- `extraction_rules.jsonl` — recalled rules with `is_noise` and `lintable`
+  labels, used to reproduce the recall-conservation denominator.
 - `lintable_rules.jsonl` — lint-able rules with their stored verdict (DB snapshot).
 - `zlint_lint_catalog.json` — zlint v3 lint counts by Source (reference row).
 - `lint_ir_summaries.json` — reverse-IR summaries of upstream zlint certificate

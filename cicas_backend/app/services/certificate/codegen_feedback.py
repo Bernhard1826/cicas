@@ -28,7 +28,6 @@ from app.services.certificate.zlint_generator import (
     ZlintCodeGenerator,
     CodeGenResult,
 )
-from app.services.certificate.l_subclass_templates import LSubclassTemplateLibrary
 
 
 class ErrorStage(str, Enum):
@@ -96,7 +95,6 @@ class CodegenFeedbackLoop:
         self.verifier = verifier
         self.max_iterations = max_iterations
         self.convergence_threshold = convergence_threshold
-        self.template_lib = LSubclassTemplateLibrary()
 
     def run(
         self,
@@ -226,11 +224,11 @@ class CodegenFeedbackLoop:
     ) -> List[ErrorClassification]:
         """Classify verification failures into actionable errors."""
         errors = []
-        metadata = self.template_lib.ir_to_metadata(ir)
-        template = self.template_lib.get_template(ir.get("lint_subclass", ""))
+        metadata = ZlintCodeGenerator.ir_to_metadata(ir)
         lintability = ir.get("zlint_lintability") or {}
 
-        # Upstream classification / template issues
+        # Upstream classification issues. Atomic-template codegen no longer
+        # requires an L-subclass template assignment.
         if lintability.get("can_generate") is False:
             errors.append(ErrorClassification(
                 stage=ErrorStage.EXTRACTION,
@@ -238,23 +236,6 @@ class CodegenFeedbackLoop:
                 description="IR marks rule as non-generatable but code generation was attempted",
                 fix_strategy=FixStrategy.MANUAL,
                 root_cause="deterministic_classification",
-            ))
-
-        if not ir.get("lint_subclass"):
-            errors.append(ErrorClassification(
-                stage=ErrorStage.TEMPLATE,
-                error_type="missing_subclass",
-                description="No executable subclass assigned for generated rule",
-                fix_strategy=FixStrategy.MANUAL,
-                root_cause="subclass_selection",
-            ))
-        elif template is None:
-            errors.append(ErrorClassification(
-                stage=ErrorStage.TEMPLATE,
-                error_type="unsupported_subclass",
-                description=f"No template registered for subclass {ir.get('lint_subclass')}",
-                fix_strategy=FixStrategy.MANUAL,
-                root_cause="template_coverage",
             ))
 
         # Structural errors
@@ -413,7 +394,7 @@ class CodegenFeedbackLoop:
 
     def _fix_citation(self, code: str, ir: Dict[str, Any]) -> str:
         """Replace Citation with deterministic metadata citation."""
-        citation = self.template_lib.ir_to_metadata(ir).get("citation", "")
+        citation = ZlintCodeGenerator.ir_to_metadata(ir).get("citation", "")
         if not citation:
             return code
         escaped = citation.replace('"', '\\"').strip()
@@ -425,7 +406,7 @@ class CodegenFeedbackLoop:
 
     def _fix_source(self, code: str, ir: Dict[str, Any]) -> str:
         """Replace Source with deterministic metadata source constant."""
-        source_const = self.template_lib.ir_to_metadata(ir).get("source", "")
+        source_const = ZlintCodeGenerator.ir_to_metadata(ir).get("source", "")
         if not source_const:
             return code
         return re.sub(

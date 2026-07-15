@@ -407,6 +407,21 @@ def _atom(n) -> str:
         return (f"every present {n.attr} attribute value in the {n.dn} DN is "
                 f"actually DER-encoded as {opts}; certificates with no such "
                 f"attribute satisfy this encoding-only check")
+    if isinstance(n, dsl.DNAttributeTypesOnlyInSet):
+        attrs = ", ".join(n.allowed_attrs)
+        excluded = [
+            attr for attr in V.DN_ATTR_OID_BY_NAME
+            if attr not in set(n.allowed_attrs)
+        ]
+        excluded_text = ""
+        if excluded:
+            excluded_text = (
+                "; known DN AttributeTypes not in this set make this condition "
+                "false, including " + ", ".join(excluded)
+            )
+        return (f"every AttributeType in the {n.dn} DN is one of this closed "
+                f"set: {attrs}; any {n.dn} DN attribute type outside this set "
+                f"makes this condition false{excluded_text}")
     if isinstance(n, dsl.FieldContains):
         return f"field {n.field} contains the substring {n.substring!r}"
     if isinstance(n, dsl.CrossFieldEq):

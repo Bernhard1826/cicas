@@ -21,34 +21,28 @@ from app.core.config import settings
 router = APIRouter()
 
 
-# IR 的 predicate → L-subclass 模板键的确定性映射。
-# 数据库中规则未填充 lint_subclass，但每条都带 predicate，可无歧义地推导出
-# 生成器所需的模板类别（L1-L6）。仅作为缺失字段的派生输入，不改动生成算法本身。
-_PREDICATE_TO_SUBCLASS = {
-    "must_be_present": "L1",      # 存在性
-    "must_not_be_present": "L1",  # 缺省性
-    "must_equal": "L2",           # 取值相等
-    "must_be_critical": "L2",     # criticality 布尔相等
-    "must_not_be_critical": "L2",
-    "allowed_values": "L3",       # 枚举集合
-    "encode_as": "L4",            # 编码/格式
-    "matches_pattern": "L4",
-    "conform_to": "L4",
-    "must_conform_to": "L4",
-    "must_include": "L5",         # 包含
-    "must_not_include": "L5",
-    "in_range": "L6",             # 数值范围
-}
-
-
-def _ensure_lint_subclass(ir: Dict) -> None:
-    """缺失 lint_subclass 时，从 predicate 确定性派生并就地补入 ir（仅内存，不写库）。"""
-    if ir.get("lint_subclass"):
+def _inject_codegen_context(ir: Dict, rule: Rule, db: Optional[Session] = None) -> None:
+    """Add DB rule metadata needed by the atomic-template codegen wrapper."""
+    if not isinstance(ir, dict) or rule is None:
         return
-    predicate = (ir.get("predicate") or "").strip().lower()
-    derived = _PREDICATE_TO_SUBCLASS.get(predicate)
-    if derived:
-        ir["lint_subclass"] = derived
+    ir.setdefault("_db_rule_id", rule.id)
+    if rule.text:
+        ir.setdefault("_rule_text", rule.text)
+        ir.setdefault("rule_text", rule.text)
+    if rule.title:
+        ir.setdefault("_rule_title", rule.title)
+    if rule.section:
+        ir.setdefault("_rule_section", rule.section)
+    obligation = getattr(rule, "obligation", None) or getattr(rule, "rule_type", None)
+    if obligation:
+        ir.setdefault("_rule_obligation", obligation)
+        ir.setdefault("obligation", obligation)
+
+    standard = getattr(rule, "standard", None)
+    if standard is None and db is not None and getattr(rule, "standard_id", None):
+        standard = db.query(Standard).filter(Standard.id == rule.standard_id).first()
+    if standard is not None and getattr(standard, "source", None):
+        ir.setdefault("_rule_source", standard.source)
 
 
 class GenerateCodeRequest(BaseModel):
@@ -152,7 +146,9 @@ async def generate_code_from_rule(
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="IR数据格式错误")
 
-        # 初始化 LLM 生成器（确定性 codegen 已逻辑删除，全走 LLM）
+        _inject_codegen_context(ir, rule, db)
+
+        # 初始化原子模板生成器（保留 ZlintCodeGenerator 兼容类名）
         generator = ZlintCodeGenerator(
             api_key=settings.LLM_API_KEY,
             api_base=settings.LLM_API_BASE,
@@ -160,7 +156,7 @@ async def generate_code_from_rule(
         )
         zlint_interface = ZLintInterface()
 
-        # 生成代码（LLM 路径）
+        # 生成代码（原子模板路径，必要时由 cascade 处理 residual）
         result = generator.generate(ir)
 
         # IR 字段来源检查：确保 LLM 没有引用 IR 之外的字段
@@ -275,7 +271,7 @@ async def batch_generate_codes(
         if not rules:
             raise HTTPException(status_code=404, detail="No rules with IR data found")
 
-        # 初始化 LLM 生成器（确定性 codegen 已逻辑删除，全走 LLM）
+        # 初始化原子模板生成器（保留 ZlintCodeGenerator 兼容类名）
         generator = ZlintCodeGenerator(
             api_key=settings.LLM_API_KEY,
             api_base=settings.LLM_API_BASE,
@@ -296,6 +292,7 @@ async def batch_generate_codes(
                 # 新格式：IR数据在ir_data['ir']中
                 ir = ir_data.get('ir', {})
                 parsed = ir_data.get('parsed', {})
+                _inject_codegen_context(ir, rule, db)
 
                 # 判断是否可生成（仅使用新格式）
                 can_generate = False
@@ -335,7 +332,7 @@ async def batch_generate_codes(
                     skipped_count += 1
                     continue
 
-                # 生成代码（LLM 路径）
+                # 生成代码（原子模板路径，必要时由 cascade 处理 residual）
                 gen_result = generator.generate(ir)
 
                 # IR 字段来源检查
@@ -441,7 +438,7 @@ async def generate_code_from_ir(
     save_files: bool = True
 ):
     """
-    从IR v2.0生成Go代码（LLM 路径，含 IR 字段来源检查）
+    从IR v2.0生成Go代码（原子模板路径，含 IR 字段来源检查）
 
     允许用户提供自定义IR，然后生成代码
 
@@ -460,14 +457,14 @@ async def generate_code_from_ir(
         }
     """
     try:
-        # 初始化 LLM 生成器（确定性 codegen 已逻辑删除，全走 LLM）
+        # 初始化原子模板生成器（保留 ZlintCodeGenerator 兼容类名）
         generator = ZlintCodeGenerator(
             api_key=settings.LLM_API_KEY,
             api_base=settings.LLM_API_BASE,
             model=settings.LLM_MODEL,
         )
 
-        # 生成代码（LLM 路径）
+        # 生成代码（原子模板路径，必要时由 cascade 处理 residual）
         result = generator.generate(ir)
 
         # IR 字段来源检查
@@ -847,7 +844,7 @@ async def transactional_batch_generate(
         rules_dict = {r.id: r for r in rules}
         ordered_rules = [rules_dict[rid] for rid in request.rule_ids]
 
-        # 全量 LLM 路径 + IR 字段守卫检查
+        # 原子模板路径 + IR 字段守卫检查
         generator = ZlintCodeGenerator(
             api_key=settings.llm_api_key,
             api_base=settings.llm_api_base,
@@ -877,6 +874,7 @@ async def transactional_batch_generate(
                     ir = ir_data.get('ir', {})
                     if not ir:
                         raise ValueError("Missing 'ir' field in IR data")
+                    _inject_codegen_context(ir, rule, db)
                 except json.JSONDecodeError:
                     raise HTTPException(
                         status_code=400,
@@ -900,10 +898,7 @@ async def transactional_batch_generate(
                         detail=f"Rule {rule.id} cannot generate zlint code: {reason}"
                     )
 
-                # 缺失 lint_subclass 时从 predicate 确定性派生（生成器选模板所需）
-                _ensure_lint_subclass(ir)
-
-                # 生成代码（LLM 路径）
+                # 生成代码（原子模板路径，必要时由 cascade 处理 residual）
                 gen_result = generator.generate(ir)
 
                 # 应用 IR 字段守卫检查
@@ -915,14 +910,14 @@ async def transactional_batch_generate(
                     test_code = guarded_result.test_code or ""
                     metadata = dict(guarded_result.metadata or {})
                     metadata['lint_name'] = guarded_result.lint_name or ""
-                    metadata['package'] = guarded_result.lint_name or ""
-                    metadata['generation_method'] = 'zlint_generator'
-                    generation_method = 'zlint_generator'
+                    metadata['package'] = metadata.get('package') or "rfc"
+                    metadata['generation_method'] = 'atomic_template'
+                    generation_method = 'atomic_template'
                 else:
                     go_code = ""
                     test_code = ""
                     metadata = {}
-                    generation_method = 'zlint_generator'
+                    generation_method = 'atomic_template'
 
                 if not go_code:
                     raise HTTPException(
@@ -935,9 +930,8 @@ async def transactional_batch_generate(
                 if rule.standard_id:
                     standard = db.query(Standard).filter(Standard.id == rule.standard_id).first()
 
-                # 判断是否需要人工审核
-                # 全量 LLM 路径全部需要人工审核（IR 字段守卫会降级严重违规）
-                requires_review = True
+                # 判断是否需要人工审核；LLM residual 仍需人工审核。
+                requires_review = guarded_result.status == "llm_success"
 
                 # 构建结果
                 result_item = {

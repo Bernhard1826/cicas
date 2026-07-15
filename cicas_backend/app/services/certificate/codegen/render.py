@@ -53,15 +53,41 @@ def used_vocab(node: dsl.Compound) -> dict:
 
 def _emit(n, *, in_item: bool, item_var) -> str:
     if isinstance(n, dsl.And):
-        if len(n.parts) == 1:
-            return _emit(n.parts[0], in_item=in_item, item_var=item_var)
-        return "(" + " && ".join(_emit(p, in_item=in_item, item_var=item_var)
-                                 for p in n.parts) + ")"
+        rendered = []
+        seen = set()
+        parts = []
+        for p in n.parts:
+            if isinstance(p, dsl.And):
+                parts.extend(p.parts)
+            else:
+                parts.append(p)
+        for p in parts:
+            expr = _emit(p, in_item=in_item, item_var=item_var)
+            if expr in seen:
+                continue
+            seen.add(expr)
+            rendered.append(expr)
+        if len(rendered) == 1:
+            return rendered[0]
+        return "(" + " && ".join(rendered) + ")"
     if isinstance(n, dsl.Or):
-        if len(n.parts) == 1:
-            return _emit(n.parts[0], in_item=in_item, item_var=item_var)
-        return "(" + " || ".join(_emit(p, in_item=in_item, item_var=item_var)
-                                 for p in n.parts) + ")"
+        rendered = []
+        seen = set()
+        parts = []
+        for p in n.parts:
+            if isinstance(p, dsl.Or):
+                parts.extend(p.parts)
+            else:
+                parts.append(p)
+        for p in parts:
+            expr = _emit(p, in_item=in_item, item_var=item_var)
+            if expr in seen:
+                continue
+            seen.add(expr)
+            rendered.append(expr)
+        if len(rendered) == 1:
+            return rendered[0]
+        return "(" + " || ".join(rendered) + ")"
     if isinstance(n, dsl.Not):
         return "!(" + _emit(n.inner, in_item=in_item, item_var=item_var) + ")"
     if isinstance(n, dsl.When):
@@ -536,6 +562,8 @@ def _emit(n, *, in_item: bool, item_var) -> str:
         return _emit_dn_directorystring_encoded_as(n.dn, n.types)
     if isinstance(n, dsl.DNAttributeValuesEncodedAs):
         return _emit_dn_attribute_values_encoded_as(n.dn, n.attr, n.types)
+    if isinstance(n, dsl.DNAttributeTypesOnlyInSet):
+        return _emit_dn_attribute_types_only_in_set(n.dn, n.allowed_attrs)
     if isinstance(n, dsl.FieldCount):
         f = _lookup_field(n.field)
         return _emit_field_count(f, n.lo, n.hi)
@@ -2948,6 +2976,45 @@ def _emit_dn_attribute_values_encoded_as(dn: str, attr: str, types: tuple) -> st
     ])
 
 
+def _emit_dn_attribute_types_only_in_set(dn: str, allowed_attrs: tuple) -> str:
+    """Every AttributeType OID in a DN must be in the allowed attribute set."""
+    raw = "c.RawSubject" if dn.lower() == "subject" else "c.RawIssuer"
+    allowed_oids = []
+    for attr in allowed_attrs:
+        oid = V.DN_ATTR_OID_BY_NAME.get(str(attr))
+        if not oid:
+            raise dsl.DSLError(f"DNAttributeTypesOnlyInSet: unknown DN attr {attr!r}")
+        if oid not in allowed_oids:
+            allowed_oids.append(oid)
+    if not allowed_oids:
+        raise dsl.DSLError("DNAttributeTypesOnlyInSet: empty allow-list")
+    entries = ", ".join(f"{_go_string(oid)}: true" for oid in allowed_oids)
+    return _iife_bool([
+        f"if len({raw}) == 0 {{ return true }}",
+        f"_allowed := map[string]bool{{{entries}}}",
+        "var _outer asn1.RawValue",
+        f"if _, _e := asn1.Unmarshal({raw}, &_outer); _e != nil {{ return false }}",
+        "_rest := _outer.Bytes",
+        "for len(_rest) > 0 {",
+        "\tvar _rdn asn1.RawValue",
+        "\tvar _e error",
+        "\t_rest, _e = asn1.Unmarshal(_rest, &_rdn)",
+        "\tif _e != nil { return false }",
+        "\t_inner := _rdn.Bytes",
+        "\tfor len(_inner) > 0 {",
+        "\t\tvar _atv asn1.RawValue",
+        "\t\t_inner, _e = asn1.Unmarshal(_inner, &_atv)",
+        "\t\tif _e != nil { return false }",
+        "\t\tvar _typ asn1.ObjectIdentifier",
+        "\t\t_, _e2 := asn1.Unmarshal(_atv.Bytes, &_typ)",
+        "\t\tif _e2 != nil { return false }",
+        "\t\tif !_allowed[_typ.String()] { return false }",
+        "\t}",
+        "}",
+        "return true",
+    ])
+
+
 def _emit_list_iter(field_name: str, predicate, semantic: str) -> str:
     """semantic = 'all' or 'any'."""
     f = V.lookup_anyfield(field_name)
@@ -3183,6 +3250,9 @@ def _walk_imports(n, imps: set[str]):
     if isinstance(n, dsl.DNAttributeValuesEncodedAs):
         # named DN attribute encoded-as walks the RDNSequence DER via encoding/asn1.
         imps.add("encoding/asn1")
+    if isinstance(n, dsl.DNAttributeTypesOnlyInSet):
+        # DN attribute-type allow-list walks the RDNSequence DER via encoding/asn1.
+        imps.add("encoding/asn1")
     if isinstance(n, (dsl.DNHasRDNSequence, dsl.RDNHasSingleAttribute, dsl.RDNSequenceHasCountryBefore)):
         imps.add("encoding/asn1")
 
@@ -3304,6 +3374,8 @@ def _walk_vocab(n, out: dict):
     elif isinstance(n, dsl.DNAttributeValuesEncodedAs):
         bump(out, "fields")
         for t in n.types: bump(out, "asn1_types")
+    elif isinstance(n, dsl.DNAttributeTypesOnlyInSet):
+        bump(out, "fields")
     elif isinstance(n, dsl.DateAfter):
         bump(out, "dates")
         bump(out, "dates")

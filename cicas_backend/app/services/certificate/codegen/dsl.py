@@ -298,6 +298,20 @@ class DNAttributeValuesEncodedAs:
 
 
 @dataclass(frozen=True)
+class DNAttributeTypesOnlyInSet:
+    """Every AttributeType OID in a Subject/Issuer DN is one of the supplied
+    X.520/CABF DN attribute names.
+
+    This models table rows such as "Any other attribute NOT RECOMMENDED": the
+    source table defines the closed set of known attributes, while other rows in
+    the same table separately govern required/prohibited attributes. Empty DNs
+    are vacuously true because this atom only constrains unexpected attribute
+    types, not DN presence."""
+    dn: str
+    allowed_attrs: tuple
+
+
+@dataclass(frozen=True)
 class DateAfter:
     """True iff later > earlier."""
     later: str    # DATE_FIELD name
@@ -1572,7 +1586,7 @@ Atom = Union[
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
     FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs,
-    DNAttributeValuesEncodedAs, FieldContains,
+    DNAttributeValuesEncodedAs, DNAttributeTypesOnlyInSet, FieldContains,
     CrossFieldEq,
     DateAfter, DateBefore,
     ListAllMatch, ListAnyMatch, ListUnique, WildcardFilter,
@@ -1639,7 +1653,7 @@ ATOM_CLASSES: dict[str, type] = {cls.__name__: cls for cls in [
     FieldEq, FieldNonEmpty, FieldEmpty,
     FieldMatchesRegex, FieldNotMatchesRegex, FieldInSet, FieldNotInSet,
     FieldLenInRange, FieldNumericInRange, FieldCount, FieldEncodedAs, DNDirectoryStringValuesEncodedAs,
-    DNAttributeValuesEncodedAs, FieldContains,
+    DNAttributeValuesEncodedAs, DNAttributeTypesOnlyInSet, FieldContains,
     CrossFieldEq,
     DateAfter, DateBefore,
     ListAllMatch, ListAnyMatch, ListUnique, WildcardFilter,
@@ -2021,6 +2035,12 @@ def parse(obj: Any) -> Compound:
         if not isinstance(args[2], list):
             raise DSLError(f"{fname}: third arg must be list of ASN1_TYPEs")
         return cls(dn=str(args[0]), attr=str(args[1]), types=tuple(str(t) for t in args[2]))
+
+    if cls is DNAttributeTypesOnlyInSet:
+        _expect_args(fname, args, 2, "<dn:Subject|Issuer> [<DN_ATTR>...]")
+        if not isinstance(args[1], (list, tuple)):
+            raise DSLError(f"{fname}: second arg must be list of DN_ATTR names")
+        return cls(dn=str(args[0]), allowed_attrs=tuple(str(t) for t in args[1]))
 
     if cls is DateAfter:
         _expect_args(fname, args, 2, "<later DATE_FIELD> <earlier DATE_FIELD>")
@@ -2613,6 +2633,16 @@ def _validate(n, errs: list[str], in_item: bool):
         for t in n.types:
             if t not in V.ASN1_BY_NAME:
                 errs.append(f"unknown ASN1_TYPE '{t}'")
+        return
+
+    if isinstance(n, DNAttributeTypesOnlyInSet):
+        if n.dn not in ("Subject", "Issuer"):
+            errs.append(f"DNAttributeTypesOnlyInSet: dn must be Subject/Issuer, got '{n.dn}'")
+        if not n.allowed_attrs:
+            errs.append("DNAttributeTypesOnlyInSet: allowed_attrs cannot be empty")
+        for attr in n.allowed_attrs:
+            if attr not in V.DN_ATTR_OID_BY_NAME:
+                errs.append(f"DNAttributeTypesOnlyInSet: unknown DN_ATTR '{attr}'")
         return
 
     if isinstance(n, DateAfter):
@@ -3239,6 +3269,7 @@ ATOM_SIGNATURES = [
     ('FieldEncodedAs',      ['<FIELD>', ['<ASN1_TYPE>', '...']],     'string field encoded as one of types'),
     ('DNDirectoryStringValuesEncodedAs', ['<dn:Subject|Issuer>', ['<ASN1_TYPE>', '...']], 'every DirectoryString-syntax attribute value in the Subject/Issuer DN is encoded as one of the types; non-DirectoryString attributes (countryName, domainComponent, ...) are skipped — use for "DirectoryString attribute values MUST be PrintableString or UTF8String, with exceptions"'),
     ('DNAttributeValuesEncodedAs', ['<dn:Subject|Issuer>', '<DN_ATTR>', ['<ASN1_TYPE>', '...']], 'every present value of one named Subject/Issuer DN attribute is DER-encoded as one of the types; attribute absence passes because this is an encoding constraint, not a presence check'),
+    ('DNAttributeTypesOnlyInSet', ['<dn:Subject|Issuer>', ['<DN_ATTR>', '...']], 'every AttributeType OID in the Subject/Issuer DN is one of the supplied DN attribute names; use for source-table "Any other attribute NOT RECOMMENDED/MUST NOT" rows after the table has supplied the closed attribute allow-list'),
     ('FieldContains',       ['<STRING_FIELD>', '<char_or_substring>'], 'string field contains the given character substring; use for "@ MUST NOT appear" / "underscore MUST NOT appear" type checks'),
     ('DateAfter',           ['<DATE_FIELD>', '<DATE_FIELD>'],        'later > earlier'),
     ('DateBefore',          ['<DATE_FIELD|YYYY-MM-DD>', '<DATE_FIELD|YYYY-MM-DD>'], 'first date < second; either side can be a YYYY-MM-DD literal'),
@@ -3370,6 +3401,7 @@ def compound_to_dict(node: Compound) -> dict:
             "FieldEncodedAs",                  # types: tuple
             "DNDirectoryStringValuesEncodedAs",  # types: tuple
             "DNAttributeValuesEncodedAs",      # types: tuple
+            "DNAttributeTypesOnlyInSet",        # allowed_attrs: tuple
             "IPListAllOctetCountIn",           # counts: tuple
             "SubtreeIPListAllOctetCountIn",    # counts: tuple
             "AIAMethodLocationsTagInSet",      # allowed_tags: tuple

@@ -37,15 +37,15 @@ Return ONLY the parameter values as a JSON object, then the complete Go code in 
 def build_codegen_prompt(
     ir: Dict[str, Any],
     metadata: Dict[str, str],
-    template: Any,  # LSubclassTemplate
+    template: Any,  # legacy subclass prompt template
     few_shot_examples: List[str],
 ) -> str:
     """Build the LLM prompt for code generation.
 
     Args:
         ir: Full IR dict for the rule
-        metadata: From LSubclassTemplateLibrary.ir_to_metadata()
-        template: LSubclassTemplate for the rule's L-subclass
+        metadata: Legacy lint metadata for prompt-guided generation
+        template: Legacy prompt template for the rule's subclass
         few_shot_examples: 1-3 existing zlint Go code snippets
 
     Returns:

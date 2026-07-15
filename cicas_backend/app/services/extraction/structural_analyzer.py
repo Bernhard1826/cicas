@@ -1596,16 +1596,17 @@ class StructuralAnalyzer:
         ep_l = (enforcement_phase or '').lower()
         # only rescue categories that are NOT inherently runtime/external
         rescue_ok_category = (current_category or '') in (
-            'clarification', 'definition', 'encoding_constraint', 'structural_constraint', '',
+            'clarification', 'definition', 'comparison',
+            'encoding_constraint', 'structural_constraint', '',
         )
         if (rescue_ok_category
                 and is_single_artifact_observable(predicate_lower, assertion_subject,
                                                   subject, obligation, rule_text)):
-            if as_l == 'ca':
+            if as_l in ('ca', 'relyingparty'):
                 ir.assertion_subject = 'Certificate'
-            if ep_l in ('validation', 'processing'):
+            if ep_l in ('validation', 'processing', 'comparison'):
                 ir.enforcement_phase = 'Encoding'
-            if (current_category or '') in ('clarification', 'definition'):
+            if (current_category or '') in ('clarification', 'definition', 'comparison'):
                 ir.rule_category = 'encoding_constraint'
             ir.lintable = True
             ir.non_lintable_reason = None

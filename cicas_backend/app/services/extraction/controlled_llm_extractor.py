@@ -1290,6 +1290,8 @@ def _obligation_from_text(text: Optional[str]) -> Optional[str]:
     if not text:
         return None
     up = text.upper()
+    if re.search(r"\bNOT\s+PERMITTED\b", up):
+        return "MUST NOT"
     found = []
     for kw in _RFC2119_KEYWORDS:
         m = re.search(rf"\b{re.escape(kw)}\b", up)
@@ -2289,8 +2291,9 @@ class ControlledLLMExtractor:
             keyword_source = (provenance.get("keyword_source") or "direct") if provenance else "direct"
             skeleton_keyword = provenance.get("skeleton_keyword") if provenance else None
 
-            if skeleton_keyword:
-                # Always prefer skeleton's keyword - it was regex-matched from source text
+            if skeleton_keyword and str(skeleton_keyword).upper() != "NOISE_CANDIDATE":
+                # Prefer a real skeleton keyword - it was regex-matched from source text.
+                # NOISE_CANDIDATE is a discovery placeholder, not an obligation.
                 obligation_str = skeleton_keyword
                 app_logger.debug(
                     f"[_build_ir] Using skeleton keyword '{skeleton_keyword}' "
@@ -3204,11 +3207,11 @@ class ControlledLLMExtractor:
             except (ValueError, KeyError):
                 return val
 
-        if _v(assertion_subject).lower() == 'ca':
+        if _v(assertion_subject).lower() in ('ca', 'relyingparty'):
             assertion_subject = AssertionSubject.CERTIFICATE
-        if _v(enforcement_phase).lower() in ('validation', 'processing'):
+        if _v(enforcement_phase).lower() in ('validation', 'processing', 'comparison'):
             enforcement_phase = _mk(EnforcementPhase, 'Encoding')
-        if _v(rule_category).lower() in ('clarification', 'definition'):
+        if _v(rule_category).lower() in ('clarification', 'definition', 'comparison'):
             rule_category = _mk(RuleCategory, 'encoding_constraint')
         app_logger.debug(
             f"[_enforce_single_artifact] rescued: pred={_v(predicate)} subj={_v(subject_path)} "

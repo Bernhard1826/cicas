@@ -31,6 +31,7 @@ from app.services.extraction.lintability_guard import (
     context_lintability_assertion_subject,
     non_single_artifact_context_lintability_reason,
 )
+from app.services.certificate.codegen import vocab as cert_vocab
 from app.services.full_pipeline_extractor import FullPipelineExtractor
 
 
@@ -786,7 +787,7 @@ def _fetch_rows(conn, ids: list[int]) -> list[dict[str, Any]]:
     cur.execute(
         """
         select r.id, r.text, r.ir_data, r.lintable, r.standard_id, r.section,
-               r.title, r.rule_type, r.sentence_index, r.context,
+               r.title, r.rule_type, r.sentence_index, r.context, r.is_noise,
                s.source, s.file_path, s.title, s.version
         from rules r
         join standards s on s.id = r.standard_id
@@ -809,10 +810,11 @@ def _fetch_rows(conn, ids: list[int]) -> list[dict[str, Any]]:
                 "rule_type": rec[7] or "",
                 "sentence_index": rec[8],
                 "context": rec[9] or "",
-                "source": rec[10] or "",
-                "file_path": rec[11] or "",
-                "standard_title": rec[12] or "",
-                "version": rec[13] or "",
+                "is_noise": bool(rec[10]),
+                "source": rec[11] or "",
+                "file_path": rec[12] or "",
+                "standard_title": rec[13] or "",
+                "version": rec[14] or "",
             }
         )
     return rows
@@ -833,6 +835,7 @@ def _backup(rows: list[dict[str, Any]], backup_dir: Path) -> Path:
                         if isinstance(row["ir_data"], str)
                         else json.dumps(row["ir_data"], ensure_ascii=False),
                         "lintable": row["lintable"],
+                        "is_noise": row.get("is_noise"),
                     },
                     ensure_ascii=False,
                 )
@@ -900,6 +903,132 @@ def _apply_context_lintability_guard(row: dict[str, Any]) -> tuple[dict[str, Any
     return old_outer if isinstance(old_outer, dict) else {}, new_inner
 
 
+def _canonical_dn_attr_name(value: Any) -> str | None:
+    raw = str(value or "").strip().strip("`")
+    if not raw:
+        return None
+    if raw in cert_vocab.DN_ATTR_OID_BY_NAME:
+        return raw
+    if raw in cert_vocab.DN_FIELD_TO_ATTR_NAME:
+        return cert_vocab.DN_FIELD_TO_ATTR_NAME[raw]
+    compact = re.sub(r"[^a-z0-9]", "", raw.lower())
+    for attr in cert_vocab.DN_ATTR_OID_BY_NAME:
+        if compact == re.sub(r"[^a-z0-9]", "", attr.lower()):
+            return attr
+    for field, attr in cert_vocab.DN_FIELD_TO_ATTR_NAME.items():
+        if compact == re.sub(r"[^a-z0-9]", "", field.lower()):
+            return attr
+    return None
+
+
+def _extract_subject_attr_table_allowlist(context: str) -> list[str]:
+    lines = (context or "").splitlines()
+    target_rows = [
+        i for i, line in enumerate(lines)
+        if line.strip().startswith("|")
+        and "any other attribute" in line.lower()
+        and ("not recommended" in line.lower() or "must not" in line.lower())
+    ]
+    for idx in target_rows:
+        attrs_rev: list[str] = []
+        saw_subject_table = False
+        j = idx - 1
+        while j >= 0:
+            line = lines[j]
+            stripped = line.strip()
+            lower = stripped.lower()
+            if "table:" in lower and "`subject` attributes" in lower:
+                saw_subject_table = True
+                break
+            if stripped.startswith("|"):
+                cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+                first = cells[0] if cells else ""
+                if not first or "---" in first or "attribute name" in first.lower():
+                    j -= 1
+                    continue
+                presence = re.sub(r"\s+", " ", cells[1].lower()) if len(cells) > 1 else ""
+                if "must not" in presence:
+                    j -= 1
+                    continue
+                attr = _canonical_dn_attr_name(first)
+                if attr and attr not in attrs_rev:
+                    attrs_rev.append(attr)
+            elif attrs_rev and stripped:
+                break
+            j -= 1
+        attrs = list(reversed(attrs_rev))
+        if attrs and saw_subject_table:
+            return attrs
+    return []
+
+
+def _subject_attribute_allowlist_reextract(
+    row: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Recover "Any other subject attribute" table rows as a closed DN allow-list.
+
+    This is a deterministic re-extraction from the source table, not a DB patch:
+    it rewrites only ir_data.ir so downstream lintability/coverage/codegen derive
+    their results from structured IR.
+    """
+    blob = "\n".join(
+        str(row.get(k) or "")
+        for k in ("text", "title", "context", "_local_context")
+    ).lower()
+    if "any other attribute" not in blob:
+        return None, None
+    if "not recommended" not in blob and "must not" not in blob:
+        return None, None
+    if "`subject` attributes" not in blob and "subject attribute" not in blob:
+        return None, None
+    allowed_attrs = _extract_subject_attr_table_allowlist(row.get("_local_context") or "")
+    if not allowed_attrs:
+        return None, None
+
+    old_outer = _loads(row["ir_data"])
+    old_inner = old_outer.get("ir", old_outer)
+    new_inner = dict(old_inner) if isinstance(old_inner, dict) else {}
+    row_text = str(row.get("text") or "")
+    row_lower = row_text.lower()
+    obligation = "NOT RECOMMENDED" if "not recommended" in row_lower else "MUST NOT"
+    new_inner.update(
+        {
+            "lint_name": "subject_attribute_types_only_allowed",
+            "description": "Any other subject attribute is not recommended",
+            "subject": "subject.attributeTypes",
+            "subject_ref": {
+                "path": "subject.attributeTypes",
+                "aliases": ["subject AttributeType", "AttributeTypeAndValue.type"],
+                "field_id": None,
+                "raw": "Any other attribute",
+                "resolved": True,
+                "resolution_method": "source_table_allowlist",
+            },
+            "obligation": obligation,
+            "predicate": "must_only_include",
+            "constraint": {
+                "raw_text": f"Any other attribute {obligation}",
+                "type": "dn_attribute_allowlist",
+                "value": None,
+                "unit": None,
+                "expanded": None,
+                "min_value": None,
+                "max_value": None,
+                "pattern": None,
+                "allowed_values": allowed_attrs,
+                "asn1_types": None,
+            },
+            "assertion_subject": "Certificate",
+            "enforcement_phase": "Encoding",
+            "lintable": True,
+            "non_lintable_reason": None,
+            "rule_category": "encoding_constraint",
+            "verifiability": "observable",
+        }
+    )
+    return old_outer if isinstance(old_outer, dict) else {}, new_inner
+
+
 def _write_report(report_rows: list[dict[str, Any]], backup_dir: Path) -> Path:
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -936,6 +1065,16 @@ def main() -> int:
         "--update-text",
         action="store_true",
         help="with --commit, also persist recovered source text to rules.text when it changed",
+    )
+    ap.add_argument(
+        "--clear-noise-on-lintable",
+        action="store_true",
+        help=(
+            "with --commit, set is_noise=false when re-extraction produces "
+            "ir.lintable=true; this keeps the generated lintable column aligned "
+            "with the re-adjudicated IR instead of preserving an obsolete discovery "
+            "noise flag"
+        ),
     )
     ap.add_argument("--backup-dir", type=Path, default=Path(__file__).resolve().parent / "backups")
     args = ap.parse_args()
@@ -990,6 +1129,47 @@ def main() -> int:
             window=args.context_window,
             max_section_chars=args.max_section_chars,
         )
+        old_outer, new_inner = _subject_attribute_allowlist_reextract(row)
+        if new_inner is not None:
+            old_inner = old_outer.get("ir", old_outer) if isinstance(old_outer, dict) else {}
+            diff = _diff_summary(old_inner if isinstance(old_inner, dict) else {}, new_inner)
+            report_rows.append(
+                {
+                    "id": row["id"],
+                    "status": "matched",
+                    "match_method": "deterministic_subject_attribute_allowlist_reextract",
+                    "old_lintable": row["lintable"],
+                    "old_is_noise": row.get("is_noise"),
+                    "input_text_changed": False,
+                    "input_text": row["text"],
+                    "new_lintable": new_inner.get("lintable"),
+                    "new_is_noise": row.get("is_noise"),
+                    "new_assertion_subject": new_inner.get("assertion_subject"),
+                    "new_rule_category": new_inner.get("rule_category"),
+                    "new_non_lintable_reason": new_inner.get("non_lintable_reason"),
+                    "diff": diff,
+                }
+            )
+            print(
+                f"  R{row['id']}: subject AttributeType allow-list recovered "
+                f"({len(new_inner.get('constraint', {}).get('allowed_values') or [])} attrs)"
+            )
+            if args.commit:
+                old_outer = old_outer if isinstance(old_outer, dict) else {}
+                old_outer["ir"] = new_inner
+                cur.execute(
+                    """
+                    update rules
+                       set ir_data = %s,
+                           lint_coverage = null,
+                           lint_covered = null,
+                           lint_name = null
+                     where id = %s
+                    """,
+                    (json.dumps(old_outer, ensure_ascii=False), row["id"]),
+                )
+                wrote += 1
+            continue
         guard_reason = _context_lintability_guard(row)
         if not guard_reason:
             llm_rows.append(row)
@@ -1003,9 +1183,11 @@ def main() -> int:
                 "status": "matched",
                 "match_method": "deterministic_context_lintability_guard",
                 "old_lintable": row["lintable"],
+                "old_is_noise": row.get("is_noise"),
                 "input_text_changed": False,
                 "input_text": row["text"],
                 "new_lintable": new_inner.get("lintable"),
+                "new_is_noise": row.get("is_noise"),
                 "new_assertion_subject": new_inner.get("assertion_subject"),
                 "new_rule_category": new_inner.get("rule_category"),
                 "new_non_lintable_reason": new_inner.get("non_lintable_reason"),
@@ -1021,7 +1203,14 @@ def main() -> int:
             old_outer = old_outer if isinstance(old_outer, dict) else {}
             old_outer["ir"] = new_inner
             cur.execute(
-                "update rules set ir_data = %s where id = %s",
+                """
+                update rules
+                   set ir_data = %s,
+                       lint_coverage = null,
+                       lint_covered = null,
+                       lint_name = null
+                 where id = %s
+                """,
                 (json.dumps(old_outer, ensure_ascii=False), row["id"]),
             )
             wrote += 1
@@ -1127,9 +1316,16 @@ def main() -> int:
                         "status": "matched",
                         "match_method": match_method,
                         "old_lintable": row["lintable"],
+                        "old_is_noise": row.get("is_noise"),
                         "input_text_changed": input_text != row["text"],
                         "input_text": input_text,
                         "new_lintable": new_inner.get("lintable"),
+                        "new_is_noise": (
+                            False
+                            if args.clear_noise_on_lintable
+                            and new_inner.get("lintable") is True
+                            else row.get("is_noise")
+                        ),
                         "new_assertion_subject": new_inner.get("assertion_subject"),
                         "new_rule_category": new_inner.get("rule_category"),
                         "new_non_lintable_reason": new_inner.get("non_lintable_reason"),
@@ -1144,9 +1340,25 @@ def main() -> int:
                 if args.commit:
                     old_outer = old_outer if isinstance(old_outer, dict) else {}
                     old_outer["ir"] = new_inner
+                    clear_noise = (
+                        args.clear_noise_on_lintable
+                        and new_inner.get("lintable") is True
+                    )
                     cur.execute(
-                        "update rules set ir_data = %s where id = %s",
-                        (json.dumps(old_outer, ensure_ascii=False), row["id"]),
+                        """
+                        update rules
+                           set ir_data = %s,
+                               is_noise = case when %s then false else is_noise end,
+                               lint_coverage = null,
+                               lint_covered = null,
+                               lint_name = null
+                         where id = %s
+                        """,
+                        (
+                            json.dumps(old_outer, ensure_ascii=False),
+                            clear_noise,
+                            row["id"],
+                        ),
                     )
                     if args.update_text and input_text != row["text"]:
                         cur.execute(

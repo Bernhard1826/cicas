@@ -225,6 +225,15 @@ class DNAttributeValuesEncodedAs:
 
 
 @dataclass(frozen=True)
+class DNAttributeTypesOnlyInSet:
+    """True iff every AttributeType OID in a Subject/Issuer DN is in the
+    supplied allow-list. Empty DNs are vacuously compliant; separate rules govern
+    required attributes."""
+    dn: str
+    allowed_attrs: tuple
+
+
+@dataclass(frozen=True)
 class IsCA:
     """True iff certificate is a CA (BasicConstraintsValid && IsCA)."""
     pass

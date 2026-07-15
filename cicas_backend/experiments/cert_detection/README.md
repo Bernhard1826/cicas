@@ -5,8 +5,9 @@ separates upstream findings from CICAS-generated `cicasgen_` findings.
 
 ## Current Status
 
-Current retained run (`outputs/detection_summary.{json,md}`), after rebuilding
-zlint from the current strict shipping manifest:
+Retained fixed run (`outputs/detection_summary.{json,md}`). This is a 90-lint
+detection snapshot and was not rerun for the current 93-lint strict shipping
+manifest used by `experiments/codegen_metrics/`:
 
 | metric | value |
 |---|---:|
@@ -38,7 +39,7 @@ python scripts/reextract_specific_rules.py --problem-rules --dry-run
 python scripts/reextract_specific_rules.py --problem-rules --commit
 ```
 
-The current targeted re-extraction set is:
+The retained historical targeted re-extraction set for this detection work was:
 
 ```text
 29324, 29325, 29339, 29342, 29343, 29375, 29415, 29493,

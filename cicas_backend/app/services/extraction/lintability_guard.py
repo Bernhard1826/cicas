@@ -64,6 +64,8 @@ CROSS_OR_RUNTIME_MARKERS = [
     r"available\s+via\s+(?:http|ftp|ldap|electronic\s+mail)", r"\bis\s+revoked\b",
     r"\bocsp\b", r"current\s+time", r"\bnetwork\b", r"external\s+registr",
     r"cross[\s-]?certif", r"corresponding\s+certificate",
+    r"when\s+comparing", r"case-insensitive", r"comparing\s+dns\s+names",
+    r"evaluating\s+name\s+constraints", r"label-by-label", r"for\s+equality",
 ]
 _MARKER_RE = re.compile("|".join(CROSS_OR_RUNTIME_MARKERS), re.I)
 
@@ -117,11 +119,14 @@ _NOT_OBSERVABLE_PATTERNS = [
     #   "wherever possible"            — no determinate predicate (aspirational SHOULD)
     #   "whenever ... are to be bound" — depends on issuer intent, not cert content
     #   "the entry holding the CRL"    — names an external directory entry's content
-    #   "value derived from ..."       — real-world derivation (truth not in the bytes)
+    #   "value derived from ..."       — real-world derivation (truth not in the bytes),
+    #                                    except when the source value is explicitly
+    #                                    another certificate field such as
+    #                                    subjectAltName.
     r"\bwherever possible\b",
     r"whenever .{0,30}identities are to be bound",
     r"the entry holding the\b",
-    r"\bmust contain a value derived from\b",
+    r"\bmust contain a value derived from\b(?![^.]{0,120}\bsubjectAltName\b)",
     # real-world SEMANTIC content (truth not mechanically checkable)
     r"\bMUST (contain|include|reflect|represent)\b[^.]{0,40}\bthe (Subject|Applicant|Organization|certificate holder)\W?s?\b[^.]{0,45}(actual|real|true|legal|official|verified)?\s*(name|locality|location|address|identity|information|jurisdiction)\b",
     # actor / key-usage INTENT antecedent — the rule's applicability turns on what
@@ -305,6 +310,17 @@ _RFC_SUBJECT_NAMING_ONLY_SAN_RE = re.compile(
 )
 _RFC_SUBJECT_NAMING_ONLY_SAN_EXAMPLE_RE = re.compile(
     r"\be\.g\.\s*,?\s*a\s+key\s+bound\s+only\s+to\s+an\s+email\s+address\s+or\s+URI\b",
+    re.I,
+)
+_RFC_ONLY_SUBJECT_IDENTITY_ALTNAME_RE = re.compile(
+    r"\bonly\s+subject\s+identity\s+included\s+in\s+the\s+certificate\s+is\s+"
+    r"an\s+alternative\s+name\s+form\b",
+    re.I,
+)
+_RFC_BASICCONSTRAINTS_CA_ROLE_PRESENCE_RE = re.compile(
+    r"\bMUST\s+include\s+this\s+extension\s+in\s+all\s+CA\s+certificates\s+"
+    r"that\s+contain\s+public\s+keys\s+used\s+to\s+validate\s+digital\s+"
+    r"signatures\s+on\s+certificates\b",
     re.I,
 )
 _CSR_KEY_REQUEST_RE = re.compile(
@@ -492,6 +508,20 @@ def non_single_artifact_lintability_reason(rule_text) -> str | None:
             "intent before that choice was made, so strict equivalence is not "
             "decidable from one certificate's encoded bytes"
         )
+    if _RFC_ONLY_SUBJECT_IDENTITY_ALTNAME_RE.search(text):
+        return (
+            "rule applicability depends on whether the only subject identity is "
+            "an alternative name form; that issuer identity-selection condition "
+            "is not an independent closed single-certificate predicate, so a "
+            "strictly equivalent non-vacuous lint cannot be generated"
+        )
+    if _RFC_BASICCONSTRAINTS_CA_ROLE_PRESENCE_RE.search(text):
+        return (
+            "rule requires BasicConstraints presence for certificates that are CA "
+            "certificates by role and whose keys validate certificate signatures; "
+            "when BasicConstraints is absent, that CA-role applicability is not "
+            "independently decidable from one certificate's encoded bytes"
+        )
     if _OPEN_ENDED_ENUMERATION_RE.search(text):
         return (
             "rule text contains an open-ended 'or similar ...' set, so the "
@@ -574,11 +604,11 @@ def is_single_artifact_observable(predicate, assertion_subject, subject_path,
     real certificate/CRL field (see module docstring for the full soundness contract)."""
     if _norm(predicate).lower() not in OBSERVABLE_PREDICATES:
         return False
-    # CA is accepted here only as an extraction-axis repair candidate.  The final
+    # CA/RelyingParty are accepted here only as extraction-axis repair candidates. The final
     # lintability gate still requires assertion_subject=Certificate; callers that
-    # use this helper must rewrite CA to Certificate when the subject path proves
-    # the rule constrains certificate bytes rather than CA process.
-    if _norm(assertion_subject).lower() not in ("certificate", "crl", "ca"):
+    # use this helper must rewrite them to Certificate when the subject path
+    # proves the rule constrains certificate bytes rather than actor behavior.
+    if _norm(assertion_subject).lower() not in ("certificate", "crl", "ca", "relyingparty"):
         return False
     if _norm(obligation).upper().replace("_", " ") not in NORMATIVE_OBLIGATIONS:
         return False

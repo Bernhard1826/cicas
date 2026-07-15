@@ -475,7 +475,7 @@ def _walk_atom_ops(obj) -> Iterable[str]:
             yield from _walk_atom_ops(item)
 
 
-def _atom_genericity_summary(rows: list[dict]) -> dict:
+def _atom_genericity_summary(rows: list[dict], row_set_label: str | None = None) -> dict:
     buckets = Counter()
     non_generic_freq = Counter()
     unknown_freq = Counter()
@@ -497,16 +497,26 @@ def _atom_genericity_summary(rows: list[dict]) -> dict:
             buckets["non_generic_only"] += 1
         else:
             buckets["generic_only"] += 1
+    total = len(rows)
+    containing_generic = buckets["generic_only"] + buckets["generic_and_non_generic"]
     return {
         "definition": (
-            "final-shipping strict EXPRESS rows; counts atomic DSL ops in tree "
+            f"{row_set_label or 'selected rows'}; counts atomic DSL ops in tree "
             "and precondition; logical combinators And/Or/Not/When are excluded"
         ),
-        "total": len(rows),
+        "total": total,
         "generic_only": buckets["generic_only"],
         "generic_and_non_generic": buckets["generic_and_non_generic"],
+        "containing_generic": containing_generic,
         "non_generic_only": buckets["non_generic_only"],
         "unknown": buckets["unknown"],
+        "shares": {
+            "generic_only": _rate(buckets["generic_only"], total),
+            "generic_and_non_generic": _rate(buckets["generic_and_non_generic"], total),
+            "containing_generic": _rate(containing_generic, total),
+            "non_generic_only": _rate(buckets["non_generic_only"], total),
+            "unknown": _rate(buckets["unknown"], total),
+        },
         "non_generic_atom_frequency": dict(sorted(non_generic_freq.items())),
         "unknown_atom_frequency": dict(sorted(unknown_freq.items())),
     }
@@ -578,12 +588,20 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             r for r in src_ship_judged
             if _shipping_gate(r) == "EXPRESSES"
         ]
+        src_ship_unanimous = [
+            r for r in src_ship_judged
+            if _shipping_unanimous(r)
+        ]
         src_ship_uncertain = [r for r in src_ship_judged if _shipping_gate(r) == "UNCERTAIN"]
         src_ship_with_rejudge_error = [r for r in src_ship_judged if r.get("ship_rejudge_error")]
         src_ship_clean_judged = [r for r in src_ship_judged if not r.get("ship_rejudge_error")]
         src_ship_clean_exp = [
             r for r in src_ship_clean_judged
             if _shipping_gate(r) == "EXPRESSES"
+        ]
+        src_ship_clean_unanimous = [
+            r for r in src_ship_clean_judged
+            if _shipping_unanimous(r)
         ]
         by_source[source] = {
             "domain_total": len(ids),
@@ -599,8 +617,22 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             "final_shipping_clean_judged": len(src_ship_clean_judged),
             "final_shipping_clean_expresses": len(src_ship_clean_exp),
             "final_shipping_clean_rate_over_domain": _rate(len(src_ship_clean_exp), len(ids)),
-            "final_shipping_unanimous_expresses": sum(1 for r in src_ship_judged if _shipping_unanimous(r)),
-            "final_shipping_clean_unanimous_expresses": sum(1 for r in src_ship_clean_judged if _shipping_unanimous(r)),
+            "final_shipping_unanimous_expresses": len(src_ship_unanimous),
+            "final_shipping_unanimous_rate_over_domain": _rate(len(src_ship_unanimous), len(ids)),
+            "final_shipping_clean_unanimous_expresses": len(src_ship_clean_unanimous),
+            "final_shipping_clean_unanimous_rate_over_domain": _rate(len(src_ship_clean_unanimous), len(ids)),
+            "paper_synonymy_expresses": len(src_ship_unanimous),
+            "paper_synonymy_rate_over_generated": _rate(len(src_ship_unanimous), len(src_gen)),
+            "paper_synonymy_rate_over_domain": _rate(len(src_ship_unanimous), len(ids)),
+            "paper_synonymy_non_unanimous_80pct_diagnostics": len(src_ship_exp) - len(src_ship_unanimous),
+            "atom_genericity": _atom_genericity_summary(
+                src_ship_unanimous,
+                row_set_label="final emitted zlint lints with unanimous EXPRESS",
+            ),
+            "atom_genericity_80pct_expresses": _atom_genericity_summary(
+                src_ship_exp,
+                row_set_label="final emitted zlint lints passing the 80% EXPRESS diagnostic gate",
+            ),
             "diagnostic_row_level": {
                 "judged": len(src_judged),
                 "not_judged": len(src_gen) - len(src_judged),
@@ -645,6 +677,14 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             "row-fragment synonymy is diagnostic only; gate is verdict=EXPRESSES "
             "and at least ceil(0.8*k) EXPRESS votes"
         ),
+        "paper_synonymy_definition": (
+            "paper-facing synonymy numerator: final emitted in-tree zlint lint semantics "
+            "vs original rule text/context with unanimous EXPRESS votes and no DNE/error votes"
+        ),
+        "paper_synonymy_expresses": len(ship_unanimous),
+        "paper_synonymy_rate_over_generated": _rate(len(ship_unanimous), generated_count),
+        "paper_synonymy_rate_over_domain": _rate(len(ship_unanimous), total),
+        "paper_synonymy_non_unanimous_80pct_diagnostics": len(ship_expresses) - len(ship_unanimous),
         "final_shipping_strict_judged": len(ship_judged),
         "final_shipping_strict_not_judged": generated_count - len(ship_judged),
         "final_shipping_strict_expresses": len(ship_expresses),
@@ -658,8 +698,10 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         "final_shipping_clean_rate_over_generated": _rate(len(ship_clean_expresses), generated_count),
         "final_shipping_clean_rate_over_domain": _rate(len(ship_clean_expresses), total),
         "final_shipping_unanimous_expresses": len(ship_unanimous),
+        "final_shipping_unanimous_rate_over_generated": _rate(len(ship_unanimous), generated_count),
         "final_shipping_unanimous_rate_over_domain": _rate(len(ship_unanimous), total),
         "final_shipping_clean_unanimous_expresses": len(ship_clean_unanimous),
+        "final_shipping_clean_unanimous_rate_over_generated": _rate(len(ship_clean_unanimous), generated_count),
         "final_shipping_clean_unanimous_rate_over_domain": _rate(len(ship_clean_unanimous), total),
         "diagnostic_row_level": {
             "judged": len(judged),
@@ -689,7 +731,19 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
             }
             for method, count in sorted(by_method.items())
         },
-        "atom_genericity": _atom_genericity_summary(ship_expresses),
+        "atom_genericity": _atom_genericity_summary(
+            ship_unanimous,
+            row_set_label="final emitted zlint lints with unanimous EXPRESS",
+        ),
+        "atom_genericity_80pct_expresses": _atom_genericity_summary(
+            ship_expresses,
+            row_set_label="final emitted zlint lints passing the 80% EXPRESS diagnostic gate",
+        ),
+        "atom_registry": {
+            "total": len(dsl.ATOM_CLASSES),
+            "generic": len(dsl.GENERIC_ATOMS),
+            "non_generic": len(dsl.NON_GENERIC_ATOMS),
+        },
         "code_eq_ir_certified": sum(1 for r in generated if r.get("code_eq_ir_certified")),
         "rule_errors": len(errors),
         "pending": total - len(scoped_latest),
@@ -771,19 +825,19 @@ def _write_row_level_expresses_index(run_dir: Path, latest: dict[int, dict],
 
 def _write_shipping_index(run_dir: Path, latest: dict[int, dict],
                           domain_ids: set[int] | None = None) -> list[dict]:
-    """Strict shipped-lint manifest.
+    """Paper-facing shipped-lint manifest.
 
-    Only rows whose final in-tree zlint semantics have been separately judged
-    synonymous with the available original rule context may appear here.  The
+    Only rows whose final in-tree zlint semantics receive unanimous EXPRESS
+    votes against the available original rule context may appear here.  The
     ``synonymous_lints_manifest`` filename is kept as a compatibility alias for
-    this paper-facing final-shipping strict manifest.
+    this paper-facing unanimous manifest.
     """
     rows = []
     for row in latest.values():
         rid = row.get("rule_id")
         if domain_ids is not None and int(rid or 0) not in domain_ids:
             continue
-        if _shipping_gate(row) != "EXPRESSES":
+        if not _shipping_unanimous(row):
             continue
         rendered = row.get("rendered_lint") or {}
         output_path = rendered.get("output_path")
@@ -803,6 +857,7 @@ def _write_shipping_index(run_dir: Path, latest: dict[int, dict],
                 "row_synonymy_verdict": row.get("synonymy", {}).get("verdict"),
                 "shipping_synonymy_verdict": row.get("ship_synonymy", {}).get("verdict"),
                 "shipping_gate_verdict": _shipping_gate(row),
+                "shipping_unanimous": True,
                 "shipping_n_expresses": row.get("ship_synonymy", {}).get("n_expresses"),
                 "shipping_k": row.get("ship_synonymy", {}).get("k"),
             }
@@ -844,12 +899,14 @@ def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = Non
             summary = {}
         summary["synonymous_lints_manifest"] = str(run_dir / "synonymous_lints_manifest.json")
         summary["shipping_lints_manifest"] = str(run_dir / "shipping_lints_manifest.json")
+        summary["paper_synonymy_manifest"] = str(run_dir / "shipping_lints_manifest.json")
         summary["diagnostic_row_level_lints_manifest"] = str(
             run_dir / "diagnostic_row_level_lints_manifest.json"
         )
         summary["diagnostic_row_level_lints_manifest_count"] = len(rows)
         summary["synonymous_lints_manifest_count"] = len(ship_rows)
         summary["shipping_lints_manifest_count"] = len(ship_rows)
+        summary["paper_synonymy_manifest_count"] = len(ship_rows)
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -918,6 +975,16 @@ def _full_rule_context(rule: dict) -> str:
         pieces.append(f"Profile/table context: {rule.get('profile_scope')}")
     if rule.get("nearby_section_rows"):
         pieces.append(f"Nearby rows from the same source section/table:\n{rule.get('nearby_section_rows')}")
+    modal_blob = " ".join(
+        str(x or "")
+        for x in (rule.get("text"), rule.get("nearby_section_rows"), rule.get("title"))
+    )
+    if "NOT RECOMMENDED" in modal_blob or "SHOULD NOT" in modal_blob:
+        pieces.append(
+            "Normative modal note: NOT RECOMMENDED / SHOULD NOT is an "
+            "advisory discouragement (a warning-level requirement), not a "
+            "prohibition. MUST NOT / SHALL NOT is the prohibitive modal."
+        )
     source_name = rule.get("source") or ""
     section_name = str(rule.get("section") or "")
     row_text = rule.get("text") or ""
@@ -1513,10 +1580,10 @@ def main() -> int:
             append_jsonl(ledger, rec)
             summary = summarize(domain, ledger, summary_path)
             export_synonymous_from_ledger(run_dir, domain)
-            sr = summary["final_shipping_strict_rate_over_domain"]
+            sr = summary["final_shipping_unanimous_rate_over_domain"]
             print("[progress] completed={completed}/{domain_total} generated={generation_success} "
-                  "shipping_strict={final_shipping_strict_expresses} "
-                  "gen_rate={generation_rate:.3f} shipping_e2e={sr}".format(
+                  "shipping_unanimous={final_shipping_unanimous_expresses} "
+                  "gen_rate={generation_rate:.3f} synonymy_e2e={sr}".format(
                       **{**summary, "sr": f"{sr:.3f}" if sr is not None else "NA"}), flush=True)
 
     summary = summarize(domain, ledger, summary_path)

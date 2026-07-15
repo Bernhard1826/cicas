@@ -53,7 +53,7 @@ counts below are unchanged; rerun the corpus scans to refresh raw
 - `inputs/ct_recent/` -> `outputs/ct_recent/`
 - `inputs/tranco_1m/` -> `outputs/tranco_1m/`
 
-Current retained strict-shipping scan result:
+Retained 90-lint scan result:
 
 - `ct_recent`: 63,327 certs scanned; 57,558 CICAS findings; 283 no-upstream
   findings independently audited; 1 strict reportable finding.

@@ -42,7 +42,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from ..codegen import dsl
+from ..codegen import dsl, vocab as V
 
 
 # ---- Subject resolution ----
@@ -1567,6 +1567,7 @@ def ir_to_dsl(rule_id: int, ir: dict) -> Optional[dsl.AND]:
         or _rsa_key_param_atom(subject, pred_raw, c) \
         or _sig_alg_match_atom(subject, c) or _cn_from_san_atom(subject, c) \
         or _no_expiry_sentinel_atom(subject, c) \
+        or _dn_attribute_allowlist_atom(subject, pred_raw, c) \
         or _cert_version_atom(ir, subject, pred_raw, c)
     if atom is None:
         if subj_kind == "unresolved":
@@ -1902,6 +1903,51 @@ def _cert_version_atom(ir, subject, pred, c):
             val = av[0]
     n = _version_to_int(val)
     return dsl.FieldEq("Version", n) if n is not None else None
+
+
+def _norm_dn_attr_name(value) -> str | None:
+    raw = str(value or "").strip().strip("`")
+    if not raw:
+        return None
+    if raw in V.DN_ATTR_OID_BY_NAME:
+        return raw
+    if raw in V.DN_FIELD_TO_ATTR_NAME:
+        return V.DN_FIELD_TO_ATTR_NAME[raw]
+    compact = re.sub(r"[^a-z0-9]", "", raw.lower())
+    for attr in V.DN_ATTR_OID_BY_NAME:
+        if compact == re.sub(r"[^a-z0-9]", "", attr.lower()):
+            return attr
+    for field, attr in V.DN_FIELD_TO_ATTR_NAME.items():
+        if compact == re.sub(r"[^a-z0-9]", "", field.lower()):
+            return attr
+    return None
+
+
+def _dn_attribute_allowlist_atom(subject, pred, c):
+    """DN AttributeType closed-set constraint from source-table extraction.
+
+    The reducer only consumes structured IR: constraint.type marks a DN
+    AttributeType allow-list and allowed_values carries concrete X.520/CABF
+    attribute names. It does not infer the list from a rule id or partial prose.
+    """
+    ctype = (c.get("type") or "").lower()
+    if ctype not in {"dn_attribute_allowlist", "attribute_allowlist", "dn_attribute_type_allowlist"}:
+        return None
+    vals = c.get("allowed_values") or c.get("allowed_attrs") or c.get("attribute_allowlist")
+    if not isinstance(vals, list) or not vals:
+        return None
+    pred_lc = (pred or "").lower()
+    if pred_lc not in {"must_only_include", "allowed_values", "must_be_in_set", "conform_to"}:
+        return None
+    holder = "Issuer" if str(subject or "").lower().startswith("issuer") else "Subject"
+    attrs = []
+    for val in vals:
+        attr = _norm_dn_attr_name(val)
+        if attr and attr not in attrs:
+            attrs.append(attr)
+    if not attrs:
+        return None
+    return dsl.DNAttributeTypesOnlyInSet(holder, tuple(attrs))
 
 
 # ---- Extension URI scheme guard ----
