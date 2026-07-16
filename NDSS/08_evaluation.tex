@@ -67,16 +67,10 @@ certified \CodeEqIR{} by certificate-level execution verification are reported
 only as collateral IR-level evidence: \CodeEqIR{} is model-independent and
 deterministic, yet it does not by itself imply \CodeEqSpec, so the paper-facing
 synonymy rate is taken solely from the final emitted code judged against the
-source rule. Any reduction of the denominator therefore comes from re-extraction
-and lintability re-adjudication rather than from local metric filters; e.g.,
-R31068 (RFC~5280~\S4.2.1.6) was re-adjudicated as not lintable because a single
-certificate exposes only the chosen GeneralName tag and its value, not the
-issuer's pre-encoding intent.
+source rule. 
 
 The first-layer quality signal is G1 conservation (Theorem~\ref{thm:recall},
-\S\ref{subsec:targets}): the total number of keyword-recalled rules should
-neither increase nor decrease in any downstream classification step. Under the
-current snapshot, conservation holds strictly:
+\S\ref{subsec:targets}). Under the current snapshot, conservation holds strictly:
 \[
   \underbrace{2080}_{\text{recall}} \;=\; \underbrace{529}_{\text{noise}} +
   \underbrace{1551}_{\text{genuine}}, \quad
@@ -95,16 +89,14 @@ into 170 CABF and 78 RFC~5280; of these zlint fully covers 158, leaving
 Answering ``how many lintable rules do existing tools cover'' hinges on using
 the right criterion. We use ``whether the lintable rule is genuinely implemented
 by some cognate zlint lint'' as the criterion: for each rule we retrieve
-candidate zlint lints, then compare field by field (subject / obligation /
-predicate / constraint), giving a three-level verdict full (fully implemented) /
+candidate zlint lints, then compare field by field, giving a three-level verdict full (fully implemented) /
 partial (partially implemented) / none (not implemented).
 
-Fig.~\ref{alg:coverage} formalizes this determination: summarize a lint
+Algorithm~\ref{alg:coverage} formalizes this determination: summarize a lint
 into a reverse IR, then align field by field; candidate retrieval is by
 source/section (Stage-1: RFC section numbers are stable and narrowed by prefix,
 while CABF section numbers drift across versions so all CABF lints are taken),
-with an added ``wrong-field'' consistency gate (Stage-3, only downgrades), and
-coverage counts only full (Stage-4; partial/none go to $\phi_G$).
+and coverage counts only full (Stage-4; partial/none go to $\phi_G$).
 
 \input{algorithms/alg_coverage}
 
@@ -167,7 +159,7 @@ rule extraction and lintability determination match human experts. The table
 covers two versions, BR~1.4.8~\cite{cabf-br148-md} and BR~2.0.2~\cite{cabf-br202-md}, compared version-for-version against
 our CABF-Server-1.4.8 backend (422 rules) and CABF-Server-2.0.2
 backend (1024 rules) extracted by the same two-layer
-pipeline.
+pipeline. Table~\ref{tab:extval} reports the version-for-version agreement.
 
 \begin{table}[tb]
 \centering
@@ -186,7 +178,13 @@ BR~2.0.2 & 250 (17/233) & 86.8\% & 96.8\% & 0.616 & 0.632 \\
 \end{tabular}
 \end{table}
 
-A small number of sheet rows fall outside our scope---title-case or lowercase descriptors such as ``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing correctly skips, and, on the BR~2.0.2 sheet, cross-references or chapter anchors with no matching backend clause---so match coverage is near 87\% on both versions. On BR~2.0.2 the matched positive class is very small (12 of 217 matched pairs, 5.5\%), so a naive all-No baseline already attains 94.5\% agreement; thus $\kappa = 0.616$ is the more meaningful figure, and the positive-class metrics ($P = 0.857$, $R = 0.50$, $n = 12$) carry correspondingly wide confidence intervals. BR~1.4.8 has more balanced classes (69 of 106 matched pairs positive, 65\%) and yields $\kappa = 0.823$ with positive-class $F_1 = 0.930$ and zero false positives, a tighter estimate of system quality.
+A small number of sheet rows fall outside our scope---title-case or lowercase descriptors such as ``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing correctly skips, and, on the BR~2.0.2 sheet, cross-references or chapter anchors with no matching backend clause---so match coverage is near 87\% on both versions. On BR~2.0.2 the matched positive class is very small (12 of 217 matched pairs, 5.5\%), so a naive all-No baseline already attains 94.5\% agreement; thus $\kappa = 0.616$
+(substantial agreement on the Landis--Koch scale~\cite{landis1977measurement}) is
+the more meaningful figure, and the positive-class metrics ($P = 0.857$, $R = 0.50$,
+$n = 12$) carry correspondingly wide confidence intervals. BR~1.4.8 has more balanced
+classes (69 of 106 matched pairs positive, 65\%) and yields $\kappa = 0.823$
+(almost-perfect agreement) with positive-class $F_1 = 0.930$ and zero false
+positives, a tighter estimate of system quality.
 
 This external validation checks the first half of the system. On
 BR~1.4.8, $\kappa = 0.823$ and Yes recall 87.0\% indicate that our rule
@@ -207,7 +205,7 @@ certificates checks code generation and synonymy judgment. We count a hit as a
 valid finding only when three conditions hold: the final zlint code's semantics
 have been checked back to the source text, the certificate yields a non-pass
 result, and an independent structural audit re-derives the same defect from the
-DER / \texttt{openssl}; on external corpora we additionally require that no native
+DER / openssl; on external corpora we additionally require that no native
 zlint lint flags the same certificate, so that existing coverage is not
 miscredited to a generated lint. The unit is a (certificate $\times$ lint)
 finding. The corpus first uses zlint's own testdata as a gate rather than an
@@ -252,7 +250,7 @@ Warn & Root CA Certificate SHOULD NOT contain CRL Distribution Points
 \end{tabular}
 \end{table*}
 
-The testdata column sums to 299 confirmed fixture findings (251 Error $+$ 48
+The testdata column of Table~\ref{tab:certfind} sums to 299 confirmed fixture findings (251 Error $+$ 48
 Warn); Tranco contributes 6 and CT 1, i.e., 7 findings by source. We read
 severity conservatively: the Certificate-Policies and AKI violations are
 Error-level profile faults whose direct cryptographic consequence is indirect,

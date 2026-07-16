@@ -178,4 +178,7 @@ The obligation field also fixes the lint severity. MUST-class obligations map to
 
 The three non-deontic conditions encode three orthogonal boundaries. $C_2$ is the \emph{subject boundary}, separating obligations on the certificate from obligations on the CA, relying party, or surrounding ecosystem. $C_3$ is the \emph{runtime boundary}, separating obligations observable in the issued bytes from those that fire during chain processing, name comparison, revocation handling, or CAA retrieval. $\neg C_4$ is the \emph{process boundary}, separating state assertions from terms in $\mathcal{N}$.
 
-Since each $C_i$ is a deterministic function of one IR field, $\mathrm{lintable}(r)$ is \emph{computed} from the IR rather than predicted by the LLM. The same normative rule IR yields the same label bit-for-bit on every run, and any misclassification is traceable to a specific Layer~2 field assignment.
+Since each $C_i$ is a deterministic function of one IR field, the lintability
+decision---which adopts the conjunction $C_1\wedge C_2\wedge C_3\wedge\neg C_4$ of
+these necessary conditions as its operational criterion---is \emph{computed} from
+the IR rather than predicted by the LLM. The same normative rule IR yields the same label bit-for-bit on every run, and any misclassification is traceable to a specific Layer~2 field assignment.

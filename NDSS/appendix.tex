@@ -7,7 +7,8 @@
 
 GraphRAG retrieval (\S\ref{sec:method-graphrag}) builds context around a set of
 core relations and explicitly distinguishes ``relations admissible into
-retrieval'' from ``relations used only in post-processing.'' The retrieval stage
+retrieval'' from ``relations used only in post-processing''
+(Table~\ref{tab:kgrel}). The retrieval stage
 obeys four constraints (GR-1 to GR-4): no inferred normative rule may enter
 retrieval; only raw specification nodes may enter retrieval; no inferential
 relation may enter retrieval; and all context must be traceable to a
@@ -45,7 +46,7 @@ inferred & CONFLICTS WITH & potential conflict between rules (produced by the
 \label{app:ir}
 
 The system internally uses a machine-readable IR object (JSON-serialized).
-Beyond the core four-tuple of \S\ref{sec:method-dual-layer}, its key fields are as follows;
+Beyond the core four-tuple of \S\ref{sec:method-dual-layer}, its key fields are listed in Table~\ref{tab:irfields};
 the remaining fields support provenance, normalization, matching, and downstream
 product generation. The lintability decision (\S\ref{sec:lintability}) directly
 uses only the four fields obligation, assertion\_subject, enforcement\_phase, and
@@ -324,7 +325,7 @@ $\phi_G$ (restricted to the DSL code space $\Tv$ of \S\ref{sec:codegen})
 synthesizes checking code, and the verification module $\phi_V$ (the three-layer
 semantic alignment of \S\ref{sec:codegen}) handles acceptance. Here $\phi_C$ is
 the single-rule lintability predicate defined in \S\ref{sec:lintability}
-($r \mapsto \{0,1\}$); the $\psi_C$ appearing in Fig.~\ref{alg:saiv} is its
+($r \mapsto \{0,1\}$); the $\psi_C$ appearing in Algorithm~\ref{alg:saiv} is its
 set-level lift: it first removes Layer-1 false positives from the
 keyword-recall set $\Rkw$ to obtain the noise set $\RN$, then applies $\phi_C$
 rule by rule to the remaining genuine rules, outputting the three-way partition
@@ -344,14 +345,15 @@ the pipeline is deemed to have converged. The three residuals differ in form.
 \medskip
 \noindent\textbf{G1 (recall completeness).}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
-If $\phi_R$ performs regex matching triggered by RFC~2119 keywords, then the
-following conservation relation holds:
+If the classification $\psi_C$ assigns each keyword-recalled candidate in
+$\Rkw(\mathcal{D})$ to exactly one of the three classes---noise, lintable, and
+not-lintable---then recall is conserved from recall to classification:
 \begin{equation}\label{eq:cons}
   |\Rkw(\mathcal{D})| = |\RN| + |\RL| + |\RU|
 \end{equation}
 \end{theorem}
 \noindent where $\mathcal{D}$ is the standard-document corpus (written D in
-ASCII inside the Fig.~\ref{alg:saiv} listing), $\RN$ is noise (containing
+ASCII inside the Algorithm~\ref{alg:saiv} listing), $\RN$ is noise (containing
 RFC~2119 keywords but not genuine rules), $\RL$ the lintable rules, and $\RU$
 the not-lintable rules. The executable class $\RL$ is further split by ``whether
 it is already implemented by an existing external lint tool'':
@@ -414,7 +416,7 @@ G3 Dual-verdict consistency & $\Nviol$ (\S\ref{subsec:algo}) &
 \end{tabular}
 \end{table*}
 
-The table gives only the objective-to-repair-direction correspondence; the
+The table (Table~\ref{tab:saiv-objectives}) gives only the objective-to-repair-direction correspondence; the
 concrete repair operations and their notation are defined in
 \S\ref{subsec:repair}.
 
@@ -463,7 +465,7 @@ accepted only when the metric decreases.
 \subsection{Iteration Algorithm and Termination Conditions}
 \label{subsec:algo}
 
-Fig.~\ref{alg:saiv} gives the full procedure.
+Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
@@ -550,7 +552,7 @@ and it is accepted, then after one round $\Nviol$ strictly decreases to $0$.
 \begin{proof}
 Let $\mathrm{cov}_{\mathcal{T}}(r) \in \{\text{full}, \text{partial},
 \text{none}\}$ be the coverage tier of rule $r$ by the external tool (zlint)
-(Fig.~\ref{alg:coverage}, \S\ref{subsec:coverage}), and $\phi_C$ the
+(Algorithm~\ref{alg:coverage}, \S\ref{subsec:coverage}), and $\phi_C$ the
 lintability predicate of \S\ref{sec:lintability}. Let the violation set be
 $\mathcal{W} = \{r : \mathrm{cov}_{\mathcal{T}}(r) \in \{\text{full},
 \text{partial}\} \wedge \phi_C(r) \neq \mathrm{lintable}\}$ (using $\mathcal{W}$

@@ -1,10 +1,18 @@
-% Algorithm 1 -- Stage-Aware Iterative Verification (SAIV).
+% Algorithm 2 -- Stage-Aware Iterative Verification (SAIV).
 % Included from the SAIV section of appendix.tex via \input{algorithms/alg_saiv}.
 \begin{figure*}[tb]
-\caption{Algorithmic listing for Stage-Aware Iterative Verification (SAIV);
-an automatic gate handles
-in-loop acceptance.}
+\makeatletter
+\@ifundefined{c@algorithm}{%
+  \newcounter{algorithm}%
+  \renewcommand{\thealgorithm}{\arabic{algorithm}}%
+}{}%
+\makeatother
+\refstepcounter{algorithm}
 \label{alg:saiv}
+\noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for
+Stage-Aware Iterative Verification (SAIV); an automatic gate handles in-loop
+acceptance.
+\par\smallskip
 \small
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} standard documents $D$, threshold $\theta$, max iterations $K$
@@ -12,7 +20,7 @@ in-loop acceptance.}
 \State $\Rkw \gets \phi_R(D)$;\quad $(\RN,\RL,\RU)\gets \psi_C(\Rkw)$
   \Comment{$\RU=$ not lintable}
 \State $(\RLcov,\RLunc)\gets \textsc{Coverage}(\RL)$
-  \Comment{Fig.~\ref{alg:coverage}}
+  \Comment{Algorithm~\ref{alg:coverage}}
 \State $C \gets \{\phi_G(r): r\in \RLunc\}$
 \State $t\gets 0$
 \Repeat

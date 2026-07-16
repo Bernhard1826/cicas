@@ -1,6 +1,6 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algpseudocode} % algorithmicx syntax inside IEEE figure floats
+\usepackage{algpseudocode} % algorithmicx syntax inside custom algorithm listing floats
 \usepackage{array}
 \usepackage{graphicx}
 \usepackage{textcomp}
@@ -26,3 +26,8 @@
 \newcommand{\etal}{et al. }
 \newcommand{\ie}{i.e., }
 \newcommand{\eg}{e.g., }
+
+% Algorithm listings use algorithmicx inside ordinary IEEE floats, but keep an
+% independent counter so they are referenced as algorithms rather than figures.
+\newcounter{algorithm}
+\renewcommand{\thealgorithm}{\arabic{algorithm}}

@@ -1,9 +1,17 @@
-% Algorithm 2 -- zlint coverage-alignment determination for lintable rules.
+% Algorithm 1 -- zlint coverage-alignment determination for lintable rules.
 % Included from sections/08_evaluation.tex via \input{algorithms/alg_coverage}.
 \begin{figure*}[tb]
-\caption{Algorithmic listing for zlint coverage-alignment determination
-(rule-indexed).}
+\makeatletter
+\@ifundefined{c@algorithm}{%
+  \newcounter{algorithm}%
+  \renewcommand{\thealgorithm}{\arabic{algorithm}}%
+}{}%
+\makeatother
+\refstepcounter{algorithm}
 \label{alg:coverage}
+\noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for zlint
+coverage-alignment determination (rule-indexed).
+\par\smallskip
 \small
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} lintable rule set $B=\{b_1,\dots,b_m\}$ (each with IR four-tuple

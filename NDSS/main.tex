@@ -88,9 +88,7 @@
 \begin{document}
 %-------------------------------------------------------------------------------
 
-\title{From PKI Standards to Compliance-Checking Code:\\
-  An End-to-End Framework for Rule Extraction, Lintability Determination,\\
-  and Verifiable Code Generation}
+\title{Compiling PKI Standards into Compliance-Checking Code}
 
 % Author block (project file --- fill in the real names/affiliations there).
 \input{authors}
@@ -124,34 +122,6 @@
 \input{08_evaluation}
 \input{09_discussion}
 \input{10_conclusion}
-
-%-------------------------------------------------------------------------------
-% Required venue sections (kept verbatim from the source paper).
-%-------------------------------------------------------------------------------
-\section*{Ethical Considerations}
-This work analyzes only publicly available material: the text of open PKI
-specifications (RFC~5280, the CA/Browser Forum Baseline Requirements) and
-publicly observable certificates (TLS handshakes to the Tranco top-1M domains
-and samples drawn from public Certificate Transparency logs). No private data,
-credentials, or human subjects are involved, and no live system is probed or
-attacked. The generated lints are analysis artifacts run offline against
-certificate bytes; the paper deliberately reports structural findings without
-overstating them as ecosystem-wide misissuance rates, and every
-certificate-level finding is gated behind an independent structural audit
-before being reported. We see no foreseeable harm from releasing the method,
-the generated checks, or the aggregate statistics.
-
-\section*{Open Science}
-In line with the venue's open-science policy, we will make available the
-artifacts needed to reproduce our results: the specification-to-IR extraction
-pipeline, the frozen typed vocabulary $\mathcal{V}$ and the finite
-atomic-template set $\mathcal{A}$, the deterministic renderer and mechanical
-translator, the generated cicasgen\_* lints, the coverage-alignment
-and synonymy-judgment harnesses, and the evaluation corpora manifests (the
-zlint maintainer scope-mapping sheets and the certificate hashes used for the
-Tranco/CT scans). Deterministic components (recall conservation, lintability
-gating, coverage aggregation, certificate-level execution verification) can be
-recomputed exactly from the released inputs.
 
 \appendices
 \input{appendix}

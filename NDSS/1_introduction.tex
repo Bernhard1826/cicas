@@ -13,7 +13,7 @@ These incidents have already translated into ecosystem-wide policy changes.
 The CA/Browser Forum mandated pre-issuance linting for all publicly trusted CAs beginning March~15,~2025~\cite{cabf-sc75-2024}.
 Subsequently, Ballot~SC-081v3~\cite{cabf-sc081v3} introduced a progressive reduction of TLS certificate validity periods to 47~days, substantially increasing certificate issuance frequency and the operational demand for automated compliance verification.
 
-Currently, certificate compliance analysis relies primarily on static certificate linting tools, such as ZLint~\cite{kumar2018tracking}, pkilint~\cite{pkilint}, certlint~\cite{certlint}, and x509lint~\cite{x509lint}, which are widely integrated into Certificate Transparency (CT) monitoring and CA issuance pipelines.
+Currently, certificate compliance analysis relies primarily on static certificate linting tools, such as zlint~\cite{kumar2018tracking}, pkilint~\cite{pkilint}, certlint~\cite{certlint}, and x509lint~\cite{x509lint}, which are widely integrated into Certificate Transparency (CT) monitoring and CA issuance pipelines.
 However, these tools depend heavily on manual rule engineering: compliance checks must be individually implemented and continuously maintained by PKI experts as Web PKI normative sources are revised.
 As certificate issuance volume and specification complexity continue to grow, this approach becomes increasingly difficult to scale.
 
