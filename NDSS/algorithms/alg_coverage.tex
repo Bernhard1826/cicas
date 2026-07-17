@@ -22,8 +22,8 @@ coverage-alignment determination (rule-indexed).
   (temperature $=0$)
 \Statex \textbf{Output:} per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
   none}\}$, covered set, and codegen domain $\phi_G$
-\Statex \textit{// Stage-0 (offline, cached): summarize each lint into a reverse
-  IR}
+\Statex // Stage-0 (offline, cached): summarize each lint into a reverse
+  IR
 \ForAll{$\ell \in L$}
   \State $\ell.\mathit{ir} \gets M_{\mathrm{summ}}(\ell.\mathrm{src},
     \ell.\mathrm{tests}, \ell.\mathrm{meta})$
@@ -32,7 +32,7 @@ coverage-alignment determination (rule-indexed).
 \State pre-split candidate pools by Source: $L_{\mathrm{RFC}}\gets$ RFC lints,\;
   $L_{\mathrm{CABF}}\gets$ CABF lints
 \ForAll{$b \in B$}
-  \State \textit{// Stage-1: deterministic candidate retrieval}
+  \State // Stage-1: deterministic candidate retrieval
   \If{$b.\mathrm{source}=\mathrm{RFC}$}
     \State $C(b)\gets\{\ell\in L_{\mathrm{RFC}}:
       \textsc{SectionPrefixMatch}(b.\mathrm{section},\ell.\mathrm{citedSections})\}$
@@ -41,19 +41,19 @@ coverage-alignment determination (rule-indexed).
   \Else
     \State $C(b)\gets\emptyset$
   \EndIf
-  \State \textit{// Stage-2: field-level judge, compare four-tuple, best across candidates}
+  \State // Stage-2: field-level judge, compare four-tuple, best across candidates
   \State $(v,\ell^{*})\gets M_{\mathrm{judge}}(b.\mathit{ir}, C(b))$
     \Comment{$v\in\{\text{full},\text{partial},\text{none}\}$}
-  \State \textit{// Stage-3: deterministic wrong-field consistency gate (downgrade only)}
+  \State // Stage-3: reject positive matches with conflicting concrete subject families
   \If{$v\in\{\text{full},\text{partial}\} \wedge
       \mathrm{Family}(b.\mathrm{subject})\neq\emptyset \wedge
       \mathrm{Family}(\ell^{*}.\mathrm{subject})\neq\emptyset \wedge
       \mathrm{Family}(b.\mathrm{subject})\neq\mathrm{Family}(\ell^{*}.\mathrm{subject})$}
-    \State $v\gets\text{none}$ \Comment{concrete but different subject family $\Rightarrow$ wrong-field FP}
+    \State $v\gets\text{none}$ \Comment{different concrete families $\Rightarrow$ wrong-field false positive}
   \EndIf
   \State $\mathrm{verdict}(b)\gets v$
 \EndFor
-\State \textit{// Stage-4: deterministic aggregation, coverage counts full only}
+\State // Stage-4: deterministic aggregation, coverage counts full only
 \State $\mathit{covered}\gets\{b\in B:\mathrm{verdict}(b)=\text{full}\}$;\quad
   $\phi_G\gets B\setminus \mathit{covered}$
 \State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \mathit{covered},\ \phi_G)$

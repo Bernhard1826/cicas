@@ -5,18 +5,113 @@
 
 This section runs experiments with the methods and framework above and draws
 quantitative conclusions. Besides the internal layered metrics
-(the end-to-end result snapshot below and the lint-coverage analysis of
-\S\ref{subsec:coverage}), it provides two
+(the lint-coverage analysis of \S\ref{subsec:coverage} and the end-to-end result
+snapshot of \S\ref{subsec:snapshot}), it provides two
 mutually independent external validations, each checking one half of the
 framework: \S\ref{subsec:lintability-ext} externally validates rule
 extraction and lintability determination against the zlint maintainers' manual
 gold standard, and \S\ref{subsec:certdetect} externally validates code
 generation and synonymy judgment by execution on real certificates.
 
-\subsection*{Experimental Setup and Result Snapshot}
+\subsection{Experimental Setup}
+\label{subsec:setup}
 
-Evaluation is performed on full-corpus re-extraction results of the two standard
-sources RFC~5280 and CABF BR. The LLM used in the experiments is GPT-5.4.
+All experiments use GPT-5.4 as the only LLM, and the judges run at temperature~$0$ for reproducibility. We target
+RFC~5280 and the CA/Browser Forum Baseline Requirements because they are
+the two most authoritative and foundational Web PKI specifications for publicly
+trusted TLS certificates: RFC~5280 defines the base X.509 certificate profile that
+virtually every downstream rule inherits, and CABF~BR is the baseline every
+publicly trusted CA is mandated to meet and itself builds directly on RFC~5280, so
+together they bound where compliance linting matters most. Rule extraction was run on CABF~BR~v2.2.6. This was the latest
+CABF~BR release when the experiments began.
+
+\subsection{Lint Coverage Analysis}
+\label{subsec:coverage}
+
+This subsection measures how many of our lintable rules an existing tool already
+implements. We restrict the analysis to zlint---the most widely deployed
+certificate linter, integrated into major CA issuance and CT-monitoring
+pipelines. The criterion is deliberately
+strict: a lintable rule counts as covered only when some cognate zlint lint
+genuinely implements it, not merely mentions the same field. We accordingly give
+each rule one of three verdicts---full (fully implemented), partial (partially
+implemented), or none (not implemented)---and count only full as covered.
+
+In many lints, the description field in metadata is too terse for reliable semantic matching. We therefore first summarize each lint into a
+reverse IR (Stage-0). For every lint we pass three inputs to an offline
+summarizer $M_{\mathrm{summ}}$ under a constrained prompt---the lint's Go source
+code, its Pass/Error test certificates, and its metadata (description, citation,
+severity)---and recover the same IR schema our rules use: the core four-tuple
+$\langle$subject, obligation, predicate, constraint$\rangle$ plus a one-sentence
+code\_summary. The inputs are chosen so that (a) the CheckApplies and Execute
+branches expose the concrete field and threshold the lint actually tests, which
+the metadata description usually omits; (b) the Pass/Error samples fix the
+direction of the check---which values it accepts and which it rejects---and its
+applicable scope; and (c) casting the lint into our four-tuple lets rule and lint
+be compared field by field. Extracting the full four-tuple, not just the
+code\_summary sentence, is what lets Stage-2 compare subject, obligation,
+predicate, and constraint jointly and reach a defensible full-versus-partial
+distinction.
+
+\input{algorithms/alg_coverage}
+
+Given these reverse IRs, Algorithm~\ref{alg:coverage} aligns each rule to zlint in
+four further stages that combine deterministic steps with a single controlled
+judge. Stage-1 retrieves candidate lints for a rule by provenance: an RFC~5280 rule is matched only against RFC lints whose
+cited section shares a common prefix with the rule's section
+(\textsc{SectionPrefixMatch}), since RFC section numbers are stable; because CABF
+section numbers drift across versions, every CABF lint is taken as a candidate for
+a CABF rule. Stage-2 hands the rule's four-tuple and its candidate set to a
+field-level judge $M_{\mathrm{judge}}$, which compares the tuples field by
+field and returns the best candidate with a full, partial, or none verdict.
+Stage-3 is a deterministic false-positive guard: it maps the subject of the rule
+and of the selected lint to a field family (e.g., KeyUsage or SubjectAltName) via
+$\mathrm{Family}(\cdot)$ and downgrades a full or partial verdict to none whenever
+the two resolve to different nonempty families, so a KeyUsage rule is never
+credited to a lint that checks SubjectAltName merely because both mention an
+extension. Stage-4
+aggregates deterministically: a rule is covered iff its verdict is full, and the
+uncovered remainder forms the code-generation domain $\phi_G$. The LLM is invoked
+only at Stage-0 and Stage-2; candidate retrieval, the family guard, and
+aggregation are fully deterministic.
+
+Of the 248 lintable rules, zlint fully covers 158 and leaves 90 uncovered under
+this procedure (Table~\ref{tab:coverage}); the 90 uncovered rules are the domain
+of code generation $\phi_G$. ``full'' counts ``whether one of our rules is fully implemented by some cognate zlint lint''; it does not form a
+simple ratio with the total zlint lint count, mainly because one lint can hit
+multiple rules.
+
+\begin{table}[tb]
+\centering
+\small
+\caption{zlint cognate lint counts and their coverage of the 248 lintable
+rules, by standard source.}
+\label{tab:coverage}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Item & CABF & RFC~5280 & Total \\
+\midrule
+zlint cognate lints, total (ref.) & 172 & 123 & 295 \\
+\quad— of which cert.\ lints & 166 & 115 & 281 \\
+\quad— of which CRL lints & 6 & 8 & 14 \\
+full (full coverage) & 106 & 52 & 158 \\
+uncovered (codegen domain) & 64 & 26 & 90 \\
+lintable total & 170 & 78 & 248 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Result Snapshot}
+\label{subsec:snapshot}
+
+Table~\ref{tab:snapshot} summarizes the end-to-end result across the full
+pipeline, from keyword recall to final-shipping lints. Two of its rows measure
+code-generation quality on the uncovered codegen domain $\phi_G$: the generation
+rate is the fraction of uncovered rules for which the restricted generator emits
+a compilable lint under the ``render and pass go build'' gate, and the strict
+synonymy rate is the fraction of final-shipping lints whose code summary is judged
+synonymous with the specification text (Layer~B, \S\ref{subsec:exec-verify}); in
+the current snapshot both are $90/90 = 100.0\%$.
 
 \begin{table*}[tb]
 \centering
@@ -33,8 +128,7 @@ lintable (single-cert observable) & 248 &
   gate excludes process, cross-certificate, runtime, external-semantic, and
   MAY/OPTIONAL classes; CRL document rules are outside this scope \\
 zlint coverage (full; existing cognate lint) & 158 &
-  the rule is fully implemented by some cognate zlint certificate lint; residual
-  cross-standard inheritance gaps are analyzed in \S\ref{subsec:crossstd} \\
+  the rule is fully implemented by some cognate zlint certificate lint \\
 uncovered lintable (codegen domain) & 90 &
   enters the current codegen domain ($248 - 158$); CABF 64 $+$ RFC~5280 26, the
   target set of downstream code generation $\phi_G$ \\
@@ -44,7 +138,7 @@ can generate compilable lint & 90 &
 cannot generate (no tree / not compiling / abstain) & 0 &
   no generation failure in the current codegen domain \\
 final-shipping strict synonymous (\CodeEqSpec) & 90 &
-  the final in-tree zlint lint (\texttt{CheckApplies} $+$ \texttt{Execute} $+$
+  the final in-tree zlint lint (CheckApplies $+$ Execute $+$
   severity/date metadata) judged against the original rule text and context;
   strict synonymy rate $= 90/90 = 100.0\%$ \\
 final-shipping not synonymous (does not express) & 0 &
@@ -52,11 +146,11 @@ final-shipping not synonymous (does not express) & 0 &
 emitted lints' atom templates touched & 52 &
   28 GENERIC $+$ 24 NON\_GENERIC of the 136 registered atoms; by rule, 53
   GENERIC-only / 5 mixed / 32 NON\_GENERIC-only \\
-\emph{(collateral) certificate-level execution verification \CodeEqIR} &
-  \emph{37} &
-  \emph{model-independent IR-level faithfulness, not a synonymy numerator; the
+(collateral) certificate-level execution verification \CodeEqIR &
+  37 &
+  model-independent IR-level faithfulness, not a synonymy numerator; the
   paper-facing synonymy rate uses only the final emitted code versus the source
-  rule} \\
+  rule \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -67,87 +161,32 @@ certified \CodeEqIR{} by certificate-level execution verification are reported
 only as collateral IR-level evidence: \CodeEqIR{} is model-independent and
 deterministic, yet it does not by itself imply \CodeEqSpec, so the paper-facing
 synonymy rate is taken solely from the final emitted code judged against the
-source rule. 
+source rule.
 
 The first-layer quality signal is G1 conservation (Theorem~\ref{thm:recall},
-\S\ref{subsec:targets}). Under the current snapshot, conservation holds strictly:
+\S\ref{subsec:targets}). Under the current snapshot, conservation holds strictly,
+instantiating the two appendix identities~\eqref{eq:cons} and~\eqref{eq:split}:
 \[
-  \underbrace{2080}_{\text{recall}} \;=\; \underbrace{529}_{\text{noise}} +
-  \underbrace{1551}_{\text{genuine}}, \quad
-  \underbrace{1551}_{\text{genuine}} \;=\; \underbrace{248}_{\text{lintable}} +
-  \underbrace{1303}_{\text{not lintable}}.
+\begin{aligned}
+  \underbrace{2080}_{|\Rkw|} &\;=\; \underbrace{529}_{|\RN|\ \text{noise}} +
+    \underbrace{248}_{|\RL|\ \text{lintable}} +
+    \underbrace{1303}_{|\RU|\ \text{not lintable}}, \\[3pt]
+  \underbrace{248}_{|\RL|} &\;=\; \underbrace{158}_{|\RLcov|\ \text{covered}} +
+    \underbrace{90}_{|\RLunc|\ \text{uncovered}}.
+\end{aligned}
 \]
-Both identities hold term by term, i.e., the G1 residual $\Lrec = 0$ and the top
-two layers of conservation are closed (deterministically recomputable). The 248
-lintable rules split by standard source
-into 170 CABF and 78 RFC~5280; of these zlint fully covers 158, leaving
-90---the domain of downstream code generation $\phi_G$.
-
-\subsection{Lint Coverage Analysis}
-\label{subsec:coverage}
-
-Answering ``how many lintable rules do existing tools cover'' hinges on using
-the right criterion. We use ``whether the lintable rule is genuinely implemented
-by some cognate zlint lint'' as the criterion: for each rule we retrieve
-candidate zlint lints, then compare field by field, giving a three-level verdict full (fully implemented) /
-partial (partially implemented) / none (not implemented).
-
-Algorithm~\ref{alg:coverage} formalizes this determination: summarize a lint
-into a reverse IR, then align field by field; candidate retrieval is by
-source/section (Stage-1: RFC section numbers are stable and narrowed by prefix,
-while CABF section numbers drift across versions so all CABF lints are taken),
-and coverage counts only full (Stage-4; partial/none go to $\phi_G$).
-
-\input{algorithms/alg_coverage}
-
-Here \textsc{SectionPrefixMatch} is true when the rule's section number shares a
-common prefix with a lint's cited section number; $\mathrm{Family}(\cdot)$ maps a
-subject path to a concrete field family, returning $\emptyset$ for a
-vague/unresolved subject rather than downgrading (so genuine matches on coarse
-subjects are preserved). The algorithm calls the LLM only in Stage-0 and Stage-2
-(the judge at temperature $=0$, its prompt containing three kinds of
-positive/negative examples: direction reversal, field misplacement, and
-constraint-type confusion); summaries are cached offline, the full CABF
-candidate set is sent to the judge in batches, and the rest is deterministic.
-
-Of the 248 lintable rules, zlint fully covers 158 and leaves 90
-uncovered under this coverage procedure (Table~\ref{tab:coverage}); the 90
-uncovered are the domain of code generation $\phi_G$.
-
-\begin{table}[tb]
-\centering
-\small
-\caption{zlint cognate lint counts and their coverage of the 248 lintable
-rules, by standard source.}
-\label{tab:coverage}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Item & CABF & RFC~5280 & Total \\
-\midrule
-\emph{zlint cognate lints, total (ref.)} & \emph{172} & \emph{123} & \emph{295} \\
-\quad\emph{— of which cert.\ lints} & \emph{166} & \emph{115} & \emph{281} \\
-\quad\emph{— of which CRL lints} & \emph{6} & \emph{8} & \emph{14} \\
-full (full coverage) & 106 & 52 & 158 \\
-uncovered (codegen domain) & 64 & 26 & 90 \\
-lintable total & 170 & 78 & 248 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The first three rows (italic) are lint counts computed directly from the
-project's built-in v3 source by zlint's Source metadata field (unit:
-lints; the 14 CRL lints are identified via RegisterRevocationListLint
-and fall outside our single-cert scope); the remaining rows are the coverage
-verdicts of our lintable rules (unit: rules). ``full'' counts ``whether one of
-our rules is fully implemented by some cognate zlint lint''; it does not form a
-simple ratio with the total zlint lint count, mainly because one lint can hit
-multiple rules.
+Both identities hold term by term---the G1 residual $\Lrec = 0$, and the top two
+conservation layers (the three-way recall split of Eq.~\eqref{eq:cons}, then the
+covered/uncovered split of the lintable set in Eq.~\eqref{eq:split}) are closed
+and deterministically recomputable. The 248 lintable rules further split by
+standard source into 170 CABF and 78 RFC~5280, and the 90 uncovered rules
+($\RLunc$) are the domain of downstream code generation $\phi_G$.
 
 \subsection{Lintability External Validation: Rule Extraction and Lintability
 Determination}
 \label{subsec:lintability-ext}
 
-The first half of the framework---rule extraction and lintability
+Rule extraction and lintability
 determination---needs an independent external reference. For this we bring in
 the CABF BR mapping table published by zlint
 maintainers~\cite{zlint-mapping-sheet}: this table is manually annotated rule by rule
@@ -188,14 +227,8 @@ positives, a tighter estimate of system quality.
 
 This external validation checks the first half of the system. On
 BR~1.4.8, $\kappa = 0.823$ and Yes recall 87.0\% indicate that our rule
-extraction (identifying which of the 422/1024 backend items are genuine
-normative requirements) and lintability determination (the four-condition
-conjunction, \S\ref{sec:lintability}) agree strongly with zlint experts'
-independent manual judgment; the 50.0\% Yes recall on BR~2.0.2 indicates a clear
-false-negative margin remaining in the newer BR version. This validation does
-not check downstream code generation and synonymy; those are checked
-additionally on real certificates by the certificate detection of
-\S\ref{subsec:certdetect}.
+extraction and lintability determination agree strongly with zlint experts'
+independent manual judgment.
 
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
@@ -208,10 +241,7 @@ result, and an independent structural audit re-derives the same defect from the
 DER / openssl; on external corpora we additionally require that no native
 zlint lint flags the same certificate, so that existing coverage is not
 miscredited to a generated lint. The unit is a (certificate $\times$ lint)
-finding. The corpus first uses zlint's own testdata as a gate rather than an
-ecosystem estimate: on 1128 parsable certificates the 90 lints raise 2627 raw
-cicasgen\_ hits, of which 299 are independently confirmed (251 Error $+$
-48 Warn) and 2328 are \texttt{NOCHECK} and hence not claimed.
+finding. 
 
 \begin{table*}[tb]
 \centering
@@ -256,32 +286,11 @@ severity conservatively: the Certificate-Policies and AKI violations are
 Error-level profile faults whose direct cryptographic consequence is indirect,
 while the Root CA CRLDP finding is a lower, Warn-level advisory.
 
-\textbf{Supplementary scan on real certificates.} To test whether these findings
+The corpus first uses zlint's own testdata as a gate rather than an
+ecosystem estimate: on 1128 parsable certificates the 90 lints raise 2627 raw
+cicasgen\_ hits, of which 299 are independently confirmed (251 Error $+$
+48 Warn) and 2328 are NOCHECK and hence not claimed. To test whether these findings
 exist only in hand-constructed testdata, we scan two external corpora: the
 TLS-handshake certificate chains of the Tranco Top~1M domains (47,791
 deduplicated PEMs) and a recent sample of CT logs (63,327 deduplicated PEMs). The
-raw cicasgen\_ hit counts are large---44,020 on Tranco and 57,558 on CT---but
-cannot be taken as defects: if a generated lint loses profile scope, a
-conditional clause, or an effective-date constraint, an independent audit may
-still only prove that the certificate satisfies the trigger of the wrong lint. We
-therefore treat the external corpora only as negative validation. Under the
-strict no-upstream audit these raw hits reduce to 6 confirmed on Tranco and 1 on
-CT; summed by source that is 7 findings, and after cross-corpus de-duplication it
-is 6 (certificate $\times$ lint) findings over 5 unique certificates, because one
-Root CA CRLDP warning is confirmed on the same Comodo ``AAA Certificate
-Services'' root in both corpora.
-
-Raw hit rates therefore serve only to surface audit candidates, never as
-defect-count conclusions. This supports the negative message of
-Table~\ref{tab:snapshot}: even when a lint compiles, executes, and fires on a
-certificate, one must still re-check the source-text scope, its conditional
-clauses, and rule effective dates before calling it a defect. Concretely,
-several high-frequency cicasgen\_ hits are excluded on exactly these
-grounds---an OV/IV localityName requirement that dropped its
-``stateOrProvinceName absent'' precondition (all such certs carry
-stateOrProvinceName); an organizationalUnitName or AKI-subfield prohibition
-applied to certificates issued before the requirement's effective date; the
-RFC~5280 A.1 ``version MUST be v2'' fragment mis-extracted as a profile rule that
-flags normal v3 certificates; and SubCA anyPolicy / NameConstraints rules that
-approximate profile scope with IsSubCA alone. Hence the raw hit rate must not be
-read as the real compliance-defect rate.
+raw cicasgen\_ hit counts are large---44,020 on Tranco and 57,558 on CT.

@@ -151,7 +151,7 @@ classical propositional logic.
 \textbf{Generality grading of atomic templates (GENERIC / NON\_GENERIC).} Atomic
 templates are graded by two orthogonal criteria (independent of the number of
 parameters): an atomic template is GENERIC iff (1) it expresses a
-\emph{general} PKI concept---a class of certificate-attribute judgments reusable
+general PKI concept---a class of certificate-attribute judgments reusable
 across rules---and (2) it is parameterized over fields/values and bound to no
 specific rule\_id or corpus-specific OID/single clause; otherwise it is
 NON\_GENERIC (its logic specialized to the internal structure of some
@@ -294,8 +294,8 @@ forms and one minimal positive example.
 %-------------------------------------------------------------------------------
 % Stage-Aware Iterative Verification (SAIV) --- moved out of the main body and
 % merged inline here (previously the separate file 07_saiv.tex, now deleted).
-% Its exact residual/routing formalization follows in the next section
-% (\ref{app:saiv}).
+% Its exact residual forms and stage-routing rule appear later in
+% \S\ref{app:saiv} and \S\ref{subsec:stage-attribution}, respectively.
 %-------------------------------------------------------------------------------
 \section{Stage-Aware Iterative Verification (SAIV)}
 \label{sec:saiv}
@@ -476,12 +476,12 @@ leaving it unchanged), then $\Ltot$ is non-increasing each round; the actual
 system uses a ``stop when no decrease'' policy, so it guarantees finite-round
 termination but not global optimality (see \S\ref{sec:eval}).
 
-\subsection{Formalization of SAIV Residuals and Stage Routing}
+\subsection{Formalization of SAIV Residuals}
 \label{app:saiv}
 
-This subsection collects the exact mathematical formalizations referenced above
-(\S\ref{subsec:repair}--\S\ref{subsec:algo}), for readers who need to
-check them formally.
+This subsection collects the exact mathematical forms of the SAIV residuals
+referenced above (\S\ref{subsec:repair}--\S\ref{subsec:algo}), for readers who
+need to check them formally.
 
 \textbf{Exact forms of SAIV's core residuals} (intuition and definitions in
 \S\ref{subsec:repair}--\S\ref{subsec:algo}).
@@ -517,8 +517,10 @@ Total loss (Eq.~\eqref{eq:total}, $w_R + w_C = 1$):
   \Ltot = w_R\cdot\Lrec + w_C\cdot\Lcode
 \end{equation}
 
-\textbf{The four-branch rule of stage routing} (exact conditions in
-\S\ref{subsec:algo}):
+\subsection{Stage Attribution Rule}
+\label{subsec:stage-attribution}
+
+The exact stage-routing rule used by Algorithm~\ref{alg:saiv} is:
 \begin{equation}\label{eq:route}
 \mathrm{Stage}^{(t)} = \begin{cases}
   \phi_R, & \Lrec^{(t)} > \tau_R \\[2pt]
@@ -574,7 +576,7 @@ Both repairs remove $r$ without introducing a new violation, so $\mathcal{W}$
 strictly contracts to the empty set within one round and $\Nviol = 0$.
 \end{proof}
 
-\noindent\emph{Note:} FLIP and SPURIOUS cannot be accepted simultaneously for the
+\noindent Note: FLIP and SPURIOUS cannot be accepted simultaneously for the
 same rule (they are mutually exclusive), and after acceptance the rule leaves
 $\mathcal{W}$ and no longer participates, so the process terminates in bounded
 time.

@@ -37,7 +37,7 @@ To address the first challenge, we build a Dual Layer Extraction Pipeline (DLEP)
 
 To address the second challenge, we formalize lintability as a four-condition framework (\S\ref{sec:method-lintability}) evaluated over IR attributes, turning the lintability decision into a traceable and reproducible check rather than a keyword heuristic.
 
-To address the third challenge, we restrict code generation to a finite, closed DSL-tree space: each rule's checking logic is a tree in this space that a deterministic function renders into Go lint code, with an LLM fallback only when the deterministic path yields nothing, and every candidate gated by ``render and pass \texttt{go build}.'' This removes hallucination and output instability from the generated lints.
+To address the third challenge, we restrict code generation to a finite, closed DSL-tree space: each rule's checking logic is a tree in this space that a deterministic function renders into Go lint code, with an LLM fallback only when the deterministic path yields nothing, and every candidate gated by ``render and pass go build.'' This removes hallucination and output instability from the generated lints.
 
 \noindent \textbf{Evaluation and Analysis.}
 We evaluate the full pipeline on the two standard sources RFC~5280 and CABF~BR, using GPT-5.4 as the LLM.

@@ -155,7 +155,7 @@ $\neg C_4$ & rule\_category     & encoding\_constraint, comparison, definition, 
 \end{tabular}
 \end{table*}
 
-Before generating code, we decide the \emph{lintability} of each normative rule, namely whether it admits such a static lint check. Rather than asking the LLM to make this judgment directly, we compute it from the IR that the LLM has already produced. Three observations motivate this design. First, the same four pieces of information determine the lintability of normative rules in practice: the deontic strength of the obligation, who is obligated, when the obligation applies, and what type of rule it is. Second, each of the four can be encoded as a single IR field with a small, closed value set, so the lintability decision becomes a Boolean function of four discrete fields. Third, separating the four conditions makes any wrong label traceable to exactly one IR field rather than to an opaque end-to-end LLM call.
+Before generating code, we decide the lintability of each normative rule, namely whether it admits such a static lint check. Rather than asking the LLM to make this judgment directly, we compute it from the IR that the LLM has already produced. Three observations motivate this design. First, the same four pieces of information determine the lintability of normative rules in practice: the deontic strength of the obligation, who is obligated, when the obligation applies, and what type of rule it is. Second, each of the four can be encoded as a single IR field with a small, closed value set, so the lintability decision becomes a Boolean function of four discrete fields. Third, separating the four conditions makes any wrong label traceable to exactly one IR field rather than to an opaque end-to-end LLM call.
 
 Table~\ref{tab:four-conditions} lists the four IR fields, their value domains, and the conditions they decide. The deontic level obligation comes from the IR core four-tuple in Table~\ref{tab:ir-core}. The remaining three fields, assertion\_\allowbreak subject, enforcement\_\allowbreak phase, and rule\_\allowbreak category, are key extension fields. From the enumeration of rule\_\allowbreak category, we designate
 \begin{gather*}
@@ -176,9 +176,9 @@ C_4(r) &\equiv r.\text{rule\_category} \in \mathcal{N}.
 \end{align*}
 The obligation field also fixes the lint severity. MUST-class obligations map to Error, and SHOULD-class obligations map to Warning. Severity is therefore not a second classifier, but a direct read of obligation.
 
-The three non-deontic conditions encode three orthogonal boundaries. $C_2$ is the \emph{subject boundary}, separating obligations on the certificate from obligations on the CA, relying party, or surrounding ecosystem. $C_3$ is the \emph{runtime boundary}, separating obligations observable in the issued bytes from those that fire during chain processing, name comparison, revocation handling, or CAA retrieval. $\neg C_4$ is the \emph{process boundary}, separating state assertions from terms in $\mathcal{N}$.
+The three non-deontic conditions encode three orthogonal boundaries. $C_2$ is the subject boundary, separating obligations on the certificate from obligations on the CA, relying party, or surrounding ecosystem. $C_3$ is the runtime boundary, separating obligations observable in the issued bytes from those that fire during chain processing, name comparison, revocation handling, or CAA retrieval. $\neg C_4$ is the process boundary, separating state assertions from terms in $\mathcal{N}$.
 
 Since each $C_i$ is a deterministic function of one IR field, the lintability
 decision---which adopts the conjunction $C_1\wedge C_2\wedge C_3\wedge\neg C_4$ of
-these necessary conditions as its operational criterion---is \emph{computed} from
+these necessary conditions as its operational criterion---is computed from
 the IR rather than predicted by the LLM. The same normative rule IR yields the same label bit-for-bit on every run, and any misclassification is traceable to a specific Layer~2 field assignment.

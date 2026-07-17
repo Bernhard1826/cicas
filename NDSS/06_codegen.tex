@@ -12,7 +12,25 @@ different outputs across calls, and the result is guaranteed neither to compile
 nor to be logically correct. To eliminate both kinds of uncertainty, we confine
 a rule's code body to a finite, closed DSL-tree space $\Tv$: each rule's code
 body can only be a tree in that space, which is then rendered into Go code by a
-deterministic function.
+deterministic function. Figure~\ref{fig:codegen-pipeline} illustrates the whole
+pipeline on a single rule---CA certificates must assert the keyCertSign
+key-usage bit---tracing it from the filled IR fields, through the DSL tree (AST)
+and its JSON serialization, to the deterministically rendered Go checking code.
+
+\begin{figure*}[tb]
+  \centering
+  \cicasfig{figures/fig03_codegen_pipeline.png}{Worked example of restricted
+    code generation: a single rule flowing from its filled IR fields through the
+    DSL tree (AST) and its JSON serialization to deterministically rendered Go
+    checking code.}
+  \caption{Worked example of restricted code generation. A single rule (CA
+    certificates must assert the keyCertSign key-usage bit) flows left to right:
+    filled IR fields (\S\ref{subsec:atoms}), the DSL tree/AST built from atomic
+    templates and IR, its JSON serialization, and the Go checking code rendered
+    deterministically by $\rho$ (\S\ref{subsec:mech}), with the IR-to-Go
+    semantics mapping shown at right.}
+  \label{fig:codegen-pipeline}
+\end{figure*}
 
 \subsection{Atomic Templates and IR Filling}
 \label{subsec:atoms}
@@ -90,7 +108,7 @@ of the constrained field.
 \S\ref{subsec:atoms} described how atomic templates and IR filling place the
 IR's subject and constraint into an atomic template's parameter slots---but the
 IR provides only ``which field this rule actually constrains, and what value,''
-without constraining the \emph{legal type} of those values (if the subject path
+without constraining the legal type of those values (if the subject path
 in the IR points to a nonexistent field, or a string is placed into a slot that
 requires an integer, a structurally legal but semantically misaligned tree can
 still result). This subsection closes that gap with a typed vocabulary
@@ -215,15 +233,15 @@ executes the DSL tree it corresponds to'' (written \CodeEqIR). Its idea borrows
 from the test oracle in software testing---using a set of samples with
 known-correct answers to check the code under test. It proceeds in two steps.
 
-\emph{Step 1, certifying a single atomic template.} For each atomic template we
-construct a pair of controlled certificate samples (fixtures): one that should
+Step 1, certifying a single atomic template. For each atomic template we
+construct a pair of controlled certificate samples: one that should
 make the template's predicate true, and one that should make it false. The
 samples are constructed by the atomic template's parameter types and are not
 bound to any concrete rule. The rendered code is executed for real on the two
 certificates and the verdicts are read back; the atomic template is deemed
 certified iff the results on both certificates match expectation.
 
-\emph{Step 2, generalizing from atomic templates to the whole tree.} For a
+Step 2, generalizing from atomic templates to the whole tree. For a
 generated lint holding a DSL tree $t$, if $t$ is composed only of certified
 atomic templates and compiles as a whole, we can induct over the tree
 structure: the faithfulness of the leaves (atomic templates) is guaranteed by
