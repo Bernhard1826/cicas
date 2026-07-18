@@ -57,7 +57,13 @@ def _parse_ir(raw: Any) -> dict:
 
 
 def _build_query(args: argparse.Namespace) -> tuple[str, list[Any]]:
-    where = ["r.lintable = true", "r.standard_id in (1, 19)"]
+    scope = getattr(args, "lintable_scope", "true")
+    if scope == "false":
+        where = ["not coalesce(r.lintable, false)", "r.standard_id in (1, 19)"]
+    elif scope == "all":
+        where = ["r.standard_id in (1, 19)"]
+    else:
+        where = ["r.lintable = true", "r.standard_id in (1, 19)"]
     params: list[Any] = []
 
     if args.rule_id:
@@ -67,12 +73,17 @@ def _build_query(args: argparse.Namespace) -> tuple[str, list[Any]]:
         where.append("r.standard_id = %s")
         params.append(args.standard_id)
 
-    if args.only_pending:
-        where.append("r.lint_coverage is null")
-    elif args.only_uncovered:
-        where.append("r.lint_coverage is not null and not coalesce(r.lint_covered, false)")
-    elif not args.include_covered:
-        where.append("(r.lint_coverage is null or not coalesce(r.lint_covered, false))")
+    # Coverage-status filters (pending / uncovered / covered) only apply to the
+    # lintable scope, i.e. the Table-2 incremental recompute. The not-lintable /
+    # all reverse-check scope (N_viol) has no persisted coverage, so every row is
+    # judged.
+    if scope == "true":
+        if args.only_pending:
+            where.append("r.lint_coverage is null")
+        elif args.only_uncovered:
+            where.append("r.lint_coverage is not null and not coalesce(r.lint_covered, false)")
+        elif not args.include_covered:
+            where.append("(r.lint_coverage is null or not coalesce(r.lint_covered, false))")
 
     sql = f"""
         select r.id, r.standard_id, s.source, r.section, r.title, r.text,
@@ -160,6 +171,7 @@ async def run(args: argparse.Namespace) -> int:
     changed_to_full = 0
     processed = 0
     errors = 0
+    verdict_counts = {"full": 0, "partial": 0, "none": 0, "other": 0}
     with psycopg2.connect(DB_URL, connect_timeout=3) as conn, out.open("a", encoding="utf-8") as log:
         for idx, row in enumerate(rules, 1):
             rid = int(row["id"])
@@ -176,6 +188,8 @@ async def run(args: argparse.Namespace) -> int:
             try:
                 result = await zlint.check_rule_coverage_intelligent(rule)
                 after = bool(result.get("has_coverage"))
+                _verdict = str(result.get("verdict") or "other").lower()
+                verdict_counts[_verdict if _verdict in verdict_counts else "other"] += 1
                 if after and not before:
                     changed_to_full += 1
                 if not args.dry_run:
@@ -220,6 +234,35 @@ async def run(args: argparse.Namespace) -> int:
         f"errors={errors} log={out}",
         flush=True,
     )
+
+    # N_viol summary: rules whose coverage verdict is full or partial. Under
+    # --lintable-scope=false this IS N_viol (zlint covers a rule that phi_C
+    # judged not-lintable); the residual aggregator (saiv_residuals.py in this
+    # dir) only trusts it when lintable_scope == "false".
+    n_viol = verdict_counts["full"] + verdict_counts["partial"]
+    summary = {
+        "lintable_scope": args.lintable_scope,
+        "dry_run": args.dry_run,
+        "processed": processed,
+        "errors": errors,
+        "verdict_counts": verdict_counts,
+        "n_viol": n_viol,
+        "n_viol_note": (
+            "count of rules whose coverage verdict is full or partial; this is "
+            "N_viol only under --lintable-scope=false (zlint covers a rule that "
+            "phi_C judged not-lintable)"
+        ),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    summary_path = OUTPUTS / "n_viol_summary.json"
+    summary_path.write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(
+        f"[n_viol] scope={args.lintable_scope} n_viol={n_viol} "
+        f"verdicts={verdict_counts} -> {summary_path}",
+        flush=True,
+    )
     return 0 if errors == 0 else 1
 
 
@@ -228,6 +271,9 @@ def main() -> int:
     ap.add_argument("--standard-id", type=int, choices=(1, 19), help="1=RFC5280, 19=CABF-BR")
     ap.add_argument("--rule-id", type=int, action="append", help="specific rule id; repeatable")
     ap.add_argument("--limit", type=int, help="maximum rows to process")
+    ap.add_argument("--lintable-scope", choices=("true", "false", "all"), default="true",
+                    help="rule scope: true=lintable (default, Table-2 coverage); "
+                         "false=not-lintable (reverse check -> N_viol); all=both")
     ap.add_argument("--include-covered", action="store_true", help="also rejudge already-covered rows")
     ap.add_argument("--only-pending", action="store_true", help="only rows with lint_coverage IS NULL")
     ap.add_argument("--only-uncovered", action="store_true", help="only rows currently judged not covered")
