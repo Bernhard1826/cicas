@@ -302,7 +302,7 @@ forms and one minimal positive example.
 
 To coordinate the modules and safeguard their output quality without manual
 ground truth, we propose the Stage-Aware Iterative Verification (SAIV)
-framework. The basic idea: predefine several quantifiable objectives, measure
+framework. The basic idea is to predefine several quantifiable objectives, measure
 the gap between the current and ideal states by each objective's computable
 residual, and when a residual has not reached its threshold, use the
 residual signal to locate the offending module and apply the corresponding
@@ -335,8 +335,8 @@ choose the next round's repair operation.
 \subsection{Three Iteration Objectives (Optimization Targets)}
 \label{subsec:targets}
 
-SAIV borrows the idea of backpropagation: first fix the objectives the whole
-pipeline is to optimize, then choose the next round's repair operation according
+SAIV borrows the idea of backpropagation. It first fixes the objectives the whole
+pipeline is to optimize, then chooses the next round's repair operation according
 to computable signals. This subsection gives the three objectives; the
 subsequent subsections all revolve around approaching them. Each objective has a
 directly computable residual; when all three residuals are simultaneously zero,
@@ -363,7 +363,7 @@ it is already implemented by an existing external lint tool'':
 where $\RLcov$ are rules covered by some lint tool and $\RLunc$ are
 not-yet-covered rules. The first identity~\eqref{eq:cons} is total conservation
 from recall to classification, and the second~\eqref{eq:split} splits the
-executable set so the later objectives can be pursued separately: the uncovered
+executable set so the later objectives can be pursued separately. The uncovered
 subset $\RLunc$ is the most important observation domain for generation that
 ``fills the ecosystem gap,'' while the covered subset $\RLcov$ provides external
 evidence of reverse executability. The residual is the recall-conservation
@@ -424,7 +424,7 @@ concrete repair operations and their notation are defined in
 \label{subsec:repair}
 
 \textbf{Stage routing.} Each round chooses the next repair operation using
-directly computable quantities: the recall-conservation residual, the
+directly computable quantities, namely the recall-conservation residual, the
 compilation-failure rate over the lintable set, the average structural score,
 the entity-necessary-condition screening result, and the synonymy confidence.
 This routing only decides which kind of repair to attempt next round.

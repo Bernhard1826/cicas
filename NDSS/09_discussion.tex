@@ -6,28 +6,28 @@
 \subsection{Applicability Across PKIs}
 \label{subsec:applicability}
 
-The framework's core mechanism is not specific to PKI: Layer~1's RFC~2119
-keyword set can be reconfigured to another ecosystem's deontic keywords (e.g.,
-ISO's shall/should/may). The method applies to specification sources that
-jointly satisfy three conditions: (1) they express mandatory/recommended
-levels with recognizable formal deontic keywords; (2) the constrained
-target is a structured, machine-parsable artifact (certificate, protocol
-message, configuration file); and (3) they have a hierarchical section
-structure that supports a knowledge graph and scope inheritance. This gives the
-methodology value beyond PKI alone.
+The framework's core mechanism is not specific to PKI. Layer~1's RFC~2119
+keyword set can be reconfigured to another ecosystem's deontic keywords such as
+ISO's shall/should/may. The method applies to specification sources that jointly
+satisfy three conditions. First, they express mandatory or recommended levels
+with recognizable formal deontic keywords. Second, the constrained target is a
+structured, machine-parsable artifact such as a certificate, protocol message, or
+configuration file. Third, they have a hierarchical section structure that
+supports a knowledge graph and scope inheritance. This gives the methodology
+value beyond PKI alone.
 
 \subsection{Recommendations for Specification Authors and Tool Maintainers}
 \label{subsec:recommendations}
 
-For specification authors, three drafting principles reduce extraction
-ambiguity: one obligation per sentence, referring to fields precisely by ASN.1
-path rather than pronoun, and normalizing cross-document references with a fixed
-pattern. For lint maintainers, we suggest writing the description
-directly as a code\_summary that explicitly gives the field
-path/assertion type/value/severity and cites the specification clause---we find
-that many lint descriptions are neither specification citations nor faithful
-implementation summaries, forcing the coverage analysis to first compute a
-code\_summary before aligning, adding overhead and adjudication noise.
+For specification authors, three drafting principles reduce extraction ambiguity.
+They are one obligation per sentence, referring to fields precisely by ASN.1 path
+rather than pronoun, and normalizing cross-document references with a fixed
+pattern. For lint maintainers, we suggest writing the description directly as a
+code\_summary that explicitly gives the field path, assertion type, value, and
+severity and cites the specification clause. We find that many lint descriptions
+are neither specification citations nor faithful implementation summaries, which
+forces the coverage analysis to first compute a code\_summary before aligning and
+adds overhead and adjudication noise.
 
 \subsection{Limitations}
 \label{subsec:limitations}
