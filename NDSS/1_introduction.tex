@@ -41,12 +41,13 @@ To address the third challenge, we restrict code generation to a finite, closed 
 
 \noindent \textbf{Evaluation and Analysis.}
 We evaluate the full pipeline on the two standard sources RFC~5280 and CABF~BR, using GPT-5.4 as the LLM.
-Of 2,080 keyword-recalled candidates, 1,551 are genuine normative rules, of which only 248, or 16.0\%, are lintable as single-certificate static checks; existing zlint lints fully cover 158 of them, leaving 90, or 36.3\%, uncovered and revealing a substantial gap between deployed tooling and the normative specifications.
-Over these 90 uncovered rules, our restricted generator emits compilable lints for all 90, a 100.0\% rate, and every one passes the final-shipping strict synonymy gate against the specification.
+Of 2,080 keyword-recalled candidates, 1,567 are genuine normative rules, of which 260, or 16.6\%, are lintable as single-certificate static checks; existing zlint lints fully cover 165 of them, leaving 95, or 36.5\%, uncovered and revealing a substantial gap between deployed tooling and the normative specifications.
+Over these 95 uncovered rules, our restricted generator emits compilable lints for 93, a 97.9\% rate: 73/95 (76.8\%) use only GENERIC atoms, 4/95 (4.2\%) mix GENERIC and NON\_GENERIC atoms, and 16/95 (16.8\%) use only NON\_GENERIC atoms; thus GENERIC-participating generation accounts for 77/95 (81.1\%) of the code-generation domain, or 77/93 (82.8\%) of generated lints.
+Seventy-nine generated lints pass the final-shipping unanimous synonymy gate against the specification.
 
 We further run two independent external validations, one for each half of the framework.
 Against the zlint maintainers' manually annotated CABF~BR mapping sheet, our rule extraction and lintability determination reach Cohen's $\kappa = 0.823$ with Yes-class $F_1 = 0.930$ on BR~1.4.8.
-Injecting the synonymy-passing lints into zlint then surfaces genuine profile violations, such as an OV certificate carrying givenName at Error level, confirmed by independent structural audit on 1,128 testdata certificates and stress-tested against 111,118 real certificates from the Tranco Top~1M and Certificate Transparency logs.
+Injecting the synonymy-passing lints into zlint then surfaces genuine profile violations, including one Error-level AKI issuer/serial violation and three Warning-level Root CA CRLDP violations missed by native zlint across 111,118 real certificates from the Tranco Top~1M and Certificate Transparency logs.
 
 \noindent\textbf{Contributions.}
 This paper makes three contributions.

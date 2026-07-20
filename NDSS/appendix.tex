@@ -111,9 +111,9 @@ $\mathcal{V}$ and the typed signature $\mathrm{sig}(a)$ of each atomic template
 \end{proposition}
 
 \textbf{Representative atomic templates.} The atomic-template set $\mathcal{A}$
-($|\mathcal{A}|=136$) is organized by semantic cluster, each with a typed
+($|\mathcal{A}|=151$) is organized by semantic cluster, each with a typed
 signature $\mathrm{sig}(a)$ (\S\ref{subsec:tv}). Table~\ref{tab:atoms} excerpts
-key atomic templates by cluster (all 136 are released with the code and data).
+key atomic templates by cluster (all 151 are released with the code and data).
 
 \begin{table*}[tb]
 \centering
@@ -162,7 +162,7 @@ This grading is fixed in code as the two sets GENERIC\_ATOMS /
 NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
 deterministically recomputable.
 
-Of the 136 atomic templates in $\mathcal{A}$, 82 are GENERIC and 54 are
+Of the 151 atomic templates in $\mathcal{A}$, 98 are GENERIC and 53 are
 NON\_GENERIC. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
 examples; the full list is released with the code and data.
 
@@ -198,9 +198,12 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 
 NON\_GENERIC atomic templates are allowed into code generation (they correspond
 to real PKI constructs, not padding to inflate the corpus), but must be
-explicitly marked and their proportion disclosed: among the 90
-final-shipping strict lints, 53 use only GENERIC atomic templates, 5 mix GENERIC
-and NON\_GENERIC templates, and 32 use only NON\_GENERIC atomic templates.
+explicitly marked and their proportion disclosed: among the 93
+generated lints, 73 use only GENERIC atomic templates, 4 mix GENERIC
+and NON\_GENERIC templates, and 16 use only NON\_GENERIC atomic templates.
+Equivalently, GENERIC-participating generation accounts for 77/95 (81.1\%) of
+the code-generation domain and 77/93 (82.8\%) of generated lints; among the 79
+final-shipping unanimous lints, the corresponding split is 60, 4, and 15.
 
 \textbf{Rendering and metadata binding.} After $\rho$ renders them, all DSL trees
 are embedded into a fixed zlint Go shell (registration via

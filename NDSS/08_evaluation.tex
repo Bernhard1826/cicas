@@ -75,8 +75,8 @@ is full, and the uncovered remainder forms the code-generation domain $\phi_G$. 
 only at Stage-0 and Stage-2; candidate retrieval, the family guard, and
 aggregation are fully deterministic.
 
-Of the 248 lintable rules, zlint fully covers 158 and leaves 90 uncovered under
-this procedure, as Table~\ref{tab:coverage} reports. The 90 uncovered rules are
+Of the 260 lintable rules, zlint fully covers 165 and leaves 95 uncovered under
+this procedure, as Table~\ref{tab:coverage} reports. The 95 uncovered rules are
 the domain of code generation $\phi_G$. ``full'' counts ``whether one of our rules is fully implemented by some cognate zlint lint''; it does not form a
 simple ratio with the total zlint lint count, mainly because one lint can hit
 multiple rules.
@@ -84,19 +84,19 @@ multiple rules.
 \begin{table}[tb]
 \centering
 \small
-\caption{zlint cognate lint counts and their coverage of the 248 lintable
+\caption{zlint cognate lint counts and their coverage of the 260 lintable
 rules, by standard source.}
 \label{tab:coverage}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
 Item & CABF & RFC~5280 & Total \\
 \midrule
-zlint cognate lints, total (ref.) & 172 & 123 & 295 \\
-\quad— of which cert.\ lints & 166 & 115 & 281 \\
-\quad— of which CRL lints & 6 & 8 & 14 \\
-full (full coverage) & 106 & 52 & 158 \\
-uncovered (codegen domain) & 64 & 26 & 90 \\
-lintable total & 170 & 78 & 248 \\
+zlint cognate lints, total (ref.) & 170 & 122 & 292 \\
+\quad— of which cert.\ lints & 164 & 115 & 279 \\
+\quad— of which CRL lints & 6 & 7 & 13 \\
+full (full coverage) & 94 & 71 & 165 \\
+uncovered (codegen domain) & 81 & 14 & 95 \\
+lintable total & 175 & 85 & 260 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -109,9 +109,10 @@ pipeline, from keyword recall to final-shipping lints. Two of its rows measure
 code-generation quality on the uncovered codegen domain $\phi_G$. The generation
 rate is the fraction of uncovered rules for which the restricted generator emits a
 compilable lint under the ``render and pass go build'' gate. The strict synonymy
-rate is the fraction of final-shipping lints whose code summary is judged
+rate is the fraction of generated lints whose final emitted code is unanimously judged
 synonymous with the specification text, the Layer~B judgment of
-\S\ref{subsec:exec-verify}. In the current snapshot both are $90/90 = 100.0\%$.
+\S\ref{subsec:exec-verify}. In the current snapshot they are $93/95 = 97.9\%$
+and $79/93 = 84.9\%$.
 
 \begin{table*}[tb]
 \centering
@@ -123,31 +124,35 @@ synonymous with the specification text, the Layer~B judgment of
 Metric & Count & Scope / notes \\
 \midrule
 Total recalled rules & 2080 & RFC~5280 640 $+$ CABF BR 1440 \\
-lintable (single-cert observable) & 248 &
-  current re-extraction / re-adjudication: CABF 170 $+$ RFC~5280 78; the negative
+lintable (single-cert observable) & 260 &
+  current re-extraction / re-adjudication: CABF 175 $+$ RFC~5280 85; the negative
   gate excludes process, cross-certificate, runtime, external-semantic, and
   MAY/OPTIONAL classes; CRL document rules are outside this scope \\
-zlint coverage (full; existing cognate lint) & 158 &
+zlint coverage (full; existing cognate lint) & 165 &
   the rule is fully implemented by some cognate zlint certificate lint \\
-uncovered lintable (codegen domain) & 90 &
-  enters the current codegen domain ($248 - 158$); CABF 64 $+$ RFC~5280 26, the
+uncovered lintable (codegen domain) & 95 &
+  enters the current codegen domain ($260 - 165$); CABF 81 $+$ RFC~5280 14, the
   target set of downstream code generation $\phi_G$ \\
-can generate compilable lint & 90 &
-  deterministic path 87 $+$ LLM fallback path 3, both gated by ``render and
-  pass go build''; generation rate $= 90/90 = 100.0\%$ \\
-cannot generate (no tree / not compiling / abstain) & 0 &
-  no generation failure in the current codegen domain \\
-final-shipping strict synonymous (\CodeEqSpec) & 90 &
+can generate compilable lint & 93 &
+  deterministic path 89 $+$ LLM fallback path 4, both gated by ``render and
+  pass go build''; generation rate $= 93/95 = 97.9\%$; generated trees split
+  into 73/95 (76.8\%) GENERIC-only, 4/95 (4.2\%) GENERIC $+$ NON\_GENERIC,
+  and 16/95 (16.8\%) NON\_GENERIC-only; GENERIC-participating generation is
+  77/95 (81.1\%) of the codegen domain and 77/93 (82.8\%) of generated lints \\
+cannot generate (no tree / not compiling / abstain) & 2 &
+  both are no-template abstentions retained in the codegen denominator \\
+final-shipping unanimous synonymous (\CodeEqSpec) & 79 &
   the final in-tree zlint lint (CheckApplies $+$ Execute $+$
   severity/date metadata) judged against the original rule text and context;
-  strict synonymy rate $= 90/90 = 100.0\%$ \\
-final-shipping not synonymous (does not express) & 0 &
-  no final-shipping residual in the current codegen domain \\
+  unanimous synonymy rate $= 79/93 = 84.9\%$ \\
+final-shipping rejected by synonymy gate & 14 &
+  generated but not accepted into the shipping manifest: 9 DOES\_NOT\_EXPRESS,
+  3 non-unanimous EXPRESS diagnostics, and 2 uncertain \\
 emitted lints' atom templates touched & 52 &
-  28 GENERIC $+$ 24 NON\_GENERIC of the 136 registered atoms; by rule, 53
-  GENERIC-only / 5 mixed / 32 NON\_GENERIC-only \\
+  37 GENERIC $+$ 15 NON\_GENERIC of the 151 registered atoms; by rule, 60
+  GENERIC-only / 4 mixed / 15 NON\_GENERIC-only \\
 (collateral) certificate-level execution verification \CodeEqIR &
-  37 &
+  35 &
   model-independent IR-level faithfulness, not a synonymy numerator; the
   paper-facing synonymy rate uses only the final emitted code versus the source
   rule \\
@@ -155,8 +160,8 @@ emitted lints' atom templates touched & 52 &
 \end{tabular}
 \end{table*}
 
-Under the current codegen domain there is no non-generable compilable lint and no
-final-shipping non-synonymous residual, and both counts are 0. The 37 rules
+Under the current codegen domain there are 2 no-template abstentions and 14
+generated lints not accepted by the final-shipping synonymy gate. The 35 rules
 certified \CodeEqIR{} by certificate-level execution verification are reported
 only as collateral IR-level evidence. \CodeEqIR{} is model-independent and
 deterministic, yet it does not by itself imply \CodeEqSpec, so the paper-facing
@@ -169,19 +174,21 @@ conservation holds strictly, instantiating the two appendix
 identities~\eqref{eq:cons} and~\eqref{eq:split}:
 \[
 \begin{aligned}
-  \underbrace{2080}_{|\Rkw|} &\;=\; \underbrace{529}_{|\RN|\ \text{noise}} +
-    \underbrace{248}_{|\RL|\ \text{lintable}} +
-    \underbrace{1303}_{|\RU|\ \text{not lintable}}, \\[3pt]
-  \underbrace{248}_{|\RL|} &\;=\; \underbrace{158}_{|\RLcov|\ \text{covered}} +
-    \underbrace{90}_{|\RLunc|\ \text{uncovered}}.
+  \underbrace{2080}_{|\Rkw|} &\;=\; \underbrace{513}_{|\RN|\ \text{noise}} +
+    \underbrace{1567}_{\text{genuine rules}}, \\[3pt]
+  \underbrace{1567}_{\text{genuine rules}} &\;=
+    \underbrace{260}_{|\RL|\ \text{lintable}} +
+    \underbrace{1307}_{|\RU|\ \text{not lintable}}, \\[3pt]
+  \underbrace{260}_{|\RL|} &\;=\; \underbrace{165}_{|\RLcov|\ \text{covered}} +
+    \underbrace{95}_{|\RLunc|\ \text{uncovered}}.
 \end{aligned}
 \]
 Both identities hold term by term, so the G1 residual $\Lrec = 0$ and the top two
 conservation layers are closed and deterministically recomputable. The first layer
 is the three-way recall split of Eq.~\eqref{eq:cons}, and the second is the
-covered/uncovered split of the lintable set in Eq.~\eqref{eq:split}. The 248
-lintable rules further split by standard source into 170 CABF and 78 RFC~5280, and
-the 90 uncovered rules $\RLunc$ are the domain of downstream code generation
+covered/uncovered split of the lintable set in Eq.~\eqref{eq:split}. The 260
+lintable rules further split by standard source into 175 CABF and 85 RFC~5280, and
+the 95 uncovered rules $\RLunc$ are the domain of downstream code generation
 $\phi_G$.
 
 \subsection{External Validation of Rule Extraction and Lintability
@@ -236,22 +243,23 @@ $F_1 = 0.930$ and zero false positives, a tighter estimate of system quality.
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
 
-Injecting the 90 final-shipping-strict lints into the zlint binary and scanning
+Injecting the 79 final-shipping-unanimous lints into the zlint binary and scanning
 certificates checks code generation and synonymy judgment. We count a hit as a
 valid finding only when three conditions hold. First, the final zlint code's
 semantics have been checked back to the source text. Second, the certificate
 yields a non-pass result. Third, an independent structural audit re-derives the
 same defect from the DER or openssl. On external corpora we additionally require
 that no native zlint lint flags the same certificate, so that existing coverage is
-not miscredited to a generated lint. The unit of a finding is a single certificate
-paired with a single lint. 
+not miscredited to a generated lint. The unit reported in Table~\ref{tab:certfind}
+is a certificate-problem instance; duplicated source rows for the same defect are
+collapsed.
 
 \begin{table*}[tb]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{4pt}
 \caption{Strictly confirmed findings across the three certificate corpora,
-ordered by highest severity first, for the 90 shipped lints. ``ext.\ merged'' is
+ordered by highest severity first, for the 79 shipped lints. ``ext.\ merged'' is
 the Tranco/CT union after cross-corpus de-duplication.}
 \label{tab:certfind}
 \begin{tabular}{@{}l p{5.9cm} r r r r p{3.3cm}@{}}
@@ -259,21 +267,14 @@ the Tranco/CT union after cross-corpus de-duplication.}
 Sev. & Finding type / governing obligation & testdata & Tranco & CT &
   ext.\ merged & Evidence boundary \\
 \midrule
-Error & Subscriber-cert Certificate Policies must contain exactly one CABF
-  Reserved Certificate Policy Identifier (BR~\S7.1.2.7.9) & 113 & 1 & 0 & 1 &
-  one Tranco leaf lacks the reserved policy OID; no native zlint overlap \\
 Error & AKI must not contain authorityCertSerialNumber / authorityCertIssuer
-  (BR~\S7.1.2.11.1) & 32 & 2 & 0 & 2 & one Tranco CA cert violates both AKI
+  (BR~\S7.1.2.11.1) & 25 & 1 & 0 & 1 & one Tranco CA cert violates both AKI
   subfields; no native zlint overlap \\
 Error & Subscriber-cert Certificate Policies must not contain anyPolicy
   (BR~\S7.1.2.7.9) & 26 & 0 & 0 & 0 & confirmed only in testdata fixtures \\
-Error & IV/OV subject-profile constraints on surname, givenName, and
-  localityName / stateOrProvinceName (BR~\S7.1.2.7.3--\S7.1.2.7.4) & 57 & 0 & 0 &
+Error & OV subject-profile constraints on surname and givenName
+  (BR~\S7.1.2.7.4) & 2 & 0 & 0 &
   0 & testdata fixtures only \\
-Error & Other structural constraints: SAN critical, signatureAlgorithm matches
-  tbsCertificate.signature, subscriber pathLenConstraint forbidden, empty
-  Certificate Policies, v1 uniqueID forbidden (RFC~5280 / BR) & 23 & 0 & 0 & 0 &
-  testdata fixtures only \\
 Warn & A certificate carrying only basic fields SHOULD be v1
   (RFC~5280~\S4.1.2.1) & 47 & 0 & 0 & 0 & advisory, reported as lint.Warn \\
 Warn & Root CA Certificate SHOULD NOT contain CRL Distribution Points
@@ -283,36 +284,39 @@ Warn & Root CA Certificate SHOULD NOT contain CRL Distribution Points
 \end{tabular}
 \end{table*}
 
-The testdata column of Table~\ref{tab:certfind} sums to 299 confirmed fixture
-findings, namely 251 Error and 48 Warn. Tranco contributes 6 and CT 1, for 7
-findings by source. We read severity conservatively. The Certificate-Policies and
-AKI violations are Error-level profile faults whose direct cryptographic
-consequence is indirect, while the Root CA CRLDP finding is a lower, Warn-level
-advisory.
+The testdata column of Table~\ref{tab:certfind} sums to 101 independently
+confirmed fixture problem instances. The underlying audit file contains 137
+confirmed row-level fixture violations because some defects are represented by
+two source rows. Tranco contributes 4 problem instances and CT contributes 1; the
+CT instance duplicates one Tranco Root CA, so the external merged total is 4
+problem instances, namely 1 Error and 3 Warn. We read severity conservatively.
+The AKI and anyPolicy violations are Error-level profile faults whose direct
+cryptographic consequence is indirect, while the Root CA CRLDP finding is a
+lower, Warn-level advisory.
 
 The corpus first uses zlint's own testdata as a gate rather than an ecosystem
-estimate. On 1128 parsable certificates the 90 lints raise 2627 raw
-hits. Of these, 299 are independently confirmed as 251 Error and 48 Warn, while
-2328 are NOCHECK and hence not claimed. To test whether these findings exist only
+estimate. On 1128 parsable certificates the 79 lints raise 2962 raw
+hits. Of these, 137 row-level fixture violations are independently confirmed,
+while 2825 are NOCHECK and hence not claimed. To test whether these findings exist only
 in hand-constructed testdata, we scan two external corpora. The first is the
 TLS-handshake certificate chains of the Tranco Top~1M domains, 47,791 deduplicated
 PEMs, and the second is a recent sample of CT logs, 63,327 deduplicated PEMs. The
-raw generated-lint hit counts are large, 44,020 on Tranco and 57,558 on CT.
+raw generated-lint hit counts are large, 57,583 on Tranco and 80,021 on CT.
 
 The three confirmation conditions collapse these raw counts sharply. Discarding
 every hit on a certificate that some native zlint lint already flags removes the
 bulk of them, because most raw matches land on certificates that existing coverage
-also rejects, and leaves 1316 candidates on Tranco and 283 on CT. The independent
-structural audit then re-derives each surviving defect from the DER and confirms 6
-of the 1316 on Tranco and 1 of the 283 on CT, marking the remainder NOCHECK and
-so not claimed. The 7 confirmed external findings are exactly the Tranco and CT
-counts of Table~\ref{tab:certfind}. Each escapes native zlint coverage and
+also rejects, and leaves 1042 candidates on Tranco and 167 on CT. The independent
+structural audit then re-derives each surviving defect from the DER and confirms 8
+rows on Tranco and 2 rows on CT, marking the remainder NOCHECK and
+so not claimed. These rows collapse to the 4 external problem instances in
+Table~\ref{tab:certfind}. Each escapes native zlint coverage and
 reproduces under an independent audit, so the reading stays conservative and no
 finding rests on the generated lint alone.
 
 This external scan checks the second half of the system. The generated lints
 generalize beyond hand-built testdata to 111,118 real certificates, where they
-surface 7 genuine profile faults that native zlint misses while every claimed
+surface 4 genuine profile faults that native zlint misses while every claimed
 finding survives both a source-text re-check and an independent structural audit.
 This indicates that our code generation and synonymy judgment produce checks
 faithful to the specification and useful on deployed certificates.
