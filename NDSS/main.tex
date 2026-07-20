@@ -69,11 +69,11 @@
 \newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
 
 %-------------------------------------------------------------------------------
-% \cicasfig{path}{fallback caption text}
+% \paperfig{path}{fallback caption text}
 % Uses the real figure if figures/<name> exists; otherwise draws a labeled
 % placeholder box so the project always compiles (even before the PNGs are added).
 %-------------------------------------------------------------------------------
-\newcommand{\cicasfig}[2]{%
+\newcommand{\paperfig}[2]{%
   \IfFileExists{#1}{%
     \includegraphics[width=\linewidth]{#1}%
   }{%

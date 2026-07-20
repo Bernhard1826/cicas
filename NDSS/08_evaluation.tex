@@ -233,11 +233,6 @@ has more balanced classes, with 69 of 106 matched pairs positive or 65\%, and
 yields $\kappa = 0.823$, an almost-perfect agreement, with positive-class
 $F_1 = 0.930$ and zero false positives, a tighter estimate of system quality.
 
-This external validation checks the first half of the system. On
-BR~1.4.8, $\kappa = 0.823$ and Yes recall 87.0\% indicate that our rule
-extraction and lintability determination agree strongly with zlint experts'
-independent manual judgment.
-
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
 
@@ -296,10 +291,28 @@ consequence is indirect, while the Root CA CRLDP finding is a lower, Warn-level
 advisory.
 
 The corpus first uses zlint's own testdata as a gate rather than an ecosystem
-estimate. On 1128 parsable certificates the 90 lints raise 2627 raw cicasgen\_
+estimate. On 1128 parsable certificates the 90 lints raise 2627 raw
 hits. Of these, 299 are independently confirmed as 251 Error and 48 Warn, while
 2328 are NOCHECK and hence not claimed. To test whether these findings exist only
 in hand-constructed testdata, we scan two external corpora. The first is the
 TLS-handshake certificate chains of the Tranco Top~1M domains, 47,791 deduplicated
 PEMs, and the second is a recent sample of CT logs, 63,327 deduplicated PEMs. The
-raw cicasgen\_ hit counts are large, 44,020 on Tranco and 57,558 on CT.
+raw generated-lint hit counts are large, 44,020 on Tranco and 57,558 on CT.
+
+The three confirmation conditions collapse these raw counts sharply. Discarding
+every hit on a certificate that some native zlint lint already flags removes the
+bulk of them, because most raw matches land on certificates that existing coverage
+also rejects, and leaves 1316 candidates on Tranco and 283 on CT. The independent
+structural audit then re-derives each surviving defect from the DER and confirms 6
+of the 1316 on Tranco and 1 of the 283 on CT, marking the remainder NOCHECK and
+so not claimed. The 7 confirmed external findings are exactly the Tranco and CT
+counts of Table~\ref{tab:certfind}. Each escapes native zlint coverage and
+reproduces under an independent audit, so the reading stays conservative and no
+finding rests on the generated lint alone.
+
+This external scan checks the second half of the system. The generated lints
+generalize beyond hand-built testdata to 111,118 real certificates, where they
+surface 7 genuine profile faults that native zlint misses while every claimed
+finding survives both a source-text re-check and an independent structural audit.
+This indicates that our code generation and synonymy judgment produce checks
+faithful to the specification and useful on deployed certificates.

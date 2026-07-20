@@ -1,5 +1,5 @@
 %-------------------------------------------------------------------------------
-\section{Restricted Code Generation and Verification}
+\section{Restricted Code Generation}
 \label{sec:codegen}
 %-------------------------------------------------------------------------------
 
@@ -19,16 +19,11 @@ and its JSON serialization, to the deterministically rendered Go checking code.
 
 \begin{figure*}[tb]
   \centering
-  \cicasfig{figures/fig03_codegen_pipeline.png}{Worked example of restricted
+  \paperfig{figures/fig03_codegen_pipeline.png}{Worked example of restricted
     code generation. A single rule flows from its filled IR fields through the
     DSL tree (AST) and its JSON serialization to deterministically rendered Go
     checking code.}
-  \caption{Worked example of restricted code generation. A single rule, that CA
-    certificates must assert the keyCertSign key-usage bit, flows left to right
-    from the filled IR fields of \S\ref{subsec:atoms}, through the DSL tree/AST
-    built from atomic templates and IR and its JSON serialization, to the Go
-    checking code rendered deterministically by $\rho$ of \S\ref{subsec:mech},
-    with the IR-to-Go semantics mapping shown at right.}
+  \caption{Worked example of restricted code generation. }
   \label{fig:codegen-pipeline}
 \end{figure*}
 
@@ -183,8 +178,7 @@ study are covered by this deterministic path.
 \textbf{Restricted LLM synthesis.} When deterministic synthesis returns failure,
 the generator switches to LLM synthesis. The model receives the rule context,
 the structured IR, the candidate atomic-template set, and a readable enumeration
-and signature table of $\mathcal{V}$ and $\mathcal{A}$; the four-segment
-concatenation of the actual prompt appears in Appendix~\ref{app:prompt}. It
+and signature table of $\mathcal{V}$ and $\mathcal{A}$. It
 outputs only one of two results, a serialized DSL tree, or an explicit
 ``no-template'' abstention marker $\bot_{\mathrm{NT}}$. Both $\bot_{\mathrm{NT}}$ and
 synthesis-failure $\bot$ are ``no usable result,'' so they share the $\bot$
@@ -194,8 +188,7 @@ a legal DSL tree $t \in \Tv$, a type error, or $\bot_{\mathrm{NT}}$, and any
 identifier outside $\mathcal{V}/\mathcal{A}$ is rejected here; a passing tree is
 rendered by $\rho$, and then a deterministic post-processor $\Phi_{\mathrm{post}}$
 binds Description/Citation/Name and the metadata of
-each specification source, with details in Appendices~\ref{app:tv}
-and~\ref{app:prompt}.
+each specification source, with details in Appendix~\ref{app:tv}.
 
 \subsection{Three-Layer Semantic Alignment Verification}
 \label{subsec:exec-verify}
