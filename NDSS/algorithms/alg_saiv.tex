@@ -1,0 +1,56 @@
+% Algorithm 2 -- Stage-Aware Iterative Verification (SAIV).
+% Included from the SAIV section of appendix.tex via \input{algorithms/alg_saiv}.
+\begin{figure*}[tb]
+\makeatletter
+\@ifundefined{c@algorithm}{%
+  \newcounter{algorithm}%
+  \renewcommand{\thealgorithm}{\arabic{algorithm}}%
+}{}%
+\makeatother
+\refstepcounter{algorithm}
+\label{alg:saiv}
+\noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for
+Stage-Aware Iterative Verification (SAIV); an automatic gate handles in-loop
+acceptance.
+\par\smallskip
+\small
+\begin{algorithmic}[1]
+\Statex \textbf{Input:} standard documents $D$, threshold $\theta$, max iterations $K$
+\Statex \textbf{Output:} final code set $C^{*}$ and termination status
+\State $\Rkw \gets \phi_R(D)$;\quad $(\RN,\RL,\RU)\gets \psi_C(\Rkw)$
+  \Comment{$\RU=$ not lintable}
+\State $(\RLcov,\RLunc)\gets \textsc{Coverage}(\RL)$
+  \Comment{Algorithm~\ref{alg:coverage}}
+\State $C \gets \{\phi_G(r): r\in \RLunc\}$
+\State $t\gets 0$
+\Repeat
+  \State compute residuals $\Lrec$~\eqref{eq:recall-res},
+    $\Lcode$~\eqref{eq:code-res}, $\Nviol$
+  \If{all residuals $<\theta$}
+    \State \textbf{break} \Comment{simultaneous closure}
+  \EndIf
+  \State $\mathit{stage}\gets \textsc{StageAttribution}(\cdots)$
+    \Comment{Eq.~\eqref{eq:route}}
+  \If{$\mathit{stage}=\phi_R$} \Comment{IR-content repair}
+    \ForAll{$r$ routed to $\mathcal{P}_R$}
+      \State $\mathit{rep}\gets \mathcal{P}_R(\textsc{FailTrace}(r))$
+        \Comment{REPAIR(ir$'$) or NO\_FIX}
+      \If{$\mathit{rep}=\textsc{No\_Fix}$ \textbf{or}
+          \textsc{ReextractCheck}$(\mathit{rep}.ir',\textsc{text}(r))\neq\emptyset$}
+        \State record $r$ in irreducible set $\mathcal{R}_{\mathrm{irred}}$
+          \Comment{kept as residual}
+      \ElsIf{\textsc{Retest}$(\mathit{rep}.ir')$ passes}
+        \State $\mathrm{IR}(r)\gets \mathit{rep}.ir'$ \Comment{accept}
+      \EndIf
+    \EndFor
+  \Else
+    \State apply $\mathcal{P}_{\mathit{stage}}\in\{\mathcal{P}_C,\mathcal{P}_G,
+      \mathcal{P}_V\}$
+  \EndIf
+  \State update $(\RN,\RL,\RU,\RLunc)$ and $C$
+  \State $t\gets t+1$
+\Until{$t\ge K$ \textbf{or} no residual decreased (loop-until-dry)}
+\State \textbf{return} $(C,\ \mathit{status}\in\{\textsc{closed},\textsc{dry},
+  \textsc{max\_iter}\})$
+\end{algorithmic}
+\end{figure*}
