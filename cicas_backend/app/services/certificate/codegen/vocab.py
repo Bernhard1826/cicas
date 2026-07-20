@@ -364,8 +364,6 @@ NAMED_REGEXES: dict[str, tuple[str, str]] = {
                                "string starts with http:// or ldap:// ONLY (excludes https / ldaps); use when rule cites RFC2616+RFC4516 schemes specifically"),
     "Re_Rfc3986Uri":          (r"^[a-zA-Z][a-zA-Z0-9+.\-]*:(//[^?#\s]*)?[^?#\s]*(\?[^#\s]*)?(#[^\s]*)?$",
                                "valid full RFC 3986 URI: scheme + optional authority/path/query/fragment, no whitespace; stricter than Re_AnyUri"),
-    "Re_IPv4AddressDottedDecimal": (r"^(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}$",
-                               "IPv4 dotted-decimal address: four decimal octets 0..255, no leading zero except the single digit 0"),
     # Character-set exclusion checks
     "Re_NoAtSign":            (r"^[^@]+$",
                                "string contains NO '@' character; use for PrintableString MUST NOT contain '@' rules (R4188)"),

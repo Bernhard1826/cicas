@@ -272,10 +272,13 @@ HARD RULES (MUST follow):
     AccessDescription atom family — it raw-parses the extension and
     handles BOTH AIA and SIA via the ext_oid parameter:
        AIAHasMethodOtherThan(<EXT_OID_CONST>, [<METHOD_OID_CONST>, ...])
+       AccessDescriptionMethodPresent(<EXT_OID_CONST>, <METHOD_OID_CONST>)
        AIAMethodLocationsTagInSet(<EXT_OID_CONST>, <METHOD_OID_CONST>,
                                    [<asn1_tag>, ...])
        AIAMethodLocationsAnyMatchRegex(<EXT_OID_CONST>, <METHOD_OID_CONST>,
                                         <NAMED_REGEX>)
+       AccessDescriptionCountInRange(<EXT_OID_CONST>, <lo>, <hi|MAX_INT>)
+       AccessLocationUniquePerMethod(<EXT_OID_CONST>)
     EXT_OID is AiaOID for AIA-shaped, SubjectInfoAccessOID for SIA.
     Method-OID consts: OidIdAdCaIssuers, OidIdAdOcsp, OidIdAdCaRepository,
     OidIdAdTimeStamping. Do NOT call SIA-specific rules no_template.
@@ -598,7 +601,7 @@ HARD RULES (MUST follow):
     unconditional predicate. An unconditional predicate that body-matches
     the rule but ignores its scope is exactly the §6.6 "scope-precondition
     omission" defect that fails strict EXPRESSES audit despite passing
-    the GLM judge. The judge does not detect missing preconditions;
+    the strict judge. The judge does not detect missing preconditions;
     you must.
 34. Exhaust creative composition before declaring no_template.
     A scope you cannot name 1-to-1 in the precondition vocabulary may
@@ -650,8 +653,11 @@ HARD RULES (MUST follow):
     runtime-redundant AND causes the judge to mis-read the rule's scope
     as "only when X is present" (narrower than the rule's text).
     X-aware atoms (whose body checks for / re-parses extension X):
-       AIAHasMethodOtherThan, AIAMethodLocationsTagInSet,
+       AIAHasMethodOtherThan, AccessDescriptionMethodPresent,
+       AIAMethodLocationsTagInSet,
        AIAMethodLocationsAnyMatchRegex (X = ext_oid arg)
+       AccessDescriptionCountInRange, AccessLocationUniquePerMethod
+         (X = ext_oid arg)
        CRLDPHasNameRelative, CRLDPHasNameRelativeWithMultiIssuer
          (X = OidExtCrlDistributionPoints, hardwired)
        CertPolicyExplicitTextHasEncodingTagInSet (X = CertPolicyOID)

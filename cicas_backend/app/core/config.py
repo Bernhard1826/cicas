@@ -30,10 +30,8 @@ class Settings(BaseSettings):
     redis_cache_ttl_hours: int = Field(default=24)
     use_redis_cache: bool = Field(default=True)
 
-    # LLM Configuration (SiliconFlow - Qwen3-8B)
-    # 策略：使用 Qwen/Qwen3-8B 作为主模型
-    # - SiliconFlow
-    # - Qwen3-8B: 128K context, 32K max output
+    # LLM Configuration (OpenAI-compatible GPT-5.4 endpoint)
+    # 策略：统一使用 gpt-5.4 作为实验主模型
     llm_api_key: str = Field(default="sk-94293042a13e21774be92ac6d1153b807f3ea2b15083e70a814fbb49a05b22aa")
     llm_api_base: str = Field(default="https://ai.ailink1.com/v1")
     llm_model: str = Field(default="gpt-5.4")
@@ -43,11 +41,11 @@ class Settings(BaseSettings):
     )
     llm_context_window: int = Field(
         default=131072,
-        description="LLM模型的输入上下文窗口大小（tokens）。Qwen3-8B=128K"
+        description="LLM模型的输入上下文窗口大小（tokens）。"
     )
     llm_max_output_tokens: int = Field(
         default=32768,
-        description="LLM模型的最大输出 token 数。Qwen3-8B=32K"
+        description="LLM模型的最大输出 token 数。"
     )
     llm_max_concurrency: int = Field(
         default=2,
@@ -57,7 +55,7 @@ class Settings(BaseSettings):
     # DISABLED: Challenger Module removed (part of adversarial learning)
     # challenger_llm_api_key: str = Field(default="")
     # challenger_llm_api_base: str = Field(default="https://api.siliconflow.cn/v1")
-    # challenger_llm_model: str = Field(default="Qwen/Qwen2.5-7B-Instruct")
+    # challenger_llm_model: str = Field(default="gpt-5.4")
 
     # Crawler Configuration
     user_agent: str = Field(default="Mozilla/5.0 (PKI Standards Crawler Bot)")

@@ -579,6 +579,7 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
     """
     for fn in (
         _extract_extension_criticality_atom,
+        _extract_extension_table_presence_criticality_atom,
         _extract_subject_email_rfc822name_atom,
         _extract_unique_identifier_version_gate_atom,
         _extract_reserved_policy_count_atom,
@@ -586,12 +587,19 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
         _extract_directorystring_atom,
         _extract_utctime_zulu_atom,
         _extract_basic_constraints_default_false_atom,
+        _extract_basic_constraints_ca_false_or_absent_atom,
         _extract_basic_constraints_keycertsign_presence_atom,
         _extract_basic_constraints_pathlen_absent_atom,
+        _extract_extension_absence_scope_from_source_excerpt,
+        _extract_crldp_distribution_point_field_absent_atom,
+        _extract_crldp_distribution_point_fullname_atom,
+        _extract_crldp_fullname_nonempty_atom,
+        _extract_crldp_fullname_generalname_type_atom,
+        _extract_crldp_fullname_uri_scheme_atom,
         _extract_asn1_module_version_comment_atom,
         _extract_serial_der_sign_bit_atom,
+        _extract_name_constraints_general_subtree_minimum_zero_atom,
         _extract_name_constraints_fallback_marker_atom,
-        _extract_common_name_ipv4_text_atom,
         _extract_ip_version_octet_atom,
         _extract_ip_reverse_zone_suffix_atom,
         _extract_dns_no_trailing_root_dot_atom,
@@ -606,9 +614,11 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
         _extract_permitted_dns_ip_or_excluded_all_atom,
         _extract_excluded_subtrees_empty_atom,
         _extract_permitted_subtrees_nonempty_atom,
+        _extract_common_name_from_san_atom,
         _extract_common_name_domain_label_atom,
         _extract_common_name_dnsname_copy_atom,
         _extract_domaincomponent_domain_name_labels_atom,
+        _extract_subject_attr_order_and_encoding_atom,
         _extract_tor_v3_onion_dns_atom,
         _extract_ecdsa_namedcurve_algid_atom,
         _extract_spki_algid_exact_hex_atom,
@@ -627,11 +637,32 @@ def _extract_text_semantic_atom(rule_id: int, ir: dict) -> Optional[object]:
         _extract_policy_qualifiers_not_recommended_atom,
         _extract_policy_qualifier_allowlist_atom,
         _extract_excluded_or_permitted_dns_ip_nameconstraints_atom,
+        _extract_subject_x500_dn_atom,
         _extract_rdn_structure_atom,
     ):
         atom = fn(ir)
         if atom is not None:
             return atom
+    return None
+
+
+def _extension_oid_from_compact_text(norm: str) -> Optional[str]:
+    if "subjectaltname" in norm:
+        return "SubjectAlternateNameOID"
+    if "authoritykeyidentifier" in norm:
+        return "AuthorityKeyIdOID"
+    if "subjectkeyidentifier" in norm:
+        return "SubjectKeyIdOID"
+    if "certificatepolicies" in norm:
+        return "CertPolicyOID"
+    if "basicconstraints" in norm:
+        return "BasicConstOID"
+    if "nameconstraints" in norm:
+        return "NameConstOID"
+    if "extendedkeyusage" in norm:
+        return "ExtKeyUsageOID"
+    if "keyusage" in norm:
+        return "KeyUsageOID"
     return None
 
 
@@ -641,23 +672,7 @@ def _extract_extension_criticality_atom(ir: dict) -> Optional[object]:
     pred = str(ir.get("predicate") or "").lower()
     if "critical" not in norm:
         return None
-    oid = None
-    if "subjectaltname" in norm:
-        oid = "SubjectAlternateNameOID"
-    elif "authoritykeyidentifier" in norm:
-        oid = "AuthorityKeyIdOID"
-    elif "subjectkeyidentifier" in norm:
-        oid = "SubjectKeyIdOID"
-    elif "certificatepolicies" in norm:
-        oid = "CertPolicyOID"
-    elif "basicconstraints" in norm:
-        oid = "BasicConstOID"
-    elif "nameconstraints" in norm:
-        oid = "NameConstOID"
-    elif "keyusage" in norm:
-        oid = "KeyUsageOID"
-    elif "extendedkeyusage" in norm:
-        oid = "ExtKeyUsageOID"
+    oid = _extension_oid_from_compact_text(norm)
     if not oid:
         return None
     from app.services.certificate.dsl import dsl as _app_dsl
@@ -666,6 +681,57 @@ def _extract_extension_criticality_atom(ir: dict) -> Optional[object]:
     if pred in {"must_be_critical", "should_be_critical"} or "mustbecritical" in norm:
         return _app_dsl.ExtCritical(oid)
     return None
+
+
+def _extract_extension_table_presence_criticality_atom(ir: dict) -> Optional[object]:
+    """Extension profile row: Presence MUST/SHOULD plus fixed Critical Y/N."""
+    row = str(ir.get("_rule_text") or "").splitlines()[0] if ir.get("_rule_text") else ""
+    if "|" not in row:
+        return None
+    cells = [" ".join(c.replace("`", "").strip().split()) for c in row.split("|")]
+    if len(cells) < 3:
+        return None
+    presence = cells[1].strip(".;:").upper().replace("_", " ")
+    critical = cells[2].strip(".;:").upper()
+    if presence not in {"MUST", "SHOULD", "REQUIRED", "SHALL"}:
+        return None
+    if critical not in {"Y", "N"}:
+        return None
+    norm = _compact_text(" ".join((str(ir.get("subject") or ""), cells[0], row)))
+    oid = _extension_oid_from_compact_text(norm)
+    if not oid:
+        return None
+    from app.services.certificate.dsl import dsl as _app_dsl
+    crit_atom = _app_dsl.ExtCritical(oid) if critical == "Y" else _app_dsl.ExtNotCritical(oid)
+    return _app_dsl.And((_app_dsl.ExtPresent(oid), crit_atom))
+
+
+def _extract_extension_absence_scope_from_source_excerpt(ir: dict) -> Optional[object]:
+    """Recover bullet-list scope for "extension MUST NOT be present in:" rows."""
+    rule_key = _compact_text(str(ir.get("_rule_text") or _ir_text(ir)))
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "mustnotbepresentin" not in rule_key:
+        return None
+    if "crldistributionpoints" not in subj_key and "crldistributionpoints" not in rule_key:
+        return None
+    excerpt = str(ir.get("_source_excerpt") or "")
+    if not excerpt:
+        return None
+    m = re.search(
+        r"CRL Distribution Points extension\s+MUST\s+NOT\s+be\s+present\s+in:\s*(?P<block>(?:\n-\s*[^\n]+)+)",
+        excerpt,
+        re.I,
+    )
+    if not m:
+        return None
+    block_key = _compact_text(m.group("block"))
+    if "ocsprespondercertificates" not in block_key:
+        return None
+    from app.services.certificate.dsl import dsl as _app_dsl
+    return _app_dsl.When(
+        cond=_app_dsl.IsOCSPResponderCert(),
+        main=_app_dsl.Not(_app_dsl.ExtPresent("CrlDistOID")),
+    )
 
 
 def _full_ir_text(ir: dict) -> str:
@@ -851,6 +917,39 @@ def _extract_basic_constraints_default_false_atom(ir: dict) -> Optional[object]:
     return None
 
 
+def _extract_basic_constraints_ca_false_or_absent_atom(ir: dict) -> Optional[object]:
+    """basicConstraints cA FALSE / non-CA-certificate requirement.
+
+    This is a reusable subject/predicate reducer, not a rule-id exception. It
+    preserves the distinction between "the basicConstraints extension is absent"
+    and "the certificate is a non-CA" by reading the raw cA field directly.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "basicconstraints" not in subj and "basicconstraints" not in key:
+        return None
+    if ".ca" not in subj and "caboolean" not in key and "cacertificates" not in key:
+        return None
+
+    pred = str(ir.get("predicate") or "").lower()
+    constraint = ir.get("constraint") if isinstance(ir.get("constraint"), dict) else {}
+    value = constraint.get("value")
+    if isinstance(value, str):
+        vl = value.strip().lower()
+        if vl in {"false", "no", "unasserted", "not asserted", "0"}:
+            return tv_dsl.BasicConstraintsCAFalseOrAbsent()
+    elif value is False:
+        return tv_dsl.BasicConstraintsCAFalseOrAbsent()
+
+    if pred in {"must_not_be_present", "must_be_absent", "must_not_include"}:
+        if "mustnotbecacertificates" in key or "mustnotbecacertificate" in key:
+            return tv_dsl.BasicConstraintsCAFalseOrAbsent()
+        if "certificatesmustnotbeca" in key or "certificatemustnotbeca" in key:
+            return tv_dsl.BasicConstraintsCAFalseOrAbsent()
+    return None
+
+
 def _extract_basic_constraints_keycertsign_presence_atom(ir: dict) -> Optional[object]:
     """basicConstraints presence for keys used to validate cert signatures."""
     raw = _full_ir_text(ir)
@@ -886,6 +985,113 @@ def _extract_basic_constraints_pathlen_absent_atom(ir: dict) -> Optional[object]
         if "mustnot" not in key or "present" not in key:
             return None
     return tv_dsl.Not(tv_dsl.PathLenConstraintPresent())
+
+
+def _extract_crldp_distribution_point_field_absent_atom(ir: dict) -> Optional[object]:
+    """CRL DistributionPoint top-level field absence (reasons/cRLIssuer)."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "crldistributionpoints" not in subj and "crldistributionpoints" not in key:
+        return None
+    pred = str(ir.get("predicate") or "").lower()
+    if pred not in {"must_not_be_present", "must_be_absent", "must_not_include"}:
+        if "mustnot" not in key or "present" not in key:
+            return None
+    field = None
+    if "crlissuer" in key or "crlissuer" in subj:
+        field = "cRLIssuer"
+    elif "reasons" in key or "reasons" in subj:
+        field = "reasons"
+    if field is None:
+        return None
+    return tv_dsl.Not(tv_dsl.CRLDPHasDistributionPointField(field))
+
+
+def _extract_crldp_distribution_point_fullname_atom(ir: dict) -> Optional[object]:
+    """CRLDP DistributionPointName must be the fullName CHOICE."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "crldistributionpoints" not in subj and "crldistributionpoints" not in key:
+        return None
+    pred = str(ir.get("predicate") or "").lower()
+    if pred not in {"encode_as", "must_equal", "must_be_in_set", "must_be_present"}:
+        if "fullname" not in key or "distributionpointname" not in key:
+            return None
+    if "distributionpointname" in key and "fullname" in key:
+        return tv_dsl.CRLDPAllDistributionPointsUseFullName()
+    return None
+
+
+def _extract_crldp_fullname_nonempty_atom(ir: dict) -> Optional[object]:
+    """CRLDP fullName GeneralNames min-cardinality."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "crldistributionpoints" not in subj and "crldistributionpoints" not in key:
+        return None
+    if "fullname" not in key and "fullname" not in subj:
+        return None
+    if "generalname" not in key:
+        return None
+    c = ir.get("constraint") or {}
+    min_count = c.get("min_count")
+    has_min_one = (
+        min_count == 1
+        or "atleastonegeneralname" in key
+        or "containatleastonegeneralname" in key
+        or "containsatleastonegeneralname" in key
+    )
+    if has_min_one:
+        return tv_dsl.CRLDPAllFullNamesNonEmpty()
+    return None
+
+
+def _extract_crldp_fullname_generalname_type_atom(ir: dict) -> Optional[object]:
+    """CRLDP fullName GeneralName CHOICE tag allow-list."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "crldistributionpoints" not in subj and "crldistributionpoints" not in key:
+        return None
+    if "generalname" not in key:
+        return None
+    if "uniformresourceidentifier" not in key:
+        return None
+    is_type_constraint = (
+        "mustbeoftypeuniformresourceidentifier" in key
+        or "allgeneralnamesmustbeoftypeuniformresourceidentifier" in key
+        or ("type" in key and str(ir.get("predicate") or "").lower() in {"allowed_values", "must_equal", "must_be_in_set"})
+    )
+    if not is_type_constraint:
+        return None
+    return tv_dsl.CRLDPFullNameGeneralNamesAllTagsInSet((6,))
+
+
+def _extract_crldp_fullname_uri_scheme_atom(ir: dict) -> Optional[object]:
+    """CRLDP fullName URI scheme allow-list."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = str(ir.get("subject") or "").lower()
+    if "crldistributionpoints" not in subj and "crldistributionpoints" not in key:
+        return None
+    if "scheme" not in key and "scheme" not in subj:
+        return None
+    c = ir.get("constraint") or {}
+    raw_values = list(c.get("allowed_values") or c.get("values") or [])
+    if c.get("value") is not None:
+        raw_values.append(c.get("value"))
+    values_key = _compact_text(" ".join(str(v) for v in raw_values))
+    schemes = []
+    if "http" in values_key or "http" in key:
+        schemes.append("http")
+    if not schemes:
+        return None
+    return tv_dsl.And(parts=(
+        tv_dsl.CRLDPFullNameGeneralNamesAllTagsInSet((6,)),
+        tv_dsl.CRLDPFullNameURISchemesInSet(tuple(schemes)),
+    ))
 
 
 def _extract_asn1_module_version_comment_atom(ir: dict) -> Optional[object]:
@@ -991,28 +1197,6 @@ def _extract_ip_version_octet_atom(ir: dict) -> Optional[object]:
     return None
 
 
-def _extract_common_name_ipv4_text_atom(ir: dict) -> Optional[object]:
-    """CABF commonName IPv4 text syntax.
-
-    The §7.1.4.3 Common Name Attribute section says "the value" because the
-    section subject is commonName.  Recover that section-owned subject before
-    the generic SAN iPAddress octet reducer sees "IPv4Address" and maps the row
-    to the wrong field.
-    """
-    raw = _full_ir_text(ir)
-    key = _compact_text(raw)
-    if "ipv4address" not in key:
-        return None
-    if "encodedasanipv4address" not in key and "mustbeencodedasanipv4address" not in key:
-        return None
-    context = _compact_text(" ".join(str(ir.get(k) or "") for k in (
-        "subject", "_rule_title", "title", "citation", "section_scope",
-    )))
-    if "commonname" not in context and "7143" not in context:
-        return None
-    return tv_dsl.StringFieldIfIPv4AddressUsesDottedDecimal("Subject.CommonName")
-
-
 def _extract_ip_reverse_zone_suffix_atom(ir: dict) -> Optional[object]:
     """CABF issuance ban for Domain Names ending in IP reverse-zone suffixes."""
     raw = _full_ir_text(ir)
@@ -1080,7 +1264,7 @@ def _extract_aia_access_description_count_atom(ir: dict) -> Optional[object]:
     if "authorityinfoaccess" not in subj and "authorityinfoaccesssyntax" not in key:
         return None
     if "authorityinfoaccesssyntax" in key and "oneormoreaccessdescription" in key:
-        return tv_dsl.AIAAccessDescriptionCountInRange(1, "MAX_INT")
+        return tv_dsl.AccessDescriptionCountInRange("AiaOID", 1, "MAX_INT")
     return None
 
 
@@ -1093,7 +1277,7 @@ def _extract_aia_unique_location_per_method_atom(ir: dict) -> Optional[object]:
         return None
     if ("sameaccessmethod" in key and "accesslocation" in key
             and ("unique" in key or "mustbeunique" in key)):
-        return tv_dsl.AIAAccessLocationUniquePerMethod()
+        return tv_dsl.AccessLocationUniquePerMethod("AiaOID")
     return None
 
 
@@ -1385,6 +1569,10 @@ def _extract_extkeyusage_only_allowed_usages_atom(ir: dict) -> Optional[object]:
     if "unrestricted" in title_key and "anyextendedkeyusage" in key:
         return None
 
+    source_table_allowed = _eku_names_from_source_table(ir)
+    if source_table_allowed:
+        return tv_dsl.ExtKeyUsageOnlyHasUsagesInSet(source_table_allowed)
+
     allowed: Optional[tuple[str, ...]] = None
     if "technicallyconstrainedprecertificatesigningcaextendedkeyusage" in title_key:
         allowed = ("PreCertificateSigningCertificate",)
@@ -1400,6 +1588,61 @@ def _extract_extkeyusage_only_allowed_usages_atom(ir: dict) -> Optional[object]:
     if not allowed:
         return None
     return tv_dsl.ExtKeyUsageOnlyHasUsagesInSet(allowed)
+
+
+_EKU_NAME_BY_SOURCE_TEXT = {
+    "anyextendedkeyusage": "Any",
+    "idkpserverauth": "ServerAuth",
+    "serverauth": "ServerAuth",
+    "idkpclientauth": "ClientAuth",
+    "clientauth": "ClientAuth",
+    "idkpcodesigning": "CodeSigning",
+    "codesigning": "CodeSigning",
+    "idkpemailprotection": "EmailProtection",
+    "emailprotection": "EmailProtection",
+    "idkptimestamping": "TimeStamping",
+    "timestamping": "TimeStamping",
+    "idkpocspsigning": "OcspSigning",
+    "ocspsigning": "OcspSigning",
+    "precertificatesigningcertificate": "PreCertificateSigningCertificate",
+}
+
+_EKU_NAME_BY_DOTTED_OID = {
+    "2.5.29.37.0": "Any",
+    "1.3.6.1.5.5.7.3.1": "ServerAuth",
+    "1.3.6.1.5.5.7.3.2": "ClientAuth",
+    "1.3.6.1.5.5.7.3.3": "CodeSigning",
+    "1.3.6.1.5.5.7.3.4": "EmailProtection",
+    "1.3.6.1.5.5.7.3.8": "TimeStamping",
+    "1.3.6.1.5.5.7.3.9": "OcspSigning",
+    "1.3.6.1.4.1.11129.2.4.4": "PreCertificateSigningCertificate",
+}
+
+
+def _eku_names_from_source_table(ir: dict) -> Optional[tuple[str, ...]]:
+    c = ir.get("constraint") or {}
+    table = c.get("source_table") or {}
+    entries = table.get("listed_entries") if isinstance(table, dict) else None
+    if not isinstance(entries, list) or not entries:
+        return None
+    out: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = None
+        oid = str(entry.get("oid") or "").strip()
+        if oid:
+            name = _EKU_NAME_BY_DOTTED_OID.get(oid)
+        if name is None:
+            label_key = _compact_text(str(entry.get("label") or ""))
+            name = _EKU_NAME_BY_SOURCE_TEXT.get(label_key)
+        if name is None or name not in V.EKU_BY_NAME:
+            continue
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return tuple(out) if out else None
 
 
 def _extract_unrestricted_anyeku_only_atom(ir: dict) -> Optional[object]:
@@ -1511,6 +1754,13 @@ def _extract_subject_attr_must_not_present_atom(ir: dict) -> Optional[object]:
         if "mustnot" not in key or "present" not in key:
             return None
     subj = str(ir.get("subject") or "")
+    # A name such as ``authorityCertSerialNumber`` may also occur as a nested
+    # extension field. Only a structured Subject-DN path denotes an RDN
+    # attribute; otherwise this generic table reducer would confuse it with the
+    # unrelated Subject.serialNumber attribute.
+    subj_key = _compact_text(subj)
+    if subj and not (subj_key == "subject" or subj_key.startswith("subject")):
+        return None
     hay = f"{subj}\n{raw}"
     hay_key = _compact_text(hay)
     for rdn_name, dn_field in V.RDN_TO_DN_NAME.items():
@@ -1532,6 +1782,12 @@ def _extract_name_constraints_directoryname_not_recommended_atom(ir: dict) -> Op
     if "directoryname" not in key or "notrecommended" not in key:
         return None
     if "nameconstraints" not in key and "nameconstraints" not in title_key:
+        return None
+    # A typed subject path already identifies one subtree branch. Preserve that
+    # structured scope and let the generic IR converter render it; this fallback
+    # is only for unscoped prose that genuinely addresses both branches.
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "permittedsubtrees" in subj_key or "excludedsubtrees" in subj_key:
         return None
     return tv_dsl.And(parts=(
         tv_dsl.Not(tv_dsl.FieldNonEmpty("PermittedDirectoryNames")),
@@ -1566,6 +1822,36 @@ def _extract_name_constraints_fallback_marker_atom(ir: dict) -> Optional[object]
             tv_dsl.SubtreeIPListAnyAllZero("PermittedIPAddresses", 32),
         ))
     return None
+
+
+def _extract_name_constraints_general_subtree_minimum_zero_atom(ir: dict) -> Optional[object]:
+    """NameConstraints GeneralSubtree.minimum DEFAULT-0 equality.
+
+    RFC 5280 encodes GeneralSubtree.minimum as context tag [0] with DEFAULT 0.
+    A rule saying "minimum MUST be zero" is therefore satisfied when the field is
+    absent (the ASN.1 default) or explicitly present with INTEGER 0. This reducer
+    is keyed by the structured subject path and the numeric equality value, not a
+    rule id.
+    """
+    subj = _compact_text(str(ir.get("subject") or ""))
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    pred = str(ir.get("predicate") or "").lower()
+    c = ir.get("constraint") if isinstance(ir.get("constraint"), dict) else {}
+    value = c.get("value")
+    min_value = c.get("min_value")
+    has_zero_value = value == 0 or min_value == 0 or "mustbezero" in key or "minimumzero" in key
+    if pred != "must_equal" or not has_zero_value:
+        return None
+    if "nameconstraints" not in subj and "nameconstraints" not in key:
+        return None
+    if "generalsubtree" not in subj and "generalsubtree" not in key:
+        return None
+    if "minimum" not in subj and "minimum" not in key:
+        return None
+    return tv_dsl.ExtSubfieldContextIntEquals(
+        "NameConstOID", 0, "minimum", "generalsubtree", 0, 0
+    )
 
 
 def _extract_permitted_dns_ip_or_excluded_all_atom(ir: dict) -> Optional[object]:
@@ -1603,6 +1889,8 @@ def _extract_excluded_subtrees_empty_atom(ir: dict) -> Optional[object]:
     raw = _full_ir_text(ir)
     key = _compact_text(raw)
     subj = str(ir.get("subject") or "").lower()
+    if "directoryname" in _compact_text(subj):
+        return None
     if "excludedsubtrees" not in key and "nameconstraints" not in subj:
         return None
     if "excludedsubtrees" not in key:
@@ -1626,6 +1914,25 @@ def _extract_permitted_subtrees_nonempty_atom(ir: dict) -> Optional[object]:
     if "includeavaluewithin" not in key and "includeavalue" not in key:
         return None
     return tv_dsl.NameConstraintsPermittedSubtreesNonEmpty()
+
+
+def _extract_common_name_from_san_atom(ir: dict) -> Optional[object]:
+    """subject commonName, if present, must be one subjectAltName value."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj_key = _compact_text(str(ir.get("subject") or ""))
+    if "notrecommended" in key or "shouldnot" in key:
+        return None
+    if subj_key not in {"subjectcommonname", "commonname"}:
+        return None
+    if "subjectaltname" not in key and "subjectalternativename" not in key:
+        return None
+    if "derivedfrom" not in key and "valuefrom" not in key and "fromthesubjectaltname" not in key:
+        return None
+    return tv_dsl.ScalarInAnyOfLists(
+        "Subject.CommonName",
+        ("DNSNames", "EmailAddresses", "URIs", "IPAddresses"),
+    )
 
 
 def _extract_common_name_domain_label_atom(ir: dict) -> Optional[object]:
@@ -1679,6 +1986,103 @@ def _extract_domaincomponent_domain_name_labels_atom(ir: dict) -> Optional[objec
     ):
         return tv_dsl.DomainComponentOrdered()
     return None
+
+
+_DN_ATTR_ALIAS = {
+    "jurisdictionCountry": "jurisdictionCountryName",
+    "jurisdictionStateOrProvince": "jurisdictionStateOrProvinceName",
+    "jurisdictionLocality": "jurisdictionLocalityName",
+}
+
+
+def _canonical_dn_attr(raw: str) -> Optional[str]:
+    name = re.sub(r"[`\s]", "", raw or "")
+    name = _DN_ATTR_ALIAS.get(name, name)
+    return name if name in V.DN_ATTR_OID_BY_NAME else None
+
+
+def _parse_subject_attr_order_table(source_excerpt: str) -> list[dict]:
+    """Parse BR's source-owned "Encoding and Order Requirements" Markdown table.
+
+    Returns an empty list on any unsupported row so the caller leaves the rule as
+    a residual instead of generating an incomplete umbrella lint.
+    """
+    if not source_excerpt:
+        return []
+    m = re.search(
+        r"Table:\s*Encoding and Order Requirements for Selected Attributes",
+        source_excerpt,
+        re.I,
+    )
+    if not m:
+        return []
+    end = len(source_excerpt)
+    for marker in (
+        "CAs that include attributes in the Certificate `subject` field that are listed in the table below SHALL follow",
+        "Table: Encoding Requirements for Selected Attributes",
+        "#### 7.1.4.3",
+    ):
+        pos = source_excerpt.find(marker, m.end())
+        if pos >= 0:
+            end = min(end, pos)
+    block = source_excerpt[m.end():end]
+    rows: list[dict] = []
+    for line in block.splitlines():
+        line = line.strip()
+        if not line.startswith("| `"):
+            continue
+        cols = [c.strip() for c in line.strip("|").split("|")]
+        if len(cols) < 5:
+            return []
+        attr = _canonical_dn_attr(cols[0])
+        if not attr:
+            return []
+        enc_col = cols[3]
+        types = [
+            t for t in re.findall(r"`([A-Za-z0-9]+String)`", enc_col)
+            if t in V.ASN1_BY_NAME
+        ]
+        if not types:
+            return []
+        max_col = cols[4]
+        max_len = None
+        if not re.search(r"\bNone\b", max_col, re.I):
+            lm = re.search(r"\b(\d+)\b", max_col)
+            if not lm:
+                return []
+            max_len = int(lm.group(1))
+        rows.append({"attr": attr, "types": tuple(types), "max_len": max_len})
+    return rows
+
+
+def _extract_subject_attr_order_and_encoding_atom(ir: dict) -> Optional[object]:
+    """BR subject attribute umbrella row -> source-table-driven generic atoms."""
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = _compact_text(str(ir.get("subject") or ""))
+    pred = str(ir.get("predicate") or "").lower()
+    if pred not in ("conform_to", "encode_as", "must_equal"):
+        return None
+    if "subject" not in subj and "certificatesubjectfield" not in key:
+        return None
+    if "relativeorder" not in key or "tablebelow" not in key:
+        return None
+    if "specifiedencodingrequirements" not in key and "encodingrequirements" not in key:
+        return None
+    rows = _parse_subject_attr_order_table(str(ir.get("_source_excerpt") or ""))
+    if not rows:
+        return None
+    ordered_attrs = tuple(row["attr"] for row in rows)
+    parts = [tv_dsl.DNAttributeRelativeOrderMatches("Subject", ordered_attrs)]
+    for row in rows:
+        parts.append(tv_dsl.DNAttributeValuesEncodedAs("Subject", row["attr"], row["types"]))
+        if row["max_len"] is not None:
+            parts.append(
+                tv_dsl.DNAttributeValuesCharacterLengthInRange(
+                    "Subject", row["attr"], 0, row["max_len"]
+                )
+            )
+    return tv_dsl.And(parts=tuple(parts))
 
 
 def _extract_keyusage_bit_atom(ir: dict) -> Optional[object]:
@@ -1873,6 +2277,41 @@ def _extract_excluded_or_permitted_dns_ip_nameconstraints_atom(ir: dict) -> Opti
     ))
 
 
+def _extract_subject_x500_dn_atom(ir: dict) -> Optional[object]:
+    """Non-empty subject field must be an X.500 Distinguished Name.
+
+    Some RFC 5280 rows are line-wrapped in the extraction table as "contain an
+    X."; the surrounding source excerpt carries the complete "X.500
+    distinguished name" phrase. Use the source-owned section excerpt only to
+    restore that standard term, then emit a generic RDNSequence structural check
+    guarded by the non-empty subject antecedent.
+    """
+    raw = _full_ir_text(ir)
+    key = _compact_text(raw)
+    subj = _compact_text(str(ir.get("subject") or ""))
+    pred = str(ir.get("predicate") or "").lower()
+    pre = ir.get("precondition") if isinstance(ir.get("precondition"), dict) else {}
+    pre_key = _compact_text(
+        " ".join(str(pre.get(k) or "") for k in ("kind", "field", "value", "description", "trigger"))
+    )
+    if pred not in ("must_include", "conform_to", "must_equal"):
+        return None
+    if subj not in ("subject", "rawsubject") and "subjectfield" not in key:
+        return None
+    if "nonempty" not in key and "nonempty" not in pre_key and "whereitisnonempty" not in key:
+        return None
+    if "contain" not in key:
+        return None
+    source_excerpt = str(ir.get("_source_excerpt") or "")
+    source_key = _compact_text(source_excerpt)
+    if "x500distinguishedname" not in source_key and "x500" not in key and "distinguishedname" not in key:
+        return None
+    return tv_dsl.When(
+        cond=tv_dsl.FieldNonEmpty("RawSubject"),
+        main=tv_dsl.DNHasRDNSequence("Subject"),
+    )
+
+
 def _extract_rdn_structure_atom(ir: dict) -> Optional[object]:
     """Name/RDN structural constraints from CABF/RFC DN grammar."""
     raw = _full_ir_text(ir)
@@ -1939,6 +2378,8 @@ def _extract_condition_atom(rule_id: int, ir: dict) -> Optional[object]:
                 return _app_dsl.FieldEq("Version", ints[0])
             if len(ints) > 1:
                 return _app_dsl.FieldInSet("Version", tuple(ints))
+        if "ocsp responder" in pre_blob and "certificate" in pre_blob:
+            return _app_dsl.ExtKeyUsageHas("OcspSigning")
 
     # Search the best available complete rule sentence. Current DB rows carry it
     # in `description`; older snapshots may use rule_text/text.

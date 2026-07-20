@@ -144,9 +144,18 @@ def _raw_section_text(source: str, section: str) -> str:
         heading_re = re.compile(rf"(?m)^#{{1,6}}\s+{re.escape(section)}(?:\s|$)")
         next_heading_re = re.compile(r"(?m)^#{1,6}\s+(\d+(?:\.\d+)*)(?:\s|$)")
     else:
-        heading_re = re.compile(rf"(?m)^\s*{re.escape(section)}(?:\.|\s+)")
-        next_heading_re = re.compile(r"(?m)^\s*(\d+(?:\.\d+)*)(?:\.|\s+)")
-    m = heading_re.search(text)
+        heading_re = re.compile(rf"(?m)^ {{0,2}}{re.escape(section)}(?:\.|\s+)")
+        next_heading_re = re.compile(r"(?m)^ {0,2}(\d+(?:\.\d+)*)(?:\.|\s+)")
+    m = None
+    for cand in heading_re.finditer(text):
+        line_end = text.find("\n", cand.start())
+        if line_end < 0:
+            line_end = len(text)
+        heading_line = text[cand.start():line_end]
+        if _source_key(source) != "CABF-BR" and re.search(r"\.{3,}\s*\d+\s*$", heading_line):
+            continue
+        m = cand
+        break
     if not m:
         return ""
     end = len(text)
@@ -175,15 +184,49 @@ def _norm_text(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
 
 
-def _effective_date_tuple(source: str,
-                          section: str,
-                          rule_text: str = "",
-                          ir: Optional[dict] = None) -> Optional[tuple[int, int, int]]:
+DateTuple = tuple[int, int, int]
+DateWindow = tuple[Optional[DateTuple], Optional[DateTuple]]
+
+
+def _date_window_from_text(value: str) -> DateWindow:
+    text = str(value or "")
+    dates = [
+        (m.group(0), (int(m.group(1)), int(m.group(2)), int(m.group(3))))
+        for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})", text)
+    ]
+    dates = [item for item in dates if 1 <= item[1][1] <= 12 and 1 <= item[1][2] <= 31]
+    if not dates:
+        return None, None
+
+    lower = text.lower()
+    if len(dates) >= 2 and re.search(r"\bon or after\b", lower) and re.search(r"\bbefore\b", lower):
+        return dates[0][1], dates[1][1]
+    if re.search(r"\bbefore\s+\d{4}-\d{2}-\d{2}\b", lower) and not re.search(r"\bon or after\b", lower):
+        return None, dates[0][1]
+    if re.search(r"\bprior to\s+\d{4}-\d{2}-\d{2}\b", lower) and not re.search(r"\bon or after\b", lower):
+        return None, dates[0][1]
+    return dates[0][1], None
+
+
+def _effective_date_window(source: str,
+                           section: str,
+                           rule_text: str = "",
+                           ir: Optional[dict] = None) -> DateWindow:
     ir = ir or {}
+    effective: Optional[DateTuple] = None
+    ineffective: Optional[DateTuple] = None
     for key in ("effective_date", "effectiveDate"):
         parsed = _date_tuple(ir.get(key))
         if parsed:
-            return parsed
+            effective = parsed
+            break
+    for key in ("ineffective_date", "ineffectiveDate"):
+        parsed = _date_tuple(ir.get(key))
+        if parsed:
+            ineffective = parsed
+            break
+    if effective or ineffective:
+        return effective, ineffective
 
     candidates = [
         rule_text or "",
@@ -191,54 +234,72 @@ def _effective_date_tuple(source: str,
         str((ir.get("constraint") or {}).get("raw_text") or ""),
     ]
     for candidate in candidates:
-        parsed = _date_tuple(candidate)
-        if parsed:
-            return parsed
+        window = _date_window_from_text(candidate)
+        if window != (None, None):
+            return window
 
     norm_candidates = [
         n for n in (_norm_text(c) for c in candidates)
         if len(n) >= 30
     ]
     if not norm_candidates:
-        return None
+        return None, None
     section_text = _raw_section_text(source, section)
     if not section_text:
-        return None
+        return None, None
     # Split into sentence-ish fragments so a date in one table-cell sentence
     # does not leak to a neighboring sentence in the same Markdown row.
     fragments = re.split(r"(?<=[.!?])\s+|\n+", section_text)
     for frag in fragments:
-        parsed = _date_tuple(frag)
-        if not parsed:
+        window = _date_window_from_text(frag)
+        if window == (None, None):
             continue
         norm_frag = _norm_text(frag)
         if any(c in norm_frag for c in norm_candidates):
-            return parsed
-    return None
+            return window
+    return None, None
+
+
+def _effective_date_tuple(source: str,
+                          section: str,
+                          rule_text: str = "",
+                          ir: Optional[dict] = None) -> Optional[DateTuple]:
+    effective, _ = _effective_date_window(source, section, rule_text, ir)
+    return effective
+
+
+def _date_go_literal(parsed: DateTuple) -> str:
+    y, mo, d = parsed
+    return f"time.Date({y}, time.Month({mo}), {d}, 0, 0, 0, 0, time.UTC)"
 
 
 def _effective_date_go_line(source: str,
                             section: str,
                             rule_text: str,
                             ir: Optional[dict]) -> tuple[str, bool]:
-    parsed = _effective_date_tuple(source, section, rule_text, ir)
-    if not parsed:
+    effective, ineffective = _effective_date_window(source, section, rule_text, ir)
+    if not effective and not ineffective:
         return "", False
-    y, mo, d = parsed
-    return (
-        f"\t\t\tEffectiveDate: time.Date({y}, time.Month({mo}), {d}, 0, 0, 0, 0, time.UTC),",
-        True,
-    )
+    lines = []
+    if effective:
+        lines.append(f"\t\t\tEffectiveDate: {_date_go_literal(effective)},")
+    if ineffective:
+        lines.append(f"\t\t\tIneffectiveDate: {_date_go_literal(ineffective)},")
+    return "\n".join(lines), True
 
 
 def _effective_date_natural(source: str,
                             section: str,
-                            ir: Optional[dict]) -> Optional[str]:
-    parsed = _effective_date_tuple(source, section, "", ir)
-    if not parsed:
+                            ir: Optional[dict]) -> Optional[tuple[Optional[str], Optional[str]]]:
+    effective, ineffective = _effective_date_window(source, section, "", ir)
+    if not effective and not ineffective:
         return None
-    y, mo, d = parsed
-    return f"{y:04d}-{mo:02d}-{d:02d}"
+    def fmt(parsed: Optional[DateTuple]) -> Optional[str]:
+        if not parsed:
+            return None
+        y, mo, d = parsed
+        return f"{y:04d}-{mo:02d}-{d:02d}"
+    return fmt(effective), fmt(ineffective)
 
 
 def lint_name_for(rule_id: int, tree=None) -> str:
@@ -362,16 +423,10 @@ def _section_scope(section: str) -> Optional[str]:
     }.get(profile)
 
 
-# A "the AKI keyIdentifier MUST be present" obligation does NOT apply to a
-# self-signed certificate: a self-signed cert has no separate issuing key to
-# identify, so RFC 5280 §4.2.1.1 makes the AKI optional for it and the CABF Root
-# CA profile inherits that relaxation. zlint encodes the same carve-out in
-# authorityKeyIdNoKeyIdField (Pass when IsCACert && IsSelfSigned). We therefore
-# narrow the scope of a presence-of-AKI-keyIdentifier lint to exclude self-signed
-# certs. This is a NARROWING (removes false positives, never adds), keyed on the
-# IR subject + obligation so it triggers only for that exact requirement — the
-# sibling "authorityCertIssuer/SerialNumber MUST NOT be present" rules constrain
-# *content*, hold for self-signed certs too, and are deliberately left untouched.
+# RFC 5280's general AKI keyIdentifier presence rule has a self-signed carve-out
+# because a self-signed cert has no separate issuing key to identify. CABF Root
+# CA profile tables can override that with an explicit profile-row MUST, so the
+# carve-out must not be applied blindly to every AKI keyIdentifier row.
 _AKI_KEYID_SUBJECT = "extensions.authoritykeyidentifier.keyidentifier"
 
 
@@ -381,6 +436,20 @@ def _is_aki_keyid_presence_rule(ir: Optional[dict]) -> bool:
     subject = str(ir.get("subject") or "").lower()
     obligation = str(ir.get("obligation") or "").upper()
     return subject == _AKI_KEYID_SUBJECT and obligation in ("MUST", "SHALL")
+
+
+def _cabf_root_aki_keyid_profile(source: Optional[str], section: Optional[str],
+                                 title: Optional[str]) -> bool:
+    source_key = str(source or "").upper()
+    title_key = str(title or "").lower()
+    section_key = str(section or "")
+    return (
+        "CABF" in source_key
+        and (
+            section_key.startswith("7.1.2.1.3")
+            or ("root ca" in title_key and "authority key identifier" in title_key)
+        )
+    )
 
 
 def _dedupe_exprs(exprs: list[str]) -> list[str]:
@@ -448,10 +517,17 @@ def _implicit_extension_presence_oid(tree) -> Optional[str]:
     if name == "Or" and _tree_has_negative_ext_subfield(tree):
         return None
     if name in ("And", "Or") and hasattr(tree, "parts"):
+        present_oids = {
+            getattr(p, "oid", None)
+            for p in (tree.parts or ())
+            if type(p).__name__ == "ExtPresent"
+        }
         oids = {
             oid for oid in (_implicit_extension_presence_oid(p) for p in (tree.parts or ()))
             if oid
         }
+        if name == "And" and len(oids) == 1 and next(iter(oids)) in present_oids:
+            return None
         return next(iter(oids)) if len(oids) == 1 else None
     if name in {
         "ExtCritical", "ExtNotCritical", "ExtContentNonEmpty",
@@ -461,7 +537,6 @@ def _implicit_extension_presence_oid(tree) -> Optional[str]:
         return tree.oid
     if name in {
         "CertPolicyExplicitTextHasEncodingTagInSet",
-        "CertPolicyExplicitTextHasEncodingTagNotInSet",
         "CertificatePoliciesHasNoPolicyQualifiers",
         "PolicyQualifierOIDInSet",
         "PolicyQualifierOIDNotInSet",
@@ -471,12 +546,22 @@ def _implicit_extension_presence_oid(tree) -> Optional[str]:
         return "CertPolicyOID"
     if name in {
         "AIAHasMethodOtherThan", "AIAMethodLocationsTagInSet",
-        "AIAMethodLocationsAnyMatchRegex",
+        "AIAMethodLocationsAnyMatchRegex", "AccessDescriptionMethodPresent",
     } and hasattr(tree, "ext_oid"):
         return tree.ext_oid
     if name in {"AIAAccessDescriptionCountInRange", "AIAAccessLocationUniquePerMethod"}:
         return "AiaOID"
-    if name in {"CRLDPHasNameRelative", "CRLDPHasNameRelativeWithMultiIssuer"}:
+    if name in {"AccessDescriptionCountInRange", "AccessLocationUniquePerMethod"} and hasattr(tree, "ext_oid"):
+        return tree.ext_oid
+    if name in {
+        "CRLDPHasNameRelative",
+        "CRLDPHasNameRelativeWithMultiIssuer",
+        "CRLDPHasDistributionPointField",
+        "CRLDPAllDistributionPointsUseFullName",
+        "CRLDPAllFullNamesNonEmpty",
+        "CRLDPFullNameGeneralNamesAllTagsInSet",
+        "CRLDPFullNameURISchemesInSet",
+    }:
         return "CrlDistOID"
     if name.startswith("Subtree") or name.startswith("NameConstraints"):
         return "NameConstOID"
@@ -656,9 +741,11 @@ def check_applies_expr(section: str, title: str,
     if _tree_has_rsa_spki_key_condition(tree):
         exprs.append(_raw_spki_rsa_key_expr())
 
-    # Requirement-grounded narrowing: exempt self-signed certs from the
-    # AKI-keyIdentifier presence obligation (mirrors zlint's own carve-out).
-    if _is_aki_keyid_presence_rule(ir):
+    # Requirement-grounded narrowing: exempt self-signed certs from the general
+    # AKI-keyIdentifier presence obligation, but not from CABF Root CA profile
+    # rows that explicitly require keyIdentifier.
+    if (_is_aki_keyid_presence_rule(ir)
+            and not _cabf_root_aki_keyid_profile(source, section, title)):
         exprs.append("!util.IsSelfSigned(c)")
 
     uniq = _dedupe_exprs(exprs)
@@ -807,7 +894,8 @@ def check_applies_natural(section: str, title: str,
             "STRING contains an ASN.1 RSAPublicKey SEQUENCE with modulus and "
             "publicExponent INTEGERs"
         )
-    if _is_aki_keyid_presence_rule(ir):
+    if (_is_aki_keyid_presence_rule(ir)
+            and not _cabf_root_aki_keyid_profile(source, section, title)):
         pieces.append("certificates that are not self-signed")
 
     # Remove exact duplicate English fragments after composing profile +
@@ -871,7 +959,6 @@ def _pass_condition_under_check_applies(tree) -> str:
     return tree_to_natural(effective)
 
 
-
 def intree_semantics_summary(section: str,
                              title: str,
                              tree,
@@ -899,12 +986,20 @@ def intree_semantics_summary(section: str,
         "lint.Warn": "lint.Warn (an advisory warning for a SHOULD/SHOULD NOT/NOT RECOMMENDED requirement, not a hard error)",
         "lint.Notice": "lint.Notice",
     }.get(severity, f"lint.{sev_short}")
-    effective = _effective_date_natural(source or "", section, ir)
-    effective_text = (
-        f"The generated lint metadata sets EffectiveDate to {effective}."
-        if effective else
-        "The generated lint metadata does not set an EffectiveDate field."
-    )
+    window = _effective_date_natural(source or "", section, ir)
+    if window:
+        effective, ineffective = window
+        bounds = []
+        if effective:
+            bounds.append(f"on or after {effective}")
+        if ineffective:
+            bounds.append(f"before {ineffective}")
+        effective_text = (
+            "The generated lint metadata makes zlint evaluate this lint only "
+            f"for certificates with NotBefore {' and '.join(bounds)}."
+        )
+    else:
+        effective_text = "The generated lint metadata does not set an EffectiveDate or IneffectiveDate field."
     warning_text = (
         " Because this lint's severity is lint.Warn, a non-pass result is an "
         "advisory warning that the discouraged state is present; it is not a "

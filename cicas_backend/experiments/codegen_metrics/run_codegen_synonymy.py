@@ -170,11 +170,23 @@ def _raw_section_excerpt(source: str, section: str, max_chars: int = 7000) -> st
         next_heading_re = re.compile(r"(?m)^#{1,6}\s+(\d+(?:\.\d+)*)(?:\s|$)")
     else:
         heading_re = re.compile(
-            rf"(?m)^\s*{re.escape(section)}(?:\.|\s+)"
+            rf"(?m)^ {{0,2}}{re.escape(section)}(?:\.|\s+)"
         )
-        next_heading_re = re.compile(r"(?m)^\s*(\d+(?:\.\d+)*)(?:\.|\s+)")
+        next_heading_re = re.compile(r"(?m)^ {0,2}(\d+(?:\.\d+)*)(?:\.|\s+)")
 
-    m = heading_re.search(text)
+    m = None
+    for cand in heading_re.finditer(text):
+        line_end = text.find("\n", cand.start())
+        if line_end < 0:
+            line_end = len(text)
+        heading_line = text[cand.start():line_end]
+        # RFC text files include table-of-contents entries such as
+        # "4.1.2.6. Subject ................23". Those are not source context
+        # for the rule and must not be selected as section excerpts.
+        if source != "CABF-BR" and re.search(r"\.{3,}\s*\d+\s*$", heading_line):
+            continue
+        m = cand
+        break
     if not m:
         return ""
     start = m.start()
@@ -313,24 +325,79 @@ def _selected_standards(value: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
+DEFAULT_DOMAIN_DEFINITION = (
+    "standard_id IN selected AND lintable AND lint_coverage IS NOT NULL "
+    "AND lint_covered=false"
+)
+
+
+def _load_domain_rule_ids(path: Path) -> list[int]:
+    raw = path.read_text(encoding="utf-8")
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        ids: list[int] = []
+        for token in raw.replace(",", "\n").splitlines():
+            token = token.strip()
+            if not token:
+                continue
+            if token.upper().startswith("R") and token[1:].isdigit():
+                token = token[1:]
+            ids.append(int(token))
+        return list(dict.fromkeys(ids))
+    if isinstance(obj, dict):
+        obj = obj.get("rule_ids", obj.get("ids"))
+    if not isinstance(obj, list):
+        raise SystemExit(f"domain rule-id file must contain a JSON list or a rule_ids list: {path}")
+    ids = []
+    for item in obj:
+        if isinstance(item, str) and item.upper().startswith("R") and item[1:].isdigit():
+            item = item[1:]
+        ids.append(int(item))
+    return list(dict.fromkeys(ids))
+
+
+def _domain_definition_from_rows(domain: list[dict]) -> str:
+    for row in domain:
+        definition = row.get("_domain_definition")
+        if definition:
+            return str(definition)
+    return DEFAULT_DOMAIN_DEFINITION
+
+
+def load_domain(
+    standards: list[str],
+    limit: int | None = None,
+    *,
+    domain_rule_ids: set[int] | None = None,
+    domain_definition: str | None = None,
+    domain_input_path: str | None = None,
+) -> list[dict]:
     selected = [STANDARDS[s]["id"] for s in standards]
     source_by_id = {v["id"]: v["source"] for v in STANDARDS.values()}
     sec2title = _load_section_titles()
     nearby_rows = _load_nearby_section_rows(selected)
     with psycopg2.connect(DB_URL, connect_timeout=3) as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            select id, standard_id, section, title, text, ir_data, obligation, context
-            from rules
+        where = """
             where standard_id = any(%s)
               and lintable
               and lint_coverage is not null
-              and not lint_covered
+        """
+        params: list[object] = [selected]
+        if domain_rule_ids is None:
+            where += "\n              and not lint_covered"
+        else:
+            where += "\n              and id = any(%s)"
+            params.append(sorted(domain_rule_ids))
+        cur.execute(
+            f"""
+            select id, standard_id, section, title, text, ir_data, obligation, context
+            from rules
+            {where}
             order by standard_id, section, id
             """,
-            (selected,),
+            params,
         )
         rows = []
         for rid, standard_id, section, title, text, raw_ir, obligation, context in cur.fetchall():
@@ -344,20 +411,32 @@ def load_domain(standards: list[str], limit: int | None = None) -> list[dict]:
                 title,
                 sec2title,
             )
+            source = source_by_id.get(int(standard_id), str(standard_id))
             rows.append(
                 {
                     "id": int(rid),
                     "standard_id": int(standard_id),
-                    "source": source_by_id.get(int(standard_id), str(standard_id)),
+                    "source": source,
                     "section": section or "",
                     "title": title or "",
                     "text": text or "",
                     "context": context or "",
                     "nearby_section_rows": nearby_rows.get(int(rid), ""),
+                    "source_excerpt": _raw_section_excerpt(source, section or ""),
                     "ir": ir,
                     "obligation": obligation or ir.get("obligation") or "",
                     "profile_scope": context_scope,
+                    "_domain_definition": domain_definition or DEFAULT_DOMAIN_DEFINITION,
+                    "_domain_input_path": domain_input_path,
                 }
+            )
+    if domain_rule_ids is not None:
+        found = {int(row["id"]) for row in rows}
+        missing = sorted(domain_rule_ids - found)
+        if missing:
+            raise SystemExit(
+                "explicit domain contains rule ids that are not currently selected "
+                f"lintable rows with computed coverage: {missing}"
             )
     if limit is not None:
         rows = rows[:limit]
@@ -661,10 +740,9 @@ def _summarize_rows(domain: list[dict], latest: dict[int, dict], ledger_path: Pa
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "db_url": DB_URL,
         "standards": sorted({r["source"] for r in domain}),
-        "domain_definition": (
-            "standard_id IN selected AND lintable AND lint_coverage IS NOT NULL "
-            "AND lint_covered=false"
-        ),
+        "domain_definition": _domain_definition_from_rows(domain),
+        "domain_input_path": next((r.get("_domain_input_path") for r in domain
+                                   if r.get("_domain_input_path")), None),
         "profile_scope": "Rule context derived from CABF §7.1.2.N profile or row section/table title",
         "domain_total": total,
         "completed": len(scoped_latest),
@@ -761,10 +839,57 @@ def summarize(domain: list[dict], ledger_path: Path, summary_path: Path) -> dict
 # ---------------------------------------------------------------------------
 # synonymous-lint export (in-tree zlint file shapes, for later injection)
 # ---------------------------------------------------------------------------
-def _render_synonymous_lint(rule: dict, tree, precondition) -> dict | None:
-    severity = det_codegen.severity_from_obligation(
-        rule.get("obligation") or (rule.get("ir") or {}).get("obligation")
+_ROW_OBLIGATION_CELLS = {
+    "MUST",
+    "MUST NOT",
+    "REQUIRED",
+    "SHALL",
+    "SHALL NOT",
+    "PROHIBITED",
+    "SHOULD",
+    "SHOULD NOT",
+    "RECOMMENDED",
+    "NOT RECOMMENDED",
+}
+
+
+def _row_text_obligation(text: str) -> str | None:
+    """Return an explicit RFC2119-style obligation from a pipe-table row.
+
+    Extracted IR can latch onto an embedded subclause ("If present, MUST ...")
+    while the table row's Presence cell is the actual finding level
+    ("NOT RECOMMENDED"). For experiment outputs, prefer the explicit table cell
+    when it is present as a standalone cell. This is row-text derived, not a DB
+    edit or rule-id override.
+    """
+    first_line = (text or "").splitlines()[0] if text else ""
+    if "|" not in first_line:
+        return None
+    for cell in reversed(first_line.split("|")):
+        norm = (
+            cell.replace("`", "")
+            .replace("_", " ")
+            .strip()
+            .strip(".;:")
+            .upper()
+        )
+        norm = " ".join(norm.split())
+        if norm in _ROW_OBLIGATION_CELLS:
+            return norm
+    return None
+
+
+def _effective_obligation(rule: dict) -> str:
+    return (
+        _row_text_obligation(rule.get("text") or "")
+        or rule.get("obligation")
+        or (rule.get("ir") or {}).get("obligation")
+        or ""
     )
+
+
+def _render_synonymous_lint(rule: dict, tree, precondition) -> dict | None:
+    severity = det_codegen.severity_from_obligation(_effective_obligation(rule))
     try:
         return intree_emitter.render_intree_file(
             int(rule["id"]),
@@ -910,6 +1035,90 @@ def export_synonymous_from_ledger(run_dir: Path, domain: list[dict] | None = Non
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def write_run_status(run_dir: Path, domain: list[dict], summary: dict) -> None:
+    """Write a compact human/machine status derived from the current ledger."""
+    latest = load_done(run_dir / "codegen_synonymy.jsonl")
+    failures = []
+    for rule in domain:
+        rid = int(rule["id"])
+        row = latest.get(rid)
+        if not row or row.get("generation_success"):
+            continue
+        gen = row.get("generation") or {}
+        failures.append(
+            {
+                "rule_id": rid,
+                "reason": gen.get("reason") or row.get("error") or "unknown",
+            }
+        )
+
+    by_source = {}
+    for source, src in (summary.get("by_source") or {}).items():
+        by_source[source] = {
+            "domain_total": src.get("domain_total"),
+            "generation_success": src.get("generation_success"),
+            "paper_synonymy_expresses": src.get("paper_synonymy_expresses"),
+            "paper_synonymy_rate_over_generated": src.get("paper_synonymy_rate_over_generated"),
+            "paper_synonymy_rate_over_domain": src.get("paper_synonymy_rate_over_domain"),
+        }
+
+    status = {
+        "run_dir": str(run_dir),
+        "status": "complete" if summary.get("pending") == 0 else "incomplete",
+        "domain_total": summary.get("domain_total"),
+        "completed_rows": summary.get("completed"),
+        "generation_success": summary.get("generation_success"),
+        "generation_rate": summary.get("generation_rate"),
+        "generation_by_method": summary.get("generation_by_method"),
+        "generation_failure_by_reason": summary.get("generation_failure_by_reason"),
+        "generation_failures": failures,
+        "final_shipping_judged": summary.get("final_shipping_strict_judged"),
+        "final_shipping_not_judged": summary.get("final_shipping_strict_not_judged"),
+        "final_shipping_expresses_80pct": summary.get("final_shipping_strict_expresses"),
+        "final_shipping_does_not_express": summary.get("final_shipping_strict_does_not_express"),
+        "final_shipping_uncertain": summary.get("final_shipping_strict_uncertain"),
+        "paper_unanimous_expresses": summary.get("paper_synonymy_expresses"),
+        "paper_synonymy_rate_over_generated": summary.get("paper_synonymy_rate_over_generated"),
+        "paper_synonymy_rate_over_domain": summary.get("paper_synonymy_rate_over_domain"),
+        "by_source": by_source,
+        "atom_genericity_unanimous": summary.get("atom_genericity"),
+        "manifest": str(run_dir / "shipping_lints_manifest.json"),
+        "compile_verification": str(run_dir / "shipping_compile.json"),
+        "genericity_verification": str(run_dir / "generic_only_audit.json"),
+        "native_coverage_false_negative_review": str(run_dir / "domain_rule_ids.json"),
+    }
+    (run_dir / "run_status.json").write_text(
+        json.dumps(status, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    generated = int(summary.get("generation_success") or 0)
+    domain_total = int(summary.get("domain_total") or 0)
+    unanimous = int(summary.get("paper_synonymy_expresses") or 0)
+    gen_rate = (generated / domain_total * 100) if domain_total else 0.0
+    syn_rate = (unanimous / generated * 100) if generated else 0.0
+    lines = [
+        "# Run Status",
+        "",
+        f"- status: {status['status']}",
+        f"- domain: {domain_total}",
+        f"- generated: {generated} ({gen_rate:.1f}%)",
+        f"- paper unanimous EXPRESS: {unanimous} ({syn_rate:.1f}% of generated)",
+        f"- final shipping 80% EXPRESS diagnostic: {summary.get('final_shipping_strict_expresses')}",
+        f"- final shipping DNE: {summary.get('final_shipping_strict_does_not_express')}",
+        f"- uncertain: {summary.get('final_shipping_strict_uncertain')}",
+        f"- generation failures: {len(failures)}",
+        "",
+        "## Generation Failures",
+        "",
+    ]
+    if failures:
+        lines.extend(f"- R{row['rule_id']}: {row['reason']}" for row in failures)
+    else:
+        lines.append("- none")
+    (run_dir / "run_status.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def compact_ledger(domain: list[dict], run_dir: Path) -> dict:
     """Keep only the latest completed row for each current-domain rule."""
     ledger = run_dir / "codegen_synonymy.jsonl"
@@ -926,6 +1135,7 @@ def compact_ledger(domain: list[dict], run_dir: Path) -> dict:
     rewrite_ledger(ledger, records)
     summary = summarize(domain, ledger, summary_path)
     export_synonymous_from_ledger(run_dir, domain)
+    write_run_status(run_dir, domain, summary)
     print(f"[compact] ledger rows {before} -> {len(records)}", flush=True)
     return summary
 
@@ -946,7 +1156,7 @@ def _judge(rule: dict, tree, precondition, code_semantics: str, k: int) -> dict:
         rule.get("text") or "",
         precondition=precondition,
         profile_scope=rule.get("profile_scope"),
-        obligation=rule.get("obligation") or (rule.get("ir") or {}).get("obligation"),
+        obligation=_effective_obligation(rule),
         k=k,
     )
 
@@ -1040,9 +1250,7 @@ def _full_rule_context(rule: dict) -> str:
 
 
 def _severity_for_rule(rule: dict) -> str:
-    return det_codegen.severity_from_obligation(
-        rule.get("obligation") or (rule.get("ir") or {}).get("obligation")
-    )
+    return det_codegen.severity_from_obligation(_effective_obligation(rule))
 
 
 def _shipping_code_semantics(rule: dict, tree=None, precondition=None,
@@ -1074,7 +1282,7 @@ def _judge_shipping(rule: dict, tree, precondition, k: int,
         _full_rule_context(rule),
         ship_sem,
         k=k,
-        profile_scope=None,
+        profile_scope=rule.get("profile_scope"),
         inner_workers=inner_workers,
     )
     res["path"] = "shipping_judge"
@@ -1219,7 +1427,7 @@ def process_rule(rule: dict, rendered_root: Path, *, workspace, k: int,
             rec["code_semantics"] = obligation_aware_summary(
                 tree,
                 precondition,
-                obligation=rule.get("obligation") or (rule.get("ir") or {}).get("obligation"),
+                obligation=_effective_obligation(rule),
             )
             rec["code_eq_ir_certified"] = cascade.code_eq_ir_certified(
                 tree, precondition, rule=rule, workspace=workspace
@@ -1313,6 +1521,7 @@ def rejudge(domain: list[dict], run_dir: Path, k: int, only_dne: bool,
     rewrite_ledger(ledger, records)
     summary = summarize(domain, ledger, summary_path)
     export_synonymous_from_ledger(run_dir, domain)
+    write_run_status(run_dir, domain, summary)
     print(f"[rejudge] re-judged {n_rejudged} rows", flush=True)
     return summary
 
@@ -1441,6 +1650,7 @@ def rejudge_shipping(domain: list[dict], run_dir: Path, k: int,
     rewrite_ledger(ledger, records)
     summary = summarize(domain, ledger, summary_path)
     export_synonymous_from_ledger(run_dir, domain)
+    write_run_status(run_dir, domain, summary)
     print(f"[rejudge-shipping] re-judged {n_rejudged} rows; skipped {n_skipped}", flush=True)
     return summary
 
@@ -1453,7 +1663,19 @@ def main() -> int:
     ap.add_argument("--standards", default="all", help="all, cabf, rfc5280, or comma list")
     ap.add_argument("--k", type=int, default=5, help="synonym judge vote count")
     ap.add_argument("--limit", type=int, help="process only the first N domain rows")
-    ap.add_argument("--run-name", default="full_current_db", help="outputs/<run-name>")
+    ap.add_argument(
+        "--run-name",
+        default="allow_nongeneric_20260718",
+        help="outputs/<run-name>",
+    )
+    ap.add_argument(
+        "--domain-rule-ids",
+        help=(
+            "JSON/text file containing the explicit rule-id domain. With this "
+            "option, the domain is selected_id AND lintable AND computed-coverage "
+            "AND id in file; it does not trust the DB lint_covered boolean."
+        ),
+    )
     ap.add_argument("--overwrite", action="store_true", help="discard existing run ledger")
     ap.add_argument("--retry-errors", action="store_true")
     ap.add_argument("--retry-generation-failures", action="store_true")
@@ -1484,6 +1706,19 @@ def main() -> int:
 
     os.environ["ZLINT_LOCAL"] = str(Path(args.zlint_v3).resolve())
     standards = _selected_standards(args.standards)
+    explicit_rule_ids: set[int] | None = None
+    domain_definition: str | None = None
+    domain_input_path: str | None = None
+    if args.domain_rule_ids:
+        domain_path = Path(args.domain_rule_ids).resolve()
+        explicit_rule_ids = set(_load_domain_rule_ids(domain_path))
+        domain_input_path = str(domain_path)
+        domain_definition = (
+            "explicit strict-uncovered rule-id domain from experiment input; "
+            "standard_id IN selected AND lintable AND lint_coverage IS NOT NULL "
+            "AND id IN domain_rule_ids. Native-zlint coverage is taken from the "
+            "strict coverage audit inputs, not from the DB lint_covered boolean."
+        )
     run_dir = OUTPUTS / args.run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     ledger = run_dir / "codegen_synonymy.jsonl"
@@ -1503,7 +1738,13 @@ def main() -> int:
             shutil.rmtree(rendered_root)
 
     try:
-        domain = load_domain(standards, limit=args.limit)
+        domain = load_domain(
+            standards,
+            limit=args.limit,
+            domain_rule_ids=explicit_rule_ids,
+            domain_definition=domain_definition,
+            domain_input_path=domain_input_path,
+        )
     except Exception as e:
         can_fallback = (
             ledger.exists()
@@ -1522,6 +1763,7 @@ def main() -> int:
     if args.summary_only:
         summary = summarize(domain, ledger, summary_path)
         export_synonymous_from_ledger(run_dir, domain)
+        write_run_status(run_dir, domain, summary)
         print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
         return 0
 
@@ -1588,6 +1830,7 @@ def main() -> int:
 
     summary = summarize(domain, ledger, summary_path)
     export_synonymous_from_ledger(run_dir, domain)
+    write_run_status(run_dir, domain, summary)
     print(json.dumps(summary, indent=2, ensure_ascii=False), flush=True)
     return 0 if summary["pending"] == 0 else 1
 

@@ -156,6 +156,13 @@ class FieldNumericInRange:
 
 
 @dataclass(frozen=True)
+class FieldNumericAtMost:
+    """True iff numeric(field) <= hi."""
+    field: str
+    hi: int
+
+
+@dataclass(frozen=True)
 class FieldCount:
     """True iff the number of items in a repeated/list field ∈ [lo, hi].
 
@@ -278,6 +285,12 @@ class IsSubscriberCert:
 
 
 @dataclass(frozen=True)
+class IsOCSPResponderCert:
+    """True iff certificate is a delegated OCSP responder certificate."""
+    pass
+
+
+@dataclass(frozen=True)
 class DNEmpty:
     """True iff the DN component is empty."""
     holder: str  # "Subject" or "Issuer"
@@ -319,15 +332,6 @@ class ExtensionURISchemeNotInSet:
 
 
 @dataclass(frozen=True)
-class ExtensionURISchemeInSet:
-    """True iff at least one extension's extnValue contains a URI matching one
-    of the given schemes. Used for 'SHOULD NOT include https:// URIs in
-    extensions' (r28449) — walks the raw DER of each extension looking for
-    ia5String-encoded URI content, then checks the scheme prefix."""
-    schemes: tuple  # e.g. ("https", "ldaps") — schemes to check for
-
-
-@dataclass(frozen=True)
 class OidEq:
     """True iff OID field equals the given OID constant."""
     field: str
@@ -356,12 +360,6 @@ class OidListCountInSet:
 class CertPolicyExplicitTextHasEncodingTagInSet:
     """True iff at least one explicitText in CertPolicy is encoded as one of the given types."""
     types: tuple
-
-@dataclass(frozen=True)
-class CertPolicyExplicitTextHasEncodingTagNotInSet:
-    """True iff all explicitText in CertPolicy are encoded as types NOT in the given set."""
-    excluded_types: tuple
-
 
 # =====================================================================
 # POLICY QUALIFIER ATOMS — CertificatePolicies extension
@@ -436,13 +434,6 @@ class SubtreeIPListAnyHasOctetCount:
 
 
 @dataclass(frozen=True)
-class SubtreeIPListAnyHasOctetCountIn:
-    """True iff at least one IP in the NameConstraints subtree has an octet count in the given set."""
-    field: str
-    allowed_counts: tuple
-
-
-@dataclass(frozen=True)
 class AIAMethodLocationsAnyMatchRegex:
     """True iff at least one SIA method of given type has URL matching pattern."""
     field: str
@@ -459,6 +450,17 @@ class AIAHasMethodOtherThan:
     match templates_v2.dsl.AIAHasMethodOtherThan (positional bridge in det_codegen)."""
     ext_oid: str          # OID_CONST name (AiaOID / SubjectInfoAccessOID)
     allowed_oids: tuple   # tuple[str], each an OID_CONST name
+
+
+@dataclass(frozen=True)
+class AccessDescriptionMethodPresent:
+    """True iff an AccessDescription-shaped extension contains at least one
+    AccessDescription whose accessMethod equals method_oid.
+
+    Generic and parameterized by extension OID + method OID; used as the guard
+    for "when accessMethod M is used" requirements."""
+    ext_oid: str
+    method_oid: str
 
 
 @dataclass(frozen=True)
@@ -493,13 +495,6 @@ class CommonNameFromSAN:
 
 
 @dataclass(frozen=True)
-class CRLNumberInRange:
-    """True iff CRLNumber integer field is within [lo, hi]."""
-    lo: int
-    hi: Union[int, str]  # "MAX_INT" allowed
-
-
-@dataclass(frozen=True)
 class CRLDPHasNameRelativeWithMultiIssuer:
     """True iff the CRL Distribution Points extension is present AND
     contains at least one DistributionPoint whose distributionPoint
@@ -510,71 +505,9 @@ class CRLDPHasNameRelativeWithMultiIssuer:
     pass
 
 
-@dataclass(frozen=True)
-class SerialNumberInRange:
-    """True iff SerialNumber octet length is within [lo, hi]."""
-    lo: int
-    hi: Union[int, str]  # "MAX_INT" allowed
-
-
-@dataclass(frozen=True)
-class PathLenConstraintHas:
-    """True iff BasicConstraints pathLenConstraint satisfies the given operator.
-
-    op: one of "eq", "le", "lt", "ge", "gt"
-    value: integer (None means not present / no constraint)
-    """
-    op: str
-    value: Union[int, None]
-
-
-@dataclass(frozen=True)
-class TimeZoneUTC:
-    """True iff validity times are encoded in UTC/GMT timezone (Zulu, no fractional seconds)."""
-    pass
-
-
-@dataclass(frozen=True)
-class URISchemeNotInSet:
-    """True iff no URI in the list field uses any of the forbidden schemes."""
-    list_field: str
-    excluded_schemes: tuple  # e.g. ("http", "ldap")
-
-
-@dataclass(frozen=True)
-class CrossFieldMatch:
-    """True iff field_a value matches field_b value (string equality)."""
-    field_a: str
-    field_b: str
-    op: str
-    value: Union[int, None]
-
-
 # =====================================================================
 # NEW GENERIC ATOMS — for no_template gap closure
 # =====================================================================
-
-@dataclass(frozen=True)
-class PolicyHasQualifierOID:
-    """True iff the CertificatePolicies extension contains at least one PolicyInformation
-    entry whose policyQualifiers SEQUENCE contains a qualifier with the given OID.
-
-    Used for 'MUST contain only permitted policyQualifiers from the table' rules
-    (e.g., cPSurl / userNotice). Re-parses the raw DER to extract qualifier OIDs.
-    Generic: parameterized by OID constant name, applies to any CertPolicy extension."""
-    oid_const: str  # e.g. "CpsQualifierOID" (1.3.6.1.5.5.7.3.1 or custom)
-
-
-@dataclass(frozen=True)
-class PolicyQualifierCountInRange:
-    """True iff the number of policyQualifiers in at least one PolicyInformation
-    entry is within [lo, hi].
-
-    Used for 'MUST contain exactly N qualifiers' / 'MUST NOT have more than M'.
-    Re-parses raw DER of CertPolicy extension content."""
-    lo: int
-    hi: Union[int, str]  # "MAX_INT" for unbounded
-
 
 @dataclass(frozen=True)
 class PolicyQualifierOIDNotInSet:
@@ -584,17 +517,6 @@ class PolicyQualifierOIDNotInSet:
     Used for 'Any other qualifier MUST NOT be present' rules. Re-parses raw DER.
     Generic: parameterized by forbidden OID set, applies universally to CertPolicy."""
     forbidden_oids: tuple  # e.g. ("otherQualifierOID1", "otherQualifierOID2")
-
-
-@dataclass(frozen=True)
-class PolicyQualifierEncodedAsTag:
-    """True iff at least one policyQualifier's qualifier field is encoded as
-    one of the given ASN.1 tag types (e.g., ia5String for CPS pointer,
-    SEQUENCE for userNotice).
-
-    Used for 'MUST be formatted as follows' qualifier encoding rules.
-    Generic: parameterized by allowed ASN.1 type tags, universally applicable."""
-    types: tuple  # e.g. ("IA5String", "SEQUENCE")
 
 
 @dataclass(frozen=True)
@@ -622,59 +544,6 @@ class ExtKeyUsageCountInRange:
 
 
 @dataclass(frozen=True)
-class RDNHasSingleAttributeType:
-    """True iff each RelativeDistinguishedName in the RDN Sequence contains
-    exactly one AttributeTypeAndValue (i.e., no multi-AV RDN).
-
-    Used for 'Each RDN MUST contain exactly one AttributeTypeAndValue' rules.
-    Universal: single-certificate observable, no cross-certificate dependencies."""
-    pass
-
-
-@dataclass(frozen=True)
-class DNNoDuplicateAttributeTypes:
-    """True iff no AttributeType appears in more than one RDN across the
-    full Distinguished Name.
-
-    Used for 'Each Name MUST NOT contain more than one instance of a given
-    AttributeTypeAndValue across all RDNs' rules. General PKI concept."""
-    pass
-
-
-@dataclass(frozen=True)
-class ExtAccessLocationMatchesType:
-    """True iff each AccessDescription in the extension has accessLocation
-    encoded as the specified GeneralName CHOICE type.
-
-    Used for 'each accessLocation MUST be encoded as the specified GeneralName type'.
-    Parameterized by expected tag number (e.g., 6 for uniformResourceIdentifier).
-    Generic: applies to AIA, SIA, and any extension with AccessDescription SEQUENCE."""
-    tag: int  # GeneralName CHOICE tag: 0=otherName,1=rfc822Name,2=dNSName,3=x400Address,
-    # 4=directoryName,5=ediPartyName,6=uniformResourceIdentifier,7=iPAddress,8=registeredID
-
-
-@dataclass(frozen=True)
-class ExtAccessDescriptionOrdered:
-    """True iff AccessDescription entries in the extension are sorted by
-    accessMethod OID in ascending order.
-
-    Used for 'AccessDescription entries MUST be ordered by accessMethod priority'.
-    Generic: applies to AIA/SIA extensions with AccessDescription SEQUENCE."""
-    pass
-
-
-@dataclass(frozen=True)
-class OIDBytesMatchHex:
-    """True iff the OID constant's DER bytes equal the given hex string.
-
-    Used for 'AlgorithmIdentifier MUST be byte-for-byte identical with hex:...'
-    rules. Re-parses the OID to DER and compares. Generic: parameterized by
-    hex literal, universally applicable to any OID field."""
-    oid_const: str   # OID constant name (e.g., "OidEcdsaWithSHA256")
-    hex_bytes: str   # hex-encoded DER bytes (e.g., "300a06082a8648ce3d040302")
-
-
-@dataclass(frozen=True)
 class DNComponentOrderMatches:
     """True iff the sequence of DN components (RDNs or AVA order) matches
     the specified canonical order (e.g., country before locality, DNS reversed).
@@ -682,16 +551,6 @@ class DNComponentOrderMatches:
     Used for 'Domain Labels MUST be encoded in reverse order to DNS protocol'.
     Generic: parameterized by expected ordering rule, applies to Subject/Issuer DNs."""
     order_type: str  # e.g., "dns_reverse", "rfc2253", "profile_section_7"
-
-
-@dataclass(frozen=True)
-class FieldMatchesNoForbiddenChars:
-    """True iff the string field contains none of the forbidden characters.
-
-    Used for 'MUST NOT contain colons, spaces, or line feeds' rules.
-    Generic: parameterized by forbidden character set, applies to any string field."""
-    field: str
-    forbidden_chars: tuple  # e.g. (":", " ", "\n")
 
 
 @dataclass(frozen=True)
@@ -805,6 +664,15 @@ class ExtHasDuplicateGeneralNames:
 
     Used for 'subjectAlternativeName MUST NOT contain duplicate DNS names' rules.
     Generic: no parameters, checks for duplicates within the SAN extension."""
+    pass  # No parameters needed
+
+
+@dataclass(frozen=True)
+class NoDuplicateExtensionOIDs:
+    """True iff no extension OID appears more than once in TBSCertificate.extensions.
+
+    Generic: parameter-free structural X.509 constraint over extension OID
+    uniqueness, not tied to any particular extension or rule id."""
     pass  # No parameters needed
 
 

@@ -125,7 +125,7 @@ class CodeVerificationPipeline:
         self,
         api_key: str = "",
         api_base: str = "https://rsxermu666.cn/v1",
-        model: str = "Qwen/Qwen3-8B",
+        model: str = "gpt-5.4",
         zlint_dir: Optional[Path] = None,
     ):
         self.api_key = api_key
@@ -574,7 +574,7 @@ Return a JSON object with these fields:
 
     def _call_llm(self, prompt: str) -> str:
         """Call LLM API."""
-        max_tokens = 4000 if "Qwen" in self.model else 2000
+        max_tokens = 4000
         timeout = 180.0 if self.provider == "anthropic" else 120.0
         return call_text_completion(
             prompt,

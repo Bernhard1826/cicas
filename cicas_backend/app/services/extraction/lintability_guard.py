@@ -9,8 +9,9 @@ constraint on a real certificate/CRL field — i.e. something a zlint check coul
 written for.
 
 SOUND BY CONSTRUCTION — returns True only when ALL hold:
-  * predicate is observable on one artifact (conform_to / compare_as excluded — those defer to
-    another spec or are runtime comparison);
+  * predicate is observable on one artifact. ``conform_to`` is normally excluded because it
+    may defer to an external specification, except when its source names another concrete field
+    of the same certificate (for example subject.commonName derived from subjectAltName);
   * assertion_subject is Certificate / CRL / CA (CrossArtifact excluded);
   * obligation is normative (RFC2119, MAY/OPTIONAL excluded);
   * the subject's ROOT segment is a recognised certificate/CRL structural field — this is the
@@ -32,6 +33,25 @@ OBSERVABLE_PREDICATES = {
     "must_not_include", "encode_as", "allowed_values",
     "must_be_critical", "must_not_be_critical", "in_range", "matches_pattern",
 }
+
+
+def _same_certificate_field_conformance(predicate, subject_path, rule_text) -> bool:
+    """Whether ``conform_to`` denotes a closed relation between cert fields.
+
+    A generic ``conform_to`` can require a runtime algorithm or a real-world
+    fact, and is therefore not lintable.  This narrow exception only admits a
+    source rule that names ``subjectAltName`` while constraining another
+    recognised certificate field.  Both values live in the same certificate
+    DER, so the relation is independently observable without issuer, chain, or
+    external state.  It is a field-relation criterion, not a rule-id mapping.
+    """
+    if _norm(predicate).lower() != "conform_to":
+        return False
+    subject = _norm(subject_path).lower()
+    if not subject or subject.split(".")[0] not in CERT_FIELD_ROOTS:
+        return False
+    text = _primary_rule_text(rule_text).lower()
+    return bool(re.search(r"\bsubjectaltname\b", text, re.IGNORECASE))
 
 # Normative obligations (MAY / OPTIONAL excluded).
 NORMATIVE_OBLIGATIONS = {
@@ -96,6 +116,8 @@ _NOT_OBSERVABLE_PATTERNS = [
     # CA / issuer PROCESS conduct (recordkeeping, vetting), not certificate content
     r"\b(CAs?|Issuing CA|Issuers?)\b[^.]{0,60}\b(SHALL|MUST|SHOULD)\b[^.]{0,40}\b(maintain|retain|keep a record|keep records|record|log|archive|audit|monitor|store records)\b",
     r"\b(CAs?|Issuing CA|Issuers?)\b[^.]{0,40}\b(SHALL|MUST|SHOULD)\b[^.]{0,40}\b(confirm|verify|determine|ensure|establish|obtain)\b[^.]{0,40}\b(that the |the )?(Applicant|Subscriber|requester|requestor|domain|identity|control|ownership)\b",
+    r"\bApplicant information\b[^.]{0,80}\b(SHALL|MUST|SHOULD)\b[^.]{0,80}\b(include|contain|identify|provide)\b",
+    r"\b(?:DNS\s+)?(?:TXT\s+)?record\b[^.]{0,80}\b(SHALL|MUST|SHOULD)\b[^.]{0,80}\b(?:placed|published|located)\b[^.]{0,120}\b(?:Authorization Domain Name|domain name|label)\b",
     r"\bMUST NOT be used to issue\b|\bSHALL NOT be used to issue\b",
     # application / relying-party / user runtime behavior
     r"\b(users?|applications?|relying part(y|ies)|clients?)\b[^.]{0,50}\b(SHALL|MUST|SHOULD)\b[^.]{0,40}\b(be prepared|be able to|process|accept|reject|support|recognize)\b",
@@ -103,6 +125,7 @@ _NOT_OBSERVABLE_PATTERNS = [
     r"\b(CSPRNG|non-sequential|unpredictab|entropy)\b|\bat least \d+ bits of (output|entropy)\b",
     # cross-certificate / signing-key / runtime
     r"\b(signing key|issued by (a |the )?(given )?ca|corresponding certificate|during (validation|path|chain)|when validating|chain build|\bis revoked\b|current time)\b",
+    r"\b(?:CA\s+)?Private Key\b[^.]{0,80}\b(SHALL|MUST)\s+NOT\b[^.]{0,80}\bbe used to sign\b",
     r"\bcertificates?\s+issued\s+by\s+the\s+subject\s+ca\b",
     r"\bcrls?\s+issued\s+by\s+the\s+subject\s+crl\s+issuer\b",
     # cross-artifact: cert<->CRL issuer identity comparison (knowing "the CRL issuer"
@@ -602,7 +625,10 @@ def is_single_artifact_observable(predicate, assertion_subject, subject_path,
                                   obligation, rule_text) -> bool:
     """True iff this is a complete, codeable, single-artifact observable constraint on a
     real certificate/CRL field (see module docstring for the full soundness contract)."""
-    if _norm(predicate).lower() not in OBSERVABLE_PREDICATES:
+    predicate_name = _norm(predicate).lower()
+    if (predicate_name not in OBSERVABLE_PREDICATES
+            and not _same_certificate_field_conformance(
+                predicate_name, subject_path, rule_text)):
         return False
     # CA/RelyingParty are accepted here only as extraction-axis repair candidates. The final
     # lintability gate still requires assertion_subject=Certificate; callers that

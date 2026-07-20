@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.services.certificate.zlint_interface import ZLintInterface  # noqa: E402
+from app.services.certificate.native_go_coverage import NativeGoCoverageJudge  # noqa: E402
 
 DB_URL = os.environ.get("CICAS_DB_URL", "postgresql://postgres:123456@localhost:15432/cicas")
 OUTPUTS = HERE / "outputs"
@@ -56,6 +58,116 @@ def _parse_ir(raw: Any) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _resolve_source_path(file_path: str | None) -> Path | None:
+    if not file_path:
+        return None
+    raw = Path(file_path)
+    candidates = [raw]
+    if not raw.is_absolute():
+        candidates.extend((BACKEND / raw, BACKEND.parent / raw))
+    return next((candidate for candidate in candidates if candidate.exists()), None)
+
+
+def _source_section(file_path: str | None, section: str | None, limit: int = 12000) -> str:
+    """Read the authoritative rule section for the native-Go coverage judge."""
+    path = _resolve_source_path(file_path)
+    if path is None or not section:
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    # RFC plain-text headings; ignore table-of-contents dots.
+    rfc_heading = re.compile(rf"(?m)^\s*{re.escape(section)}\.\s+.*$")
+    match = next((candidate for candidate in rfc_heading.finditer(text)
+                  if "...." not in candidate.group(0)), None)
+    if match:
+        next_heading = re.compile(r"(?m)^\s*(\d+(?:\.\d+)*)\.\s+")
+        end = len(text)
+        for candidate in next_heading.finditer(text, match.end()):
+            next_section = candidate.group(1)
+            if next_section.startswith(section + "."):
+                continue
+            end = candidate.start()
+            break
+        return text[match.start():end].strip()[:limit]
+    # Markdown headings used by CABF sources.
+    md_heading = re.compile(rf"(?m)^#{{1,6}}\s+{re.escape(section)}(?:\s+|$).*$")
+    match = md_heading.search(text)
+    if not match:
+        return ""
+    next_heading = re.compile(r"(?m)^#{1,6}\s+(\d+(?:\.\d+)*)(?:\s+|$)")
+    end = len(text)
+    for candidate in next_heading.finditer(text, match.end()):
+        next_section = candidate.group(1)
+        if next_section == section or next_section.startswith(section + "."):
+            continue
+        end = candidate.start()
+        break
+    return text[match.start():end].strip()[:limit]
+
+
+def _same_document_reference_sections(ir: dict[str, Any], source: str, current_section: str | None) -> list[str]:
+    """Return explicit, same-document section references in deterministic order.
+
+    A normative table atom can delegate part of its meaning with wording such
+    as "according to Section 7.1.4.3".  The controlled extractor records that
+    relation in ``IR.references``.  Coverage must give the native-Go judge the
+    referenced authoritative text as well as the local row, otherwise it may
+    silently omit an incorporated cardinality or encoding constraint.  This
+    intentionally follows only explicit IR references whose document is absent
+    (same-document by default) or clearly names the current standard; cross-
+    standard references remain out of scope for this single-file loader.
+    """
+    if not isinstance(ir, dict):
+        return []
+    source_key = re.sub(r"[^a-z0-9]", "", (source or "").lower())
+    refs = ir.get("references") if isinstance(ir.get("references"), list) else []
+    sections: list[str] = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        section = str(ref.get("section") or "").strip()
+        doc_id = re.sub(r"[^a-z0-9]", "", str(ref.get("doc_id") or "").lower())
+        if not section or section == str(current_section or ""):
+            continue
+        if doc_id and source_key and source_key not in doc_id and doc_id not in source_key:
+            continue
+        if section not in sections:
+            sections.append(section)
+    return sections
+
+
+def _authoritative_source_context(
+    file_path: str | None,
+    section: str | None,
+    ir: dict[str, Any],
+    source: str,
+    limit: int = 12000,
+) -> str:
+    """Build the source context for semantic coverage review.
+
+    The primary section is always present first.  Explicit same-document
+    references are appended with headings, subject to the same fixed size
+    bound, so the audit input is reproducible from the source file and IR.
+    """
+    primary = _source_section(file_path, section, limit=limit)
+    if not primary:
+        return ""
+    parts = [f"[Authoritative section {section}]\n{primary}"]
+    used = len(parts[0])
+    for referenced_section in _same_document_reference_sections(ir, source, section):
+        remaining = limit - used
+        if remaining <= 0:
+            break
+        referenced = _source_section(file_path, referenced_section, limit=remaining)
+        if not referenced:
+            continue
+        part = f"[Normatively referenced same-document section {referenced_section}]\n{referenced}"
+        if used + len(part) > limit:
+            part = part[:remaining]
+        parts.append(part)
+        used += len(part)
+    return "\n\n".join(parts)[:limit]
+
+
 def _build_query(args: argparse.Namespace) -> tuple[str, list[Any]]:
     where = ["r.lintable = true", "r.standard_id in (1, 19)"]
     params: list[Any] = []
@@ -71,11 +183,13 @@ def _build_query(args: argparse.Namespace) -> tuple[str, list[Any]]:
         where.append("r.lint_coverage is null")
     elif args.only_uncovered:
         where.append("r.lint_coverage is not null and not coalesce(r.lint_covered, false)")
+    elif args.only_covered:
+        where.append("r.lint_coverage is not null and coalesce(r.lint_covered, false)")
     elif not args.include_covered:
         where.append("(r.lint_coverage is null or not coalesce(r.lint_covered, false))")
 
     sql = f"""
-        select r.id, r.standard_id, s.source, r.section, r.title, r.text,
+        select r.id, r.standard_id, s.source, s.file_path, r.section, r.title, r.text,
                r.ir_data, r.obligation, r.lint_covered, r.lint_name, r.lint_coverage
         from rules r
         join standards s on r.standard_id = s.id
@@ -98,6 +212,9 @@ def load_rules(args: argparse.Namespace) -> list[dict]:
         ir = _parse_ir(row.get("ir_data"))
         row["ir"] = ir
         row["source"] = row.get("source") or ("RFC" if row.get("standard_id") == 1 else "CABF-BR")
+        row["source_section"] = _authoritative_source_context(
+            row.get("file_path"), row.get("section"), ir, row["source"]
+        )
         if row.get("obligation") and not ir.get("obligation"):
             ir["obligation"] = row["obligation"]
     return rows
@@ -112,6 +229,7 @@ def coverage_json(result: dict) -> dict:
         "n_candidates": result.get("n_candidates"),
         "match_method": result.get("match_method"),
         "matched_lints": result.get("matched_lints") or [],
+        "audit": result.get("audit") or {},
         "recomputed_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -150,12 +268,18 @@ async def run(args: argparse.Namespace) -> int:
     if not rules:
         return 0
 
-    zlint = ZLintInterface(zlint_path=str(BACKEND / "zlint"))
-    await zlint.initialize_coverage_detection()
-    print(
-        f"[zlint-ir] CABF={len(zlint.zlint_ir_cabf)} RFC={len(zlint.zlint_ir_rfc)}",
-        flush=True,
-    )
+    zlint = None
+    native_go = None
+    if args.engine == "legacy-ir":
+        zlint = ZLintInterface(zlint_path=str(BACKEND / "zlint"))
+        await zlint.initialize_coverage_detection()
+        print(
+            f"[zlint-ir] CABF={len(zlint.zlint_ir_cabf)} RFC={len(zlint.zlint_ir_rfc)}",
+            flush=True,
+        )
+    else:
+        native_go = NativeGoCoverageJudge(BACKEND / "zlint")
+        print(f"[native-go] certificate lints={len(native_go.load_lints())}", flush=True)
 
     changed_to_full = 0
     processed = 0
@@ -170,11 +294,20 @@ async def run(args: argparse.Namespace) -> int:
                 "section": row.get("section") or "",
                 "title": row.get("title") or "",
                 "source": row.get("source") or "",
+                "source_section": row.get("source_section") or "",
                 "ir": row.get("ir") or {},
                 "ir_data": row.get("ir_data"),
+                "lint_name": row.get("lint_name"),
             }
             try:
-                result = await zlint.check_rule_coverage_intelligent(rule)
+                if native_go is not None:
+                    result = await native_go.judge(
+                        rule,
+                        candidate_limit=args.candidate_limit,
+                        require_skeptic=not args.no_skeptic,
+                    )
+                else:
+                    result = await zlint.check_rule_coverage_intelligent(rule)
                 after = bool(result.get("has_coverage"))
                 if after and not before:
                     changed_to_full += 1
@@ -191,6 +324,8 @@ async def run(args: argparse.Namespace) -> int:
                     "lint_name": result.get("lint_name"),
                     "n_candidates": result.get("n_candidates"),
                     "dry_run": args.dry_run,
+                    "match_method": result.get("match_method"),
+                    "audit": result.get("audit") or {},
                 }
                 log.write(json.dumps(rec, ensure_ascii=False, default=_json_default) + "\n")
                 log.flush()
@@ -231,11 +366,21 @@ def main() -> int:
     ap.add_argument("--include-covered", action="store_true", help="also rejudge already-covered rows")
     ap.add_argument("--only-pending", action="store_true", help="only rows with lint_coverage IS NULL")
     ap.add_argument("--only-uncovered", action="store_true", help="only rows currently judged not covered")
+    ap.add_argument("--only-covered", action="store_true", help="only rows currently judged fully covered")
     ap.add_argument("--dry-run", action="store_true", help="call judge but do not update DB")
+    ap.add_argument(
+        "--engine",
+        choices=("native-go", "legacy-ir"),
+        default="native-go",
+        help="native-go uses actual CheckApplies/Execute plus source sections; legacy-ir is retained for comparison",
+    )
+    ap.add_argument("--candidate-limit", type=int, default=24, help="native Go candidates supplied to each primary judge")
+    ap.add_argument("--no-skeptic", action="store_true", help="do not require the independent second full-coverage vote")
     ap.add_argument("--output", help="output JSONL filename under outputs/")
     args = ap.parse_args()
-    if args.only_pending and args.only_uncovered:
-        ap.error("--only-pending and --only-uncovered are mutually exclusive")
+    scoped = [args.only_pending, args.only_uncovered, args.only_covered]
+    if sum(bool(value) for value in scoped) > 1:
+        ap.error("--only-pending, --only-uncovered, and --only-covered are mutually exclusive")
     return asyncio.run(run(args))
 
 

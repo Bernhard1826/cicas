@@ -1505,6 +1505,44 @@ class StructuralAnalyzer:
             )
             return
 
+        # Open-ended ASN.1 schema delegation: the certificate carries an OID
+        # and bytes, but strict equivalence would require the arbitrary ASN.1
+        # module that defines that OID's value syntax. A generic DER check is
+        # weaker than the source requirement.
+        asn1_module_text = semantic_text_lower.replace("asn.1", "asn1")
+        if "relevant asn1 module defining" in asn1_module_text:
+            self._mark_non_lintable(ir, "delegation",
+                "Open-ended ASN.1 module delegation - strict checking requires "
+                "the external schema for the referenced OID, not only this "
+                "certificate's encoded bytes")
+            return
+
+        early_unobservable_preconditions = [
+            'unless the ca is aware', 'unless ca is aware',
+            'if the ca is aware', 'if known to the ca',
+            'known to exist', 'is known', 'not known',
+            'registration number is known',
+        ]
+        if any(p in text_lower for p in early_unobservable_preconditions):
+            self._mark_non_lintable(ir, "unobservable_precondition",
+                "Unobservable precondition - rule depends on issuer knowledge, "
+                "intent, or external facts that cannot be determined from "
+                "certificate content alone")
+            return
+
+        # Algorithm-step rows are not standalone certificate predicates. This
+        # guard must run before the single-artifact whitelist, because phrases
+        # such as "in step 5, change all ..." look like an encoding constraint
+        # if stripped from their algorithm parent.
+        if text_lower.strip().startswith('in step') or (
+            re.search(r'\bstep\s+\d+\b', text_lower)
+            and getattr(getattr(ir, 'algorithm_ref', None), 'step_modifications', None)
+        ):
+            self._mark_non_lintable(ir, "algorithm_step",
+                "Algorithm step - describes internal algorithm state/parameter, "
+                "not an independent certificate-content predicate")
+            return
+
         # === TARGETED NON-LINTABLE EXCEPTIONS ===
         # Some Table II gold rules are observable certificate-side statements, but they
         # remain non-lintable because the sentence is explanatory/example-style rather
@@ -1726,6 +1764,7 @@ class StructuralAnalyzer:
             'known to exist', 'is known', 'not known',
             'registration number is known',
             'if the ca is aware', 'if known to the ca',
+            'unless the ca is aware', 'unless ca is aware',
         ]
         if any(p in text_lower for p in unobservable_preconditions):
             self._mark_non_lintable(ir, "unobservable_precondition",
@@ -1780,27 +1819,9 @@ class StructuralAnalyzer:
             # operations) describe implementation behavior, not certificate content.
             # A linter checks the RESULT on the certificate (e.g., is dNSName ASCII?),
             # not whether the CA ran the algorithm with specific flags.
-            #
-            # EXCEPTION: Some algorithm steps produce observable encoding results.
-            # e.g., "in step 5, change all label separators to U+002E" means
-            # dNSName labels MUST use U+002E as separator — statically verifiable.
-            observable_step_results = [
-                'label separator', 'separator', 'u+002e', 'full stop',
-                'ace', 'ascii compatible encoding',
-                'before storage', 'stored in',
-            ]
-            has_observable_result = any(p in text_lower for p in observable_step_results)
-            if has_observable_result and ('dnsname' in subject_lower or 'subjectaltname' in subject_lower
-                                          or 'dnsname' in text_lower or 'domain name' in text_lower):
-                app_logger.info(
-                    f"[StructuralAnalyzer] Algorithm step with observable result: "
-                    f"'{subject}' — step produces verifiable encoding constraint"
-                )
-                # Don't filter — let it fall through to lintable patterns
-            else:
-                self._mark_non_lintable(ir, "algorithm_step",
-                    "Algorithm step - describes internal algorithm state/parameter, not certificate content")
-                return
+            self._mark_non_lintable(ir, "algorithm_step",
+                "Algorithm step - describes internal algorithm state/parameter, not certificate content")
+            return
 
         # 3. Capability - implementation capability, not certificate content
         capability_patterns = [

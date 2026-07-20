@@ -17,9 +17,14 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 ZLINT = _ROOT / "cicas_backend" / "zlint" / "v3"
-MANIFEST_DIR = _ROOT / "cicas_backend" / "experiments" / "codegen_metrics" / "outputs" / "full_current_db"
-SHIPPING_MANIFEST_SRC = MANIFEST_DIR / "shipping_lints_manifest.json"
-ROW_FRAGMENT_MANIFEST_SRC = MANIFEST_DIR / "synonymous_lints_manifest.json"
+MANIFEST_DIR = (
+    _ROOT
+    / "cicas_backend"
+    / "experiments"
+    / "codegen_metrics"
+    / "outputs"
+    / "strict_audited_uncovered_20260718"
+)
 MANIFEST_DST = _ROOT / "cicas_backend" / "experiments" / "cert_detection" / "inputs" / "cicasgen_manifest.json"
 
 
@@ -62,16 +67,23 @@ def main():
         default="shipping",
         help="shipping uses strict final-zlint synonymy; row-fragment is diagnostic only",
     )
+    ap.add_argument(
+        "--run-dir",
+        type=Path,
+        default=MANIFEST_DIR,
+        help="codegen output directory containing shipping_lints_manifest.json",
+    )
     args = ap.parse_args()
 
     if not args.emit and not args.build and not args.manifest_only:
         ap.error("need at least one of --emit, --build, --manifest-only")
 
     zlint_entries = []
-    manifest_src = (
-        SHIPPING_MANIFEST_SRC
+    manifest_dir = args.run_dir.resolve()
+    manifest_src = manifest_dir / (
+        "shipping_lints_manifest.json"
         if args.manifest_source == "shipping"
-        else ROW_FRAGMENT_MANIFEST_SRC
+        else "synonymous_lints_manifest.json"
     )
 
     # --- manifest ---

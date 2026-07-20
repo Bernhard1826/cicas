@@ -122,6 +122,8 @@ _OID_FRIENDLY = {
     "BRIndividualValidatedOID":       "the CABF individual-validated Reserved Certificate Policy Identifier (2.23.140.1.2.3)",
     "BRExtendedValidatedOID":         "the CABF extended-validation Reserved Certificate Policy Identifier (2.23.140.1.1)",
     "AnyPolicyOID":                   "the anyPolicy OID (2.5.29.32.0)",
+    "OidIdAdCaIssuers":              "id-ad-caIssuers (1.3.6.1.5.5.7.48.2)",
+    "OidIdAdOcsp":                   "id-ad-ocsp (1.3.6.1.5.5.7.48.1)",
     "CpsOID":                         "id-qt-cps / CPS pointer policyQualifierId (1.3.6.1.5.5.7.2.1)",
     "UserNoticeOID":                  "id-qt-unotice / UserNotice policyQualifierId (1.3.6.1.5.5.7.2.2)",
 }
@@ -196,6 +198,8 @@ def _atom(n) -> str:
         return "the certificate is a TLS server certificate"
     if isinstance(n, dsl.IsSubscriberCert):
         return "the certificate is a Subscriber certificate"
+    if isinstance(n, dsl.IsOCSPResponderCert):
+        return "the certificate is a delegated OCSP responder certificate"
     if isinstance(n, dsl.SigAlgMatchesTBSSignature):
         return ("the DER-encoded bytes of the outer Certificate.signatureAlgorithm "
                 "AlgorithmIdentifier are byte-for-byte identical to the DER-encoded "
@@ -283,19 +287,6 @@ def _atom(n) -> str:
         return ("if the subject commonName is a Fully-Qualified Domain Name or "
                 "Wildcard Domain Name, then it is a character-for-character copy "
                 "of a subjectAltName dNSName entry")
-    if isinstance(n, dsl.StringFieldIfIPv4AddressUsesDottedDecimal):
-        if n.field == "Subject.CommonName":
-            return ("if the subject commonName attribute value is an IPv4 "
-                    "address, that commonName string is encoded using the "
-                    "RFC 3986 IPv4Address textual literal grammar (dotted "
-                    "decimal decimal-octets): exactly four decimal octets "
-                    "0..255 separated by dots, with no leading zero except "
-                    "the single digit 0")
-        return (f"if string field {n.field} is IPv4-address-like text, its string "
-                "value is encoded using the IPv4Address textual literal grammar "
-                "(dotted decimal decimal-octets), not the X.509 subjectAltName "
-                "iPAddress OCTET STRING form: exactly four decimal octets 0..255 "
-                "separated by dots, with no leading zero except the single digit 0")
     if isinstance(n, dsl.NotAfterIsNoExpirySentinel):
         return ("the notAfter date is the GeneralizedTime no-expiration sentinel "
                 "99991231235959Z (RFC 5280 §4.1.2.5)")
@@ -363,6 +354,8 @@ def _atom(n) -> str:
         if n.lo == n.hi:
             return f"numeric value of {n.field} equals {n.lo}"
         return f"numeric value of {n.field} is in range [{n.lo}, {n.hi}]"
+    if isinstance(n, dsl.FieldNumericAtMost):
+        return f"numeric value of {n.field} is at most {n.hi}"
     if isinstance(n, dsl.FieldCount):
         hi = n.hi
         if n.field == "ExtKeyUsage":
@@ -378,6 +371,8 @@ def _atom(n) -> str:
         if n.lo == hi:
             return f"field {n.field} occurs exactly {n.lo} time(s)"
         return f"field {n.field} occurs between {n.lo} and {hi} time(s)"
+    if isinstance(n, dsl.NoDuplicateExtensionOIDs):
+        return "no extension OID appears more than once in the TBSCertificate extensions list"
     if isinstance(n, dsl.ExtKeyUsageCountInRange):
         hi = n.hi
         scope = "counting both standard EKU values and unknown EKU OIDs"
@@ -407,6 +402,15 @@ def _atom(n) -> str:
         return (f"every present {n.attr} attribute value in the {n.dn} DN is "
                 f"actually DER-encoded as {opts}; certificates with no such "
                 f"attribute satisfy this encoding-only check")
+    if isinstance(n, dsl.DNAttributeValuesCharacterLengthInRange):
+        return (f"every present {n.attr} attribute value in the {n.dn} DN has "
+                f"Unicode-character length between {n.lo} and {n.hi}; certificates "
+                f"with no such attribute satisfy this length-only check")
+    if isinstance(n, dsl.DNAttributeRelativeOrderMatches):
+        return (f"the {n.dn} DN's table-listed AttributeTypes, when present, "
+                f"appear in this relative RDNSequence order: {list(n.ordered_attrs)}; "
+                "attributes outside this list are ignored and absence of a listed "
+                "attribute does not violate this ordering-only check")
     if isinstance(n, dsl.DNAttributeTypesOnlyInSet):
         attrs = ", ".join(n.allowed_attrs)
         excluded = [
@@ -497,7 +501,9 @@ def _atom(n) -> str:
     if isinstance(n, dsl.RDNCountInRange):
         return f"the {n.holder} DN contains between {n.lo} and {n.hi} RDNs"
     if isinstance(n, dsl.DNHasRDNSequence):
-        return f"the {n.holder} Name is encoded as an ASN.1 RDNSequence: an outer SEQUENCE whose elements are RelativeDistinguishedName SETs"
+        return (f"the {n.holder} Name is an X.500 Distinguished Name encoded "
+                "as an ASN.1 RDNSequence: an outer SEQUENCE whose elements are "
+                "RelativeDistinguishedName SETs")
     if isinstance(n, dsl.RDNHasSingleAttribute):
         return f"each RDN in the {n.holder} DN carries exactly one attribute-value pair"
     if isinstance(n, dsl.RDNSequenceHasCountryBefore):
@@ -518,6 +524,10 @@ def _atom(n) -> str:
         return ("a basicConstraints extension that encodes the cA boolean as FALSE "
                 "uses the DER DEFAULT form: the extnValue OCTET STRING is exactly "
                 "the empty SEQUENCE hex 3000; an explicit BOOLEAN FALSE encoding is a violation")
+    if isinstance(n, dsl.BasicConstraintsCAFalseOrAbsent):
+        return ("the basicConstraints extension is absent, or its cA boolean is "
+                "absent/default FALSE or explicitly encoded FALSE; malformed "
+                "basicConstraints fails this predicate")
     if isinstance(n, dsl.ExtSubfieldPresent):
         sub = n.subfield or f"the [{n.tag}] context-tagged sub-element"
         if n.path == "generalsubtree":
@@ -525,6 +535,20 @@ def _atom(n) -> str:
                     f"carries the {sub} field (ASN.1 context tag [{n.tag}])")
         return (f"the {n.oid} extension is present AND its {sub} sub-field "
                 f"(ASN.1 context tag [{n.tag}]) is present in the encoded extension")
+    if isinstance(n, dsl.ExtSubfieldContextIntEquals):
+        sub = n.subfield or f"the [{n.tag}] context-tagged INTEGER sub-element"
+        if n.path == "generalsubtree":
+            default = ""
+            if n.absent_value is not None:
+                default = (
+                    f"; when that field is absent, ASN.1 DEFAULT {n.absent_value} "
+                    "is used for the comparison"
+                )
+            return (f"every GeneralSubtree inside the {n.oid} extension has the "
+                    f"{sub} field (ASN.1 context tag [{n.tag}]) equal to integer "
+                    f"{n.value}{default}")
+        return (f"the {n.oid} extension's {sub} field at path {n.path} equals "
+                f"integer {n.value}")
     if isinstance(n, dsl.OidEq):
         if n.field == "PublicKeyAlgorithmOID":
             return (f"the SubjectPublicKeyInfo.algorithm AlgorithmIdentifier OID "
@@ -660,6 +684,9 @@ def _atom(n) -> str:
         oids = ", ".join(n.allowed_oids)
         return (f"the extension {n.ext_oid} contains at least one "
                 f"AccessDescription whose accessMethod is NOT in [{oids}]")
+    if isinstance(n, dsl.AccessDescriptionMethodPresent):
+        return (f"the extension {n.ext_oid} contains at least one "
+                f"AccessDescription whose accessMethod is {n.method_oid}")
     if isinstance(n, dsl.AIAMethodLocationsTagInSet):
         tags = ", ".join(str(t) for t in n.allowed_tags)
         tagnames = {1:"rfc822Name", 2:"dNSName", 4:"directoryName",
@@ -680,6 +707,13 @@ def _atom(n) -> str:
         return ("within the Authority Information Access extension, AccessDescription "
                 "entries that have the same accessMethod have pairwise unique "
                 "accessLocation GeneralName values")
+    if isinstance(n, dsl.AccessDescriptionCountInRange):
+        return (f"the AccessDescription-shaped extension {n.ext_oid}, when present, "
+                f"contains between {n.lo} and {n.hi} AccessDescription entries")
+    if isinstance(n, dsl.AccessLocationUniquePerMethod):
+        return (f"within the AccessDescription-shaped extension {n.ext_oid}, "
+                "AccessDescription entries that have the same accessMethod have "
+                "pairwise unique accessLocation GeneralName values")
     if isinstance(n, dsl.CRLDPHasNameRelative):
         return ("the CRL Distribution Points extension contains at least one "
                 "DistributionPoint using nameRelativeToCRLIssuer (not fullName)")
@@ -687,6 +721,24 @@ def _atom(n) -> str:
         return ("the CRL Distribution Points extension contains at least one "
                 "DistributionPoint using nameRelativeToCRLIssuer AND whose "
                 "cRLIssuer field has more than one GeneralName")
+    if isinstance(n, dsl.CRLDPHasDistributionPointField):
+        return (f"the CRL Distribution Points extension contains at least one "
+                f"DistributionPoint whose {n.field} field is present")
+    if isinstance(n, dsl.CRLDPAllDistributionPointsUseFullName):
+        return ("the CRL Distribution Points extension is present, contains at "
+                "least one DistributionPoint, and every DistributionPoint uses "
+                "distributionPoint encoded as the fullName choice")
+    if isinstance(n, dsl.CRLDPAllFullNamesNonEmpty):
+        return ("every fullName value inside CRL Distribution Points contains "
+                "at least one GeneralName")
+    if isinstance(n, dsl.CRLDPFullNameGeneralNamesAllTagsInSet):
+        tags = ", ".join(str(t) for t in n.tags)
+        return ("every GeneralName inside CRL Distribution Points fullName "
+                f"values has an ASN.1 context tag in {{{tags}}}")
+    if isinstance(n, dsl.CRLDPFullNameURISchemesInSet):
+        schemes = ", ".join(str(s) for s in n.schemes)
+        return ("every uniformResourceIdentifier GeneralName inside CRL "
+                f"Distribution Points fullName values has a URI scheme in {{{schemes}}}")
     if isinstance(n, dsl.ValidityDateAsn1TagInSet):
         tags = ", ".join(n.allowed_tags)
         return (f"the ASN.1 encoding tag of validity date {n.date_field} "
@@ -720,10 +772,6 @@ def _atom(n) -> str:
     if isinstance(n, dsl.CertificatePoliciesHasNoPolicyQualifiers):
         return ("the CertificatePolicies extension is absent or every "
                 "PolicyInformation has no policyQualifiers")
-    if isinstance(n, dsl.AlgorithmIdentifierBytesMatch):
-        if n.neg:
-            return f"the algorithm identifier is NOT {n.oid_const}"
-        return f"the algorithm identifier is {n.oid_const}"
     # ---- SerialNumber constraints (RFC 5280 §4.1.2.4) ----
     if isinstance(n, dsl.SerialNumberPositive):
         return "the certificate serial number is a positive integer (greater than zero)"
@@ -757,8 +805,41 @@ def _render(n) -> str:
             return (f"every AccessDescription in extension {inner.ext_oid} has "
                     f"an accessMethod in the permitted set [{oids}]; no "
                     "AccessDescription uses any other accessMethod")
+        if isinstance(inner, dsl.AccessDescriptionMethodPresent):
+            return (f"the extension {inner.ext_oid} contains no "
+                    f"AccessDescription whose accessMethod is {inner.method_oid}")
         return f"NOT ({_render(n.inner)})"
     if isinstance(n, dsl.And):
+        # Source-table umbrella rules can expand into one ordering atom plus
+        # per-attribute encoding/length atoms. Render that closed conjunction
+        # compactly while retaining every parameter, so the synonymy judge sees
+        # the complete predicate instead of a prompt-truncated clause list.
+        order_atoms = [p for p in n.parts if isinstance(p, dsl.DNAttributeRelativeOrderMatches)]
+        if len(order_atoms) == 1 and order_atoms[0].dn == "Subject":
+            order = order_atoms[0].ordered_attrs
+            enc = {
+                p.attr: p.types
+                for p in n.parts
+                if isinstance(p, dsl.DNAttributeValuesEncodedAs) and p.dn == "Subject"
+            }
+            lengths = {
+                p.attr: p
+                for p in n.parts
+                if isinstance(p, dsl.DNAttributeValuesCharacterLengthInRange) and p.dn == "Subject"
+            }
+            if order and set(enc) == set(order) and set(lengths) == set(order):
+                order_text = ", ".join(order)
+                req_text = "; ".join(
+                    f"{attr}: ASN.1 {' or '.join(enc[attr])}, maximum "
+                    f"{lengths[attr].hi} characters"
+                    for attr in order
+                )
+                return (
+                    "the Subject DN uses the source table's listed attributes "
+                    f"in this relative RDNSequence order: {order_text}; for "
+                    "each present listed attribute, the table-specified ASN.1 "
+                    f"encoding and character limit are enforced: {req_text}"
+                )
         return " AND ".join(f"({_render(p)})" for p in n.parts)
     if isinstance(n, dsl.Or):
         if n.parts and all(isinstance(p, dsl.SignatureAlgorithmIdentifiersEqualHex) for p in n.parts):
@@ -896,13 +977,14 @@ def tree_branches_to_natural(branches: list) -> str:
 # snake_cased class name, so new atoms still get a sensible (if longer) slug.
 _SLUG_VERB: dict[str, str] = {
     "IsCA": "is_ca", "IsRootCA": "root_ca", "IsSubCA": "sub_ca", "IsServerCert": "server_cert",
-    "IsSubscriberCert": "subscriber_cert", "IsEndEntity": "end_entity",
+    "IsSubscriberCert": "subscriber_cert", "IsOCSPResponderCert": "ocsp_responder_cert", "IsEndEntity": "end_entity",
     "ExtPresent": "present", "ExtCritical": "critical", "ExtNotCritical": "not_critical",
     "ExtContentNonEmpty": "content_non_empty",
     "KeyUsageHas": "ku_has", "ExtKeyUsageHas": "eku_has",
     "FieldEq": "eq", "FieldNonEmpty": "present", "FieldEmpty": "absent",
     "FieldInSet": "in_set", "FieldNotInSet": "not_in_set",
     "FieldLenInRange": "len", "FieldNumericInRange": "value",
+    "FieldNumericAtMost": "value_at_most",
     "FieldEncodedAs": "encoded_as", "FieldCount": "count",
     "FieldMatchesRegex": "matches", "FieldNotMatchesRegex": "not_matches",
     "FieldContains": "contains",
@@ -926,7 +1008,8 @@ _SLUG_KEY_ATTRS = ("oid", "bit", "field", "scalar_field", "list_field",
 _SLUG_SUBJECT_FIRST = {
     "ExtPresent", "ExtCritical", "ExtNotCritical",
     "FieldEq", "FieldNonEmpty", "FieldEmpty", "FieldInSet", "FieldNotInSet",
-    "FieldLenInRange", "FieldNumericInRange", "FieldEncodedAs", "FieldCount",
+    "FieldLenInRange", "FieldNumericInRange", "FieldNumericAtMost",
+    "FieldEncodedAs", "FieldCount",
     "FieldMatchesRegex", "FieldNotMatchesRegex", "FieldContains",
     "OidListContains", "IPListAllOctetCount",
 }

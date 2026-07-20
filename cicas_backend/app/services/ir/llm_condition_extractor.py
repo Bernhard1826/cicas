@@ -248,7 +248,7 @@ class SimpleLLMClient:
         # 示例：
         # import openai
         # response = openai.ChatCompletion.create(
-        #     model="gpt-4",
+        #     model="gpt-5.4",
         #     messages=[{"role": "user", "content": prompt}],
         #     temperature=temperature
         # )

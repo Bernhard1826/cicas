@@ -38,7 +38,7 @@ CERTIFIED = {
     "IsCA", "KeyUsageHas", "ExtKeyUsageHas",
     "FieldNonEmpty", "FieldEmpty", "ExtPresent", "ExtNotCritical", "ExtCritical",
     "FieldEq", "FieldInSet", "FieldNotInSet", "FieldLenInRange",
-    "FieldNumericInRange", "FieldCount", "OidListContains", "IPListAllOctetCount",
+    "FieldNumericInRange", "FieldNumericAtMost", "FieldCount", "OidListContains", "IPListAllOctetCount",
     "RSAModulusBitsInRange", "RSAPublicExponentInRange",
     "ExtHasAnyGeneralNameOfTag",
     "SigAlgMatchesTBSSignature",

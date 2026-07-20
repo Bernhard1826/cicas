@@ -3,31 +3,39 @@
 This experiment scans zlint testdata with the augmented zlint binary and
 separates upstream findings from CICAS-generated `cicasgen_` findings.
 
-## Current Status
+## Archived 87-Lint Snapshot
 
-Retained fixed run (`outputs/detection_summary.{json,md}`). This is a 90-lint
-detection snapshot and was not rerun for the current 93-lint strict shipping
-manifest used by `experiments/codegen_metrics/`:
+This directory retains a historical certificate-detection run. It is not the
+current paper-facing result. The current strict code-generation result is
+recorded under
+`experiments/codegen_metrics/outputs/strict_no_hardcode_20260717/` and has 29
+unanimous shipping lints. No new certificate-scan claim is made in the paper
+until a scan is rerun from that strict manifest.
+
+The archived run is retained under
+`outputs/current_87_20260716_fixed_rsa/`. It was generated from the
+then-current 87-lint unanimous shipping manifest; it is not a current
+`codegen_metrics` result:
 
 | metric | value |
 |---|---:|
-| shipped `cicasgen_` lints | 90 |
+| shipped `cicasgen_` lints | 87 |
 | zlint testdata certs scanned | 1128 |
-| `cicasgen_` findings | 2627 |
-| triage REAL | 2469 |
-| weak-oracle triage SPURIOUS | 133 |
-| triage UNCERTAIN | 25 |
+| `cicasgen_` findings | 1794 |
+| triage REAL | 1741 |
+| weak-oracle triage SPURIOUS | 29 |
+| triage UNCERTAIN | 24 |
 | uncertain confirmed real | 2 |
-| independent CONFIRMED | 299 |
+| independent CONFIRMED | 320 |
 | independent REFUTED | 0 |
-| independent NOCHECK | 2328 |
-| unresolved weak-oracle SPURIOUS | 129 |
-| strict reportable findings | 0 |
+| independent NOCHECK | 1474 |
+| unresolved weak-oracle SPURIOUS | 25 |
+| verified novel source problems | 0 |
 
-The current run is clean under the hard independent-audit contradiction
-criterion (`REFUTED=0`). Paper-facing claims should use only independently
-confirmed findings, or explicitly label the remaining `NOCHECK` rows as not
-structurally audited.
+`REFUTED=0` only says that the implemented structural auditor did not refute a
+finding. Paper-facing external claims additionally use the shipping-manifest
+source/code review and the no-native-result audit below; `NOCHECK` rows remain
+unverified rather than clean.
 
 ## Targeted Re-Extraction
 
@@ -64,19 +72,27 @@ and strict shipping synonymy has been judged:
 
 ```bash
 python cicas_backend/experiments/codegen_metrics/run_codegen_synonymy.py \
-  --standards all --run-name full_current_db --summary-only
+  --standards all --run-name strict_no_hardcode_20260717 --summary-only
 python cicas_backend/scripts/inject_and_build.py --emit --build
 ```
 
-Run the testdata gate:
+Run the paper-facing testdata gate:
 
 ```bash
-python cicas_backend/experiments/cert_detection/run.py
+python cicas_backend/experiments/cert_detection/run.py \
+  --output-dir cicas_backend/experiments/cert_detection/outputs/current_87_20260716_fixed_rsa
 ```
 
 Expected behavior today: the command writes all outputs, then exits non-zero
 while unresolved weak-oracle `SPURIOUS` rows remain. Those rows are excluded
 from strict paper-facing claims.
+
+Derive and cross-check every Paper §8.4 count from the retained outputs:
+
+```bash
+python cicas_backend/experiments/cert_detection/audit_claimed_findings.py
+python cicas_backend/experiments/cert_detection/verify_paper_counts.py
+```
 
 External CT/Tranco-style corpus scans are report-only:
 
@@ -94,6 +110,11 @@ python cicas_backend/experiments/cert_detection/run.py \
 - `outputs/strict_reportable_findings.jsonl`: conservative paper-facing findings.
 - `outputs/audit_independent.jsonl`: independent structural audit for all
   post-gate findings.
+- `outputs/current_87_20260716_fixed_rsa/paper_counts.json`: consolidated
+  paper-facing counts derived by `verify_paper_counts.py`.
+- `outputs/current_87_20260716_fixed_rsa/claimed_finding_audit/`: reproducible
+  DER/novelty audit used for Paper §8.4. It intentionally excludes issuance-time
+  applicability in the current audit round.
 - `outputs/triage_by_lint.json`: per-lint firing and triage counts.
 - `outputs/uncertain_verified.jsonl`: reverse-check result for UNCERTAIN
   findings.

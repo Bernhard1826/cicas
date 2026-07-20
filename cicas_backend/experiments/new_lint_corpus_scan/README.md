@@ -5,20 +5,30 @@ samples or Tranco-derived TLS certificates. This directory is intentionally
 separate from `experiments/cert_detection/`, which is the SAIV gate over zlint
 testdata.
 
-The retained `ct_recent` and `tranco_1m` outputs are used by Paper §8.4 as
-external-corpus evidence. Raw `cicasgen_` hits are still inspection candidates
-only; paper-facing issue counts come from `strict_reportable_findings.jsonl`
-after the no-upstream independent structural audit.
+The `ct_recent` and `tranco_1m` outputs are retained under
+`outputs/current_87_20260716_fixed_rsa/` as external-corpus evidence. Raw
+`cicasgen_` hits and the legacy-named `strict_reportable_findings.jsonl` are
+inspection candidates only. Final paper claims come from
+`cert_detection/audit_claimed_findings.py`, which combines the shipping-manifest
+source/code review with DER confirmation and semantic novelty.
 
 The report answers: which findings came from CICAS-added zlint lints
 (`cicasgen_`), and which came from upstream zlint?
 
 ## Run
 
-```
-python3 cicas_backend/experiments/cert_detection/run.py \
-  --certs /path/to/flat-pem-corpus \
-  --independent-audit-scope no-upstream
+```bash
+python cicas_backend/experiments/cert_detection/run.py \
+  --certs cicas_backend/experiments/new_lint_corpus_scan/inputs/tranco_1m/certs \
+  --output-dir cicas_backend/experiments/new_lint_corpus_scan/outputs/current_87_20260716_fixed_rsa/tranco_1m \
+  --independent-audit-scope no-upstream \
+  --workers 16 --progress-every 10000
+
+python cicas_backend/experiments/cert_detection/run.py \
+  --certs cicas_backend/experiments/new_lint_corpus_scan/inputs/ct_recent/certs \
+  --output-dir cicas_backend/experiments/new_lint_corpus_scan/outputs/current_87_20260716_fixed_rsa/ct_recent \
+  --independent-audit-scope no-upstream \
+  --workers 16 --progress-every 10000
 ```
 
 Default output:
@@ -35,7 +45,8 @@ Key files:
 - `upstream_findings.jsonl` — upstream zlint findings kept separate.
 - `new_lint_by_lint.json` — per-`cicasgen_` lint rollup.
 - `detection_summary.json` — corpus-level counts.
-- `strict_reportable_findings.jsonl` — paper-facing strict confirmed findings.
+- `strict_reportable_findings.jsonl` — legacy preliminary structural screen;
+  not sufficient for paper-facing problem claims.
 - `no_upstream_independent_audit*.json*` — independent audit ledger/summary for
   CICAS findings on certificates with no upstream zlint finding.
 
@@ -43,28 +54,32 @@ Input corpus convention: a flat directory of `*.pem` certificates. For CT or
 Tranco collection, keep acquisition metadata outside this directory or in a
 parallel manifest so the scanner sees only PEM files.
 
-Retained input/output pairs were produced with the previous 91-lint shipping
-binary. After the lintability re-adjudication, R31068 is no longer in the
-codegen denominator or shipping manifest, leaving 90 shipped lints. R31068 has
-no hits in the retained Tranco/CT outputs, so the strict reportable finding
-counts below are unchanged; rerun the corpus scans to refresh raw
-`new_lint_findings` counts under the 90-lint binary.
+Current input/output pairs:
 
-- `inputs/ct_recent/` -> `outputs/ct_recent/`
-- `inputs/tranco_1m/` -> `outputs/tranco_1m/`
+- `inputs/ct_recent/` -> `outputs/current_87_20260716_fixed_rsa/ct_recent/`
+- `inputs/tranco_1m/` -> `outputs/current_87_20260716_fixed_rsa/tranco_1m/`
 
-Retained 90-lint scan result:
+Retained 87-lint scan result before the final claimed-finding audit:
 
-- `ct_recent`: 63,327 certs scanned; 57,558 CICAS findings; 283 no-upstream
-  findings independently audited; 1 strict reportable finding.
-- `tranco_1m`: 47,791 certs scanned; 44,020 CICAS findings; 1,316 no-upstream
-  findings independently audited; 6 strict reportable findings.
+- `ct_recent`: 63,327 certs scanned; 9,238 CICAS findings; 45 no-upstream
+  findings audited; 1 independently confirmed Warn finding, duplicated from Tranco.
+- `tranco_1m`: 47,791 certs scanned; 14,581 CICAS findings; 402 no-upstream
+  findings audited; 6 independently confirmed findings: 3 Error and 3 Warn.
 
-Strict reportable here means: CICAS-generated lint fired, no upstream zlint lint
-fired on the same certificate, and the independent structural auditor confirmed
-the specific defect. Findings are not removed because of certificate issuance
-time; time/effective-date questions are treated as audit context, not a reporting
-filter.
+The rerun also corrected a local zlint RSA compatibility defect. The local
+`zcrypto/x509` parser returns `*zcrypto/rsa.PublicKey`, while 19 native RSA lints
+had asserted `*crypto/rsa.PublicKey`; this made
+`e_rsa_no_public_key` falsely flag normal RSA certificates and suppressed valid
+no-upstream candidates. The native lints now use the parser's actual key type,
+and `lints/community/lint_rsa_no_public_key_test.go` provides a real-PEM
+regression test. Generated `cicasgen_` code and the 87-lint manifest were not
+changed by this compatibility fix.
+
+The legacy strict screen means: CICAS-generated lint fired, no upstream zlint
+lint fired on the same certificate, and the independent structural auditor
+confirmed the specific DER predicate. The final audit retains these rows only
+after the shipping-manifest source/code review; it likewise does not filter on
+issuance time in this round.
 
 Probe, smoke, generic overwritten `outputs/certs/`, and older corpus runs are
 intentionally not kept.

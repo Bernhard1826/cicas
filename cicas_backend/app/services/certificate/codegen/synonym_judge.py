@@ -12,7 +12,7 @@ generated code, or anything else. It exposes:
 
 Design contract (kept identical to v3 so behavior matches round5):
   - Embedding model: BAAI/bge-m3 via SiliconFlow
-  - LLM:             Qwen/Qwen3-8B, temperature=0, reasoning_level=off
+  - LLM:             gpt-5.4, temperature=0
   - Prompt:          v3 paraphrase-strict template (lint↔std interchangeable)
   - Section/citation pre-filter: NONE (deprecated by user — section numbers
                      have drifted, embedding-only recall as instructed)
@@ -44,7 +44,7 @@ OPENAI_BASE = "https://capi.quan2go.com/v1"
 ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_BASE = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 
-LLM_MODEL = os.environ.get("LLM_MODEL", "THUDM/GLM-Z1-9B-0414")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-5.4")
 EMB_MODEL = "BAAI/bge-m3"
 
 # ---- Unified experiment LLM endpoint (ai.ailink1.com, OpenAI-compatible) -----
@@ -62,7 +62,7 @@ AILINK_SYSTEM = ("You are a precise assistant for PKI / X.509 certificate rule "
 # ------------------------------------------------------------------ LLM call
 
 def _call_ailink(prompt: str, max_tokens: int, temperature: float) -> str:
-    """Call the unified ai.ailink1.com OpenAI-compatible endpoint (gpt-5.5).
+    """Call the unified ai.ailink1.com OpenAI-compatible endpoint (gpt-5.4).
     A system message is mandatory for this endpoint."""
     base_payload = {
         "model": AILINK_MODEL,
@@ -201,7 +201,7 @@ def _call_anthropic(model: str, prompt: str, max_tokens: int, temperature: float
 
 def call_llm(prompt: str, max_tokens: int = 3500, temperature: float = 0.0,
              model: str | None = None) -> str:
-    """Call the unified experiment LLM (ai.ailink1.com / gpt-5.5) with retries;
+    """Call the unified experiment LLM (ai.ailink1.com / gpt-5.4) with retries;
     return raw assistant content or an __ERROR__ string.
 
     All experiment LLM tasks — IR extraction, DSL-tree generation, synonym check,
@@ -647,19 +647,31 @@ certificate-violation detection and is not an extra precondition. However,
 reject a lint when CheckApplies is the very fact that P is supposed to require
 (for example, a rule requiring policy OID X must not have CheckApplies require
 that OID X already be present).
-For extension criticality/content rows such as "this extension MUST be marked
-critical" or "extension E MUST be non-critical", CheckApplies(extension present)
-is faithful: criticality/content exists only for a present extension, while a
-missing mandatory extension is a separate presence requirement.
-Example: (A) "If the subject field is an empty SEQUENCE, the subjectAltName
-extension MUST be marked critical"; (B) CheckApplies(subject empty AND
-subjectAltName present) plus Execute(subjectAltName critical) -> EXPRESSES.
-CONDITIONAL FALLBACK EQUIVALENCE: A rule of the form "if no X is present,
-include fallback marker/value Y" is logically satisfied by the pass condition
-"X is present OR Y is present". Do not reject this form merely because (B)
-mentions the ordinary X branch; that branch is the case where the source
-antecedent "no X" is false. The fallback Y must still be checked exactly.
-NAMECONSTRAINTS IP EXCLUDE-ALL: In X.509 nameConstraints, an iPAddress
+	For extension criticality/content rows such as "this extension MUST be marked
+	critical" or "extension E MUST be non-critical", CheckApplies(extension present)
+	is faithful: criticality/content exists only for a present extension, while a
+	missing mandatory extension is a separate presence requirement.
+	Example: (A) "If the subject field is an empty SEQUENCE, the subjectAltName
+	extension MUST be marked critical"; (B) CheckApplies(subject empty AND
+	subjectAltName present) plus Execute(subjectAltName critical) -> EXPRESSES.
+	OPTIONAL EXTENSION CONTENT ROWS: If the source-owned surrounding text says an
+	extension may be omitted, or may be indicated either by omission or by including
+	the extension with a specified subfield value, then a table row constraining
+	that subfield is satisfied by omission as well as by the specified value. In
+	that case, code whose pass condition is "extension absent OR subfield has the
+	required value" can EXPRESS the row. Do not reject it merely because the terse
+	table row names only the subfield. If the surrounding text instead requires the
+	extension to be present, omission is not a valid substitute.
+	CONDITIONAL FALLBACK EQUIVALENCE: A rule of the form "if no X is present,
+	include fallback marker/value Y" is logically satisfied by the pass condition
+	"X is present OR Y is present". Do not reject this form merely because (B)
+	mentions the ordinary X branch; that branch is the case where the source
+	antecedent "no X" is false. The fallback Y must still be checked exactly.
+	NEGATED EXISTENTIALS: A pass condition written as
+	"NOT (contains at least one item whose field/property P is present)" means
+	there is no such item; equivalently, every relevant item lacks P. Do not
+	misread this as "at least one item lacks P".
+	NAMECONSTRAINTS IP EXCLUDE-ALL: In X.509 nameConstraints, an iPAddress
 GeneralSubtree is encoded as address bytes plus mask bytes. Excluding all
 iPAddress names means covering both IP address families: the IPv4 0.0.0.0/0
 all-zero 8-octet marker and the IPv6 ::0/0 all-zero 32-octet marker. For a
@@ -709,15 +721,29 @@ placed in the authority key identifier extension of certificates issued by the
 subject of this certificate" is NOT a same-certificate requirement that this
 certificate's SKI equals this certificate's AKI.
 
-TABLE-FRAGMENT STRICTNESS: Some (A) inputs are extracted rows from a larger
-standards table. If (A) includes "Nearby rows from the same source
-section/table", use those rows to interpret terse cells such as "MUST /",
-"MUST / MAY", or a blank value column. Do not treat one fragment row as a
-complete standalone rule when the nearby rows define alternatives or
-conditional presence. For example, if nearby rows show attribute X is required
-when Y is absent and attribute Y is required when X is absent, then (B) does
-NOT express the table by unconditionally requiring only X or only Y; it drops
-the alternative.
+	TABLE-FRAGMENT STRICTNESS: Some (A) inputs are extracted rows from a larger
+	standards table. If (A) includes "Nearby rows from the same source
+	section/table", use those rows to interpret terse cells such as "MUST /",
+	"MUST / MAY", or a blank value column. Do not treat one fragment row as a
+	complete standalone rule when the nearby rows define alternatives or
+	conditional presence. For example, if nearby rows show attribute X is required
+	when Y is absent and attribute Y is required when X is absent, then (B) does
+	NOT express the table by unconditionally requiring only X or only Y; it drops
+	the alternative.
+	At the same time, do not require (B) to enforce every sibling row in the same
+	table. Nearby rows provide scope and disambiguation, but a sibling row is not
+	part of (A)'s required predicate unless the quoted rule/context combines the
+	rows into a single conjunctive requirement.
+	SOURCE-EXCERPT FRAGMENT SCOPE: When "Original extracted rule text" is a terse
+	fragment, but the "Original source section excerpt" contains the complete
+	sentence/table row for that same fragment, the complete source excerpt controls
+	the scope of (A). In particular, if the complete source sentence says a
+	validity-period limit applies to certificates issued before/after specific
+	dates, a generated lint metadata EffectiveDate/IneffectiveDate window matching
+	those dates is faithful, not an added narrowing. However, if that same complete
+	source sentence contains both an advisory SHOULD/SHOULD NOT threshold and a
+	hard MUST/MUST NOT threshold, a single lint that enforces only one severity
+	branch does NOT express the whole combined rule.
 However, do NOT merge independent neighboring source sentences/rows into (A)
 when the "Original extracted rule text" already names one specific branch or
 requirement. Source excerpts provide inherited conditions, table headers,
@@ -729,6 +755,11 @@ sentence represented by "Original extracted rule text". Do not transfer an
 effective date, severity, or condition from a neighboring RFC2119 sentence
 unless that date/condition is in the extracted text itself or is grammatically
 the antecedent of that same sentence.
+Do not reject (B) merely because the generated zlint metadata omits
+EffectiveDate when (A) and the supplied original source context do not state an
+effective-date or issuance-date window. Conversely, when (A) or the provided
+context explicitly states such a date window, (B) must preserve it through
+EffectiveDate/IneffectiveDate metadata or an equivalent CheckApplies condition.
 Example: if the extracted rule text is "If the subject field is an empty
 SEQUENCE, subjectAltName MUST be marked critical", then code scoped to the
 empty-subject branch EXPRESSES that row. Do not reject it for omitting the
@@ -801,6 +832,15 @@ says "if present"; this is not an added narrowing. Likewise, words such as
 defined by the immediately preceding same-cell sentence. Do not reject code for
 including that definitional antecedent when it is needed to identify the thing
 being ordered or encoded.
+The same rule applies to compact formatting sub-tables: when the current row
+uses anaphora such as "each" and the immediately surrounding rows define the
+referent's type or representation, a predicate may include that definitional
+antecedent. Example: if one row says all GeneralNames in a CRL Distribution
+Points fullName must be uniformResourceIdentifier and the next row says the
+scheme of each must be http, code that requires each such GeneralName to be a
+URI and then requires URI scheme http EXPRESSES the scheme row; the URI-type
+check is the source-defined antecedent for the word "each", not an invented
+extra constraint.
 For split domainComponent rows, keep the two clauses separate: a row requiring
 the domainComponent fields to be one sequence containing all labels is expressed
 by a predicate that checks one contiguous domainComponent block and exact label
@@ -1019,7 +1059,13 @@ def judge_expresses(rule_text: str, code_sem: str, *,
     else:
         psb = ""
     _rt = (rule_text or "")[:3000]
-    _cs = (code_sem or "")[:1000]
+    # Keep the full mechanical semantics for table-driven conjunctions. A
+    # 1000-character cutoff can terminate an otherwise complete predicate
+    # halfway through its attribute/encoding clauses and make the judge report
+    # a false DOES_NOT_EXPRESS. The generated summaries are deterministic and
+    # bounded by the closed DSL tree; retain enough room for the largest
+    # source-table expansion without inventing or dropping clauses.
+    _cs = (code_sem or "")[:16000]
     prompt = (JUDGE_PROMPT
               .replace("{profile_scope_block}", psb)
               .replace("{rule_text}", _rt)

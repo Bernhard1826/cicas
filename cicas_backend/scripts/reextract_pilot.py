@@ -39,7 +39,7 @@ BACKEND = Path(__file__).resolve().parent.parent
 DB = os.environ.get("CICAS_DB_URL", "postgresql://postgres:123456@localhost:15432/cicas")
 DEFAULT_LEDGER = (
     BACKEND
-    / "experiments/codegen_metrics/outputs/full_current_db/codegen_synonymy.jsonl"
+    / "experiments/codegen_metrics/outputs/allow_nongeneric_20260718/codegen_synonymy.jsonl"
 )
 REPO_ROOT = BACKEND.parent
 
@@ -971,14 +971,16 @@ def _subject_attribute_allowlist_reextract(
     it rewrites only ir_data.ir so downstream lintability/coverage/codegen derive
     their results from structured IR.
     """
+    row_text = str(row.get("text") or "")
+    row_lower = row_text.lower()
+    if "any other attribute" not in row_lower:
+        return None, None
+    if "not recommended" not in row_lower and "must not" not in row_lower:
+        return None, None
     blob = "\n".join(
         str(row.get(k) or "")
         for k in ("text", "title", "context", "_local_context")
     ).lower()
-    if "any other attribute" not in blob:
-        return None, None
-    if "not recommended" not in blob and "must not" not in blob:
-        return None, None
     if "`subject` attributes" not in blob and "subject attribute" not in blob:
         return None, None
     allowed_attrs = _extract_subject_attr_table_allowlist(row.get("_local_context") or "")
@@ -988,8 +990,6 @@ def _subject_attribute_allowlist_reextract(
     old_outer = _loads(row["ir_data"])
     old_inner = old_outer.get("ir", old_outer)
     new_inner = dict(old_inner) if isinstance(old_inner, dict) else {}
-    row_text = str(row.get("text") or "")
-    row_lower = row_text.lower()
     obligation = "NOT RECOMMENDED" if "not recommended" in row_lower else "MUST NOT"
     new_inner.update(
         {
@@ -1062,6 +1062,14 @@ def main() -> int:
     )
     ap.add_argument("--commit", action="store_true")
     ap.add_argument(
+        "--llm-only",
+        action="store_true",
+        help=(
+            "bypass deterministic IR rewrite helpers and send every selected row "
+            "through canonical Layer-2 re-extraction; use for source-scope audits"
+        ),
+    )
+    ap.add_argument(
         "--update-text",
         action="store_true",
         help="with --commit, also persist recovered source text to rules.text when it changed",
@@ -1129,6 +1137,52 @@ def main() -> int:
             window=args.context_window,
             max_section_chars=args.max_section_chars,
         )
+        if args.llm_only:
+            llm_rows.append(row)
+            continue
+        guard_reason = _context_lintability_guard(row)
+        if guard_reason:
+            old_outer, new_inner = _apply_context_lintability_guard(row)
+            old_inner = old_outer.get("ir", old_outer)
+            diff = _diff_summary(old_inner if isinstance(old_inner, dict) else {}, new_inner)
+            report_rows.append(
+                {
+                    "id": row["id"],
+                    "status": "matched",
+                    "match_method": "deterministic_context_lintability_guard",
+                    "old_lintable": row["lintable"],
+                    "old_is_noise": row.get("is_noise"),
+                    "input_text_changed": False,
+                    "input_text": row["text"],
+                    "new_lintable": new_inner.get("lintable"),
+                    "new_is_noise": row.get("is_noise"),
+                    "new_assertion_subject": new_inner.get("assertion_subject"),
+                    "new_rule_category": new_inner.get("rule_category"),
+                    "new_non_lintable_reason": new_inner.get("non_lintable_reason"),
+                    "diff": diff,
+                }
+            )
+            print(
+                f"  R{row['id']}: context guard lintable {row['lintable']} -> "
+                f"{new_inner.get('lintable')} as={new_inner.get('assertion_subject')} "
+                f"reason={guard_reason}"
+            )
+            if args.commit:
+                old_outer = old_outer if isinstance(old_outer, dict) else {}
+                old_outer["ir"] = new_inner
+                cur.execute(
+                    """
+                    update rules
+                       set ir_data = %s,
+                           lint_coverage = null,
+                           lint_covered = null,
+                           lint_name = null
+                     where id = %s
+                    """,
+                    (json.dumps(old_outer, ensure_ascii=False), row["id"]),
+                )
+                wrote += 1
+            continue
         old_outer, new_inner = _subject_attribute_allowlist_reextract(row)
         if new_inner is not None:
             old_inner = old_outer.get("ir", old_outer) if isinstance(old_outer, dict) else {}
@@ -1170,50 +1224,7 @@ def main() -> int:
                 )
                 wrote += 1
             continue
-        guard_reason = _context_lintability_guard(row)
-        if not guard_reason:
-            llm_rows.append(row)
-            continue
-        old_outer, new_inner = _apply_context_lintability_guard(row)
-        old_inner = old_outer.get("ir", old_outer)
-        diff = _diff_summary(old_inner if isinstance(old_inner, dict) else {}, new_inner)
-        report_rows.append(
-            {
-                "id": row["id"],
-                "status": "matched",
-                "match_method": "deterministic_context_lintability_guard",
-                "old_lintable": row["lintable"],
-                "old_is_noise": row.get("is_noise"),
-                "input_text_changed": False,
-                "input_text": row["text"],
-                "new_lintable": new_inner.get("lintable"),
-                "new_is_noise": row.get("is_noise"),
-                "new_assertion_subject": new_inner.get("assertion_subject"),
-                "new_rule_category": new_inner.get("rule_category"),
-                "new_non_lintable_reason": new_inner.get("non_lintable_reason"),
-                "diff": diff,
-            }
-        )
-        print(
-            f"  R{row['id']}: context guard lintable {row['lintable']} -> "
-            f"{new_inner.get('lintable')} as={new_inner.get('assertion_subject')} "
-            f"reason={guard_reason}"
-        )
-        if args.commit:
-            old_outer = old_outer if isinstance(old_outer, dict) else {}
-            old_outer["ir"] = new_inner
-            cur.execute(
-                """
-                update rules
-                   set ir_data = %s,
-                       lint_coverage = null,
-                       lint_covered = null,
-                       lint_name = null
-                 where id = %s
-                """,
-                (json.dumps(old_outer, ensure_ascii=False), row["id"]),
-            )
-            wrote += 1
+        llm_rows.append(row)
 
     by_std: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for row in llm_rows:

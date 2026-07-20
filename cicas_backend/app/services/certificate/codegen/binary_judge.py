@@ -219,7 +219,7 @@ def judge_expresses(rule_text: str, code_sem: str, *,
                     max_tokens: int = 500) -> dict:
     """Returns dict with keys: verdict, missing_or_wrong, why, raw."""
     import os
-    model = model or os.environ.get("JUDGE_MODEL", "THUDM/GLM-Z1-9B-0414")
+    model = model or os.environ.get("JUDGE_MODEL", "gpt-5.4")
     # Replace {rule_text} and {code_sem} directly with their values.
     # We can't use str.format() here because code_sem may contain {N} patterns
     # (e.g. "{4, 16}" from IP byte-count checks) that format() mis-parses.

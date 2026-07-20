@@ -1351,6 +1351,29 @@ def _precondition_from_profile_title(title: Optional[str], rule_text: str = "") 
         if re.search(r"ocsp|responder|nocheck", (rule_text or "").lower()):
             return _p("eku_present", "OcspSigning")
         return None
+    # --- validation-level profiles (Subscriber + policy-OID guard) ---
+    # The BR defines DV/OV/IV/EV as *Subscriber Certificate* profiles and
+    # assigns each its reserved certificate-policy OID.  Both parts are source
+    # applicability conditions: retaining only the OID would overstate the
+    # applicable set relative to native CheckApplies implementations.
+    validation_oids = {
+        "individual validated": "2.23.140.1.2.3",
+        "organization validated": "2.23.140.1.2.2",
+        "domain validated": "2.23.140.1.2.1",
+        "extended validated": "2.23.140.1.1",
+    }
+    for label, oid in validation_oids.items():
+        if label in t:
+            return {
+                "kind": "all_of",
+                "negate": False,
+                "conditions": [
+                    _p("certificate_type", "subscriber"),
+                    _p("policy_oid", oid),
+                ],
+                "description": f"profile scope: Subscriber {title}",
+                "trigger": f"Subscriber {title}",
+            }
     # --- subscriber (leaf/EE) ---
     if "subscriber" in t:
         return _p("certificate_type", "subscriber")
@@ -1370,21 +1393,12 @@ def _precondition_from_profile_title(title: Optional[str], rule_text: str = "") 
         return _p("certificate_type", "ca")  # IsCA is safe here: TLS Sub-CA is a
                                              # specific CA role, and rules under
                                              # this profile are about CA properties.
-    # --- validation-level profiles (policy-OID guard) ---
-    # The validation level is encoded in the certificate's reserved CP OID,
-    # observable from a single cert.
-    if "individual validated" in t:
-        return _p("policy_oid", "2.23.140.1.2.3")
-    if "organization validated" in t:
-        return _p("policy_oid", "2.23.140.1.2.2")
-    if "domain validated" in t:
-        return _p("policy_oid", "2.23.140.1.2.1")
-    if "extended validated" in t:
-        return _p("policy_oid", "2.23.140.1.1")
     # --- generic CA profile (not subscriber, not root, not TLS-sub) ---
-    # If the title says "CA Certificate Profile" without a modifier, it covers
-    # ALL CAs (root + intermediate). IsCA is the correct guard.
-    if "ca certificate profile" in t:
+    # A section headed directly "CA Certificate ..." is the generic CA profile
+    # family, even when the trailing word is a field name rather than "Profile"
+    # (for example, CA Certificate Certificate Policies).  It covers all CAs
+    # (root + intermediate).  More-specific CA headings were handled above.
+    if "ca certificate profile" in t or t.startswith("ca certificate "):
         return _p("certificate_type", "ca")
     return None
 
@@ -1464,6 +1478,140 @@ def _precondition_from_rule_text(rule_text: str, subject_raw: str) -> Optional[D
                     "trigger": f"for {cert_kw} certificate"}
 
     return None
+
+
+def _conjoin_preconditions(*preconditions: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Preserve independent source/profile applicability conditions as an AND.
+
+    A table row such as ``province MUST be present if locality is absent`` in a
+    profile section has two conditions: the profile and the row antecedent.
+    They cannot replace one another.  This structural combiner is intentionally
+    vocabulary-agnostic; nested ``all_of`` values are flattened and exact
+    duplicate guards are removed deterministically.
+    """
+    parts: list[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for precondition in preconditions:
+        if not isinstance(precondition, dict) or not precondition:
+            continue
+        kind = str(precondition.get("kind") or precondition.get("type") or "")
+        values = precondition.get("conditions") if kind == "all_of" else [precondition]
+        if not isinstance(values, list):
+            values = [precondition]
+        for value in values:
+            if not isinstance(value, dict) or not value:
+                continue
+            # Descriptions and triggers are provenance text, not guard
+            # semantics. Profile context can emit the same guard twice with
+            # different wording; deduplicate on the executable shape.
+            key = json.dumps({
+                "kind": value.get("kind") or value.get("type"),
+                "field": value.get("field"),
+                "value": value.get("value"),
+                "values": value.get("values"),
+                "negate": bool(value.get("negate")),
+                "ext": value.get("ext"),
+            }, ensure_ascii=False, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key)
+                parts.append(value)
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0]
+    return {
+        "kind": "all_of",
+        "negate": False,
+        "conditions": parts,
+        "description": "all independently stated profile and row conditions",
+        "trigger": "profile scope and row antecedent",
+    }
+
+
+def _precondition_from_leading_dn_condition(rule_text: str) -> Optional[Dict[str, Any]]:
+    """Structure explicit certificate-DN field presence conditions from source.
+
+    This is intentionally a narrow grammar rule over a source sentence, not a
+    rule-id mapping.  It prevents an LLM's target extension (for example SAN)
+    from replacing the antecedent holder in ``If the subject field contains an
+    empty sequence, ...`` and normalizes table atoms such as ``if localityName
+    is absent`` to the same field-presence representation.
+    """
+    if not rule_text:
+        return None
+    match = re.match(
+        r"^\s*(?:if|when)\s+(?:the\s+)?`?(subject|issuer)`?(?:\s+field)?\s+"
+        r"(?:of\s+(?:the\s+)?certificate\s+)?(?:contains?|is)\s+"
+        r"(?:an?\s+)?(non-?empty|empty)(?:\s+sequence)?\b",
+        rule_text,
+        re.IGNORECASE,
+    )
+    if match:
+        field, state = match.groups()
+        is_nonempty = state.lower().replace("-", "") == "nonempty"
+        return {
+            "type": "field_present" if is_nonempty else "field_absent",
+            "value": field.lower(),
+            "negate": False,
+            "description": match.group(0).strip(),
+            "trigger": match.group(0).strip(),
+        }
+
+    match = re.search(
+        r"\bif\s+`?([A-Za-z][A-Za-z0-9_-]*)`?\s+is\s+"
+        r"(absent|not\s+present|present)\b",
+        rule_text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    raw_field, state = match.groups()
+    field = re.sub(r"[^a-z0-9]", "", raw_field.lower())
+    if field not in _PRESENCE_FIELD_TOKENS:
+        return None
+    is_absent = state.lower() in {"absent", "not present"}
+    return {
+        "type": "field_present",
+        "field": field,
+        "value": field,
+        "negate": is_absent,
+        "description": match.group(0).strip(),
+        "trigger": match.group(0).strip(),
+    }
+
+
+def _precondition_from_dn_condition_prose(precondition: Any) -> Optional[Dict[str, Any]]:
+    """Normalize a whole-DN empty/non-empty antecedent from its provenance prose.
+
+    A source sentence can use ``Otherwise`` while the LLM records the resolved
+    condition in its ``trigger`` field.  Conversely, Markdown quoting can make
+    an otherwise explicit ``If the `subject` field ...`` condition miss the
+    leading-source parser.  In both forms, the source/LLM provenance explicitly
+    names a subject or issuer DN and its empty/non-empty polarity.  Recover that
+    closed, single-certificate guard before accepting inconsistent LLM slots.
+    """
+    if not isinstance(precondition, dict):
+        return None
+    prose = " ".join(str(precondition.get(key) or "") for key in ("description", "trigger"))
+    if not prose:
+        return None
+    match = re.search(
+        r"`?(subject|issuer)`?(?:\s+field)?(?:\s+of\s+(?:the\s+)?certificate)?\s+"
+        r"(?:contains?|is)\s+(?:(not)\s+)?(?:an?\s+)?(non-?empty|empty)(?:\s+sequence)?\b",
+        prose,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    field, explicit_not, state = match.groups()
+    is_nonempty = bool(explicit_not) or state.lower().replace("-", "") == "nonempty"
+    return {
+        "type": "field_present" if is_nonempty else "field_absent",
+        "value": field.lower(),
+        "negate": False,
+        "description": match.group(0).strip(),
+        "trigger": match.group(0).strip(),
+    }
 
 
 def _precondition_from_section_body(section_body: str, rule_text: str,
@@ -2413,7 +2561,8 @@ class ControlledLLMExtractor:
             )
             if _crit_pred and predicate in (
                 None, "must_be_present", "must_not_be_present",
-                "must_equal", "must_include", "conform_to",
+                "must_be_absent", "must_not_be_absent", "must_equal",
+                "must_include", "must_not_include", "conform_to",
             ):
                 predicate = _crit_pred
                 if not constraint.type:
@@ -2562,34 +2711,54 @@ class ControlledLLMExtractor:
             # (profile applicability). Both structure the LLM's own output into the
             # schema the reducer guards on; neither narrows below the rule's scope.
             _precond = normalized.get("precondition")
-            _pf = _precondition_from_prose_field(_precond, subject)
-            if isinstance(_pf, dict) and _pf.get("type") == "general_name_allowed_set":
-                # This is strictly more specific than weak field_present/email
-                # guards and preserves the source antecedent as a closed
-                # GeneralName CHOICE set.
-                _precond = _pf
-            elif not (isinstance(_precond, dict) and _precond.get("type")):
-                if _pf:
-                    _precond = _pf
+            # An explicit leading DN condition in the source outranks a target-field
+            # guess in the LLM precondition.  This preserves the antecedent rather
+            # than silently converting "Subject is empty" into "SAN is absent".
+            _leading_dn = _precondition_from_leading_dn_condition(cleaned_text)
+            if _leading_dn:
+                _precond = _leading_dn
+            else:
+                _dn_prose = _precondition_from_dn_condition_prose(_precond)
+                if _dn_prose:
+                    _precond = _dn_prose
                 else:
-                    _ptitle = (provenance or {}).get("title") if provenance else None
-                    _derived = _precondition_from_profile_title(_ptitle, cleaned_text)
-                    if _derived:
-                        _precond = _derived
-                    else:
-                        # Third fallback: extract embedded conditions from rule text itself
-                        _rt = _precondition_from_rule_text(cleaned_text, subject)
-                        if _rt:
-                            _precond = _rt
+                    _pf = _precondition_from_prose_field(_precond, subject)
+                    if isinstance(_pf, dict) and _pf.get("type") == "general_name_allowed_set":
+                        # This is strictly more specific than weak field_present/email
+                        # guards and preserves the source antecedent as a closed
+                        # GeneralName CHOICE set.
+                        _precond = _pf
+                    elif not (isinstance(_precond, dict) and _precond.get("type")):
+                        if _pf:
+                            _precond = _pf
                         else:
-                            # Fourth fallback: extract from full section body
-                            # This catches preconditions the LLM missed (e.g., CABF
-                            # Table 69/70 "Policy Restricted" branch for anyPolicy rules).
-                            if section_body:
-                                _sb = _precondition_from_section_body(
-                                    section_body, cleaned_text, source_id)
-                                if _sb:
-                                    _precond = _sb
+                            _ptitle = (provenance or {}).get("title") if provenance else None
+                            _derived = _precondition_from_profile_title(_ptitle, cleaned_text)
+                            if _derived:
+                                _precond = _derived
+                            else:
+                                # Third fallback: extract embedded conditions from rule text itself
+                                _rt = _precondition_from_rule_text(cleaned_text, subject)
+                                if _rt:
+                                    _precond = _rt
+                                else:
+                                    # Fourth fallback: extract from full section body
+                                    # This catches preconditions the LLM missed (e.g., CABF
+                                    # Table 69/70 "Policy Restricted" branch for anyPolicy rules).
+                                    if section_body:
+                                        _sb = _precondition_from_section_body(
+                                            section_body, cleaned_text, source_id)
+                                        if _sb:
+                                            _precond = _sb
+
+            # A profile title and a row-level condition are independent source
+            # constraints.  The legacy fallback used profile scope only when the
+            # LLM gave no structured antecedent, silently dropping one of them for
+            # profile tables.  Keep both as a schema-level conjunction.
+            _ptitle = (provenance or {}).get("title") if provenance else None
+            _profile_scope = _precondition_from_profile_title(_ptitle, cleaned_text)
+            if _profile_scope:
+                _precond = _conjoin_preconditions(_profile_scope, _precond)
 
             # Universally-deprecated fields (RFC 5280 §4.1.2.8: conforming CAs MUST
             # NOT generate certs with unique identifiers — applies to ALL profiles).
@@ -2657,6 +2826,7 @@ class ControlledLLMExtractor:
     # be (non-)critical. Validated against the RFC5280 corpus (exp_criticality_rederive).
     _CRIT_NEG_RE = re.compile(
         r'(?:be\s+)?mark(?:ed)?\s+(?:this\s+|the\s+)?(?:\w+\s+)?(?:extension\s+)?as\s+non-?critical|'
+        r'\b(?:MUST|SHOULD|SHALL)\s+NOT\s+be\s+(?:marked\s+(?:as\s+)?)?critical\b|'
         r'MUST\s+be\s+(?:marked\s+(?:as\s+)?)?non-?critical|'
         r'SHOULD\s+be\s+(?:marked\s+(?:as\s+)?)?non-?critical|'
         r'be\s+non-?critical\b', re.I)
@@ -2666,7 +2836,7 @@ class ControlledLLMExtractor:
     # Exclusions: criticality as a precondition / general processing, not a
     # requirement that THIS extension be (non-)critical.
     _CRIT_EXCL_RE = re.compile(
-        r'\bif\b[^.]*\bcritical|unrecognized\s+critical|'
+        r'unrecognized\s+critical|'
         r'\bMAY\b[^.]*critical\s+or\s+non-?critical|appear\s+as\s+a\s+critical\s+or|'
         r'reject\b[^.]*critical|process[^.]*critical|contains?\s+(?:an?\s+)?(?:unrecognized\s+)?critical',
         re.I)
@@ -3418,7 +3588,7 @@ class ControlledLLMExtractor:
         """
         从截断的 JSON 数组响应中恢复尽可能多的完整对象。
 
-        策略：定位 JSON 数组起点（推理模型如 GLM-Z1 会在 '[' 前输出 thinking
+        策略：定位 JSON 数组起点（推理型模型可能会在 '[' 前输出 thinking
         文本，故不能要求 text 以 '[' 开头），然后扫描收集 **所有** 顶层完整对象
         （depth 从 1 落回 0 即为一个完整对象的边界），而非只保留最后一个。
         截断发生在第 N 个对象中途时，前 N-1 个对象仍可全部恢复。
@@ -3571,7 +3741,7 @@ class ControlledLLMExtractor:
         )
 
         # 调用LLM（带重试）- 使用流式传输消除超时问题
-        # 每条规则约 1200-1500 tokens JSON 输出 + 推理模型(GLM-Z1)大量 thinking tokens。
+        # 每条规则约 1200-1500 tokens JSON 输出 + 推理型模型的大量 thinking tokens。
         # 给足 thinking 余量（每条 1500 + 固定 10000），封顶 16000 防超模型输出上限。
         # 配合 max_rules_per_batch=4，确保 thinking+JSON 不截断。
         batch_max_tokens = min(16000, len(batch_contexts) * 1500 + 10000)

@@ -20,11 +20,46 @@ in ONE dsl namespace (see tree_codegen.py import note).
 """
 from __future__ import annotations
 
+import dataclasses
 from typing import Optional
 
-from . import det_codegen, tree_prompt, tree_codegen, synonym_judge
+from . import det_codegen, dsl, tree_prompt, tree_codegen, synonym_judge
 from . import oracle_pipeline, runner
 from .tree_to_natural import obligation_aware_summary, tree_to_natural
+
+
+def _atom_names(node) -> set[str]:
+    """Return all non-compound DSL dataclass names in a parsed tree."""
+    if node is None:
+        return set()
+    names: set[str] = set()
+    if not dataclasses.is_dataclass(node):
+        return names
+    name = type(node).__name__
+    if name not in set(dsl.COMPOUND_CLASSES) | {"When"}:
+        names.add(name)
+    for field in dataclasses.fields(node):
+        value = getattr(node, field.name)
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                names.update(_atom_names(item))
+        else:
+            names.update(_atom_names(value))
+    return names
+
+
+def _unknown_atoms_reason(tree, precondition=None) -> str:
+    """Reject only atoms outside the closed DSL registry.
+
+    NON_GENERIC is an audit category, not a generation failure condition.  A
+    registered NON_GENERIC atom is a reusable domain operation whose use must
+    be reported separately from GENERIC-only synthesis.  The only atom policy
+    enforced at this boundary is closed-world validation: an unregistered
+    operation must never reach rendering or the experiment ledger.
+    """
+    names = _atom_names(tree) | _atom_names(precondition)
+    unknown = names - set(dsl.ATOM_CLASSES)
+    return "" if not unknown else "unknown_atoms_rejected: " + ", ".join(sorted(unknown))
 
 
 def _is_profile_scope_marker(pc) -> bool:
@@ -171,10 +206,17 @@ def generate_tree(rule: dict, *, workspace=None, allow_llm: bool = True) -> dict
         det_ir.setdefault("_rule_title", rule.get("title") or "")
         det_ir.setdefault("_rule_text", rule.get("text") or "")
         det_ir.setdefault("_rule_source", rule.get("source") or "")
+        det_ir.setdefault("_source_excerpt", rule.get("source_excerpt") or "")
         tree = det_codegen.deterministic_tree(rid, det_ir, section=section)
     except Exception:
         tree = None
     if tree is not None:
+        policy_reason = _unknown_atoms_reason(tree)
+        if policy_reason:
+            tree = None
+            det_noncompile_reason = policy_reason
+        else:
+            det_noncompile_reason = None
         # A returned tree is not yet a guarantee: det_codegen's _renderable check
         # is weaker than full render + `go build` (e.g. a FieldInSet whose value
         # is prose, or a charset-less ASN.1 type). Only count "deterministic" when
@@ -183,14 +225,15 @@ def generate_tree(rule: dict, *, workspace=None, allow_llm: bool = True) -> dict
         # so fall through to the LLM (honoring deterministic-first). The compile
         # gate runs only when a workspace is supplied (the measurement passes one);
         # without it we keep the legacy "tree returned" behavior for cheap callers.
-        if workspace is None:
+        if tree is not None and workspace is None:
             return {"tree": tree, "precondition": None,
                     "method": "deterministic", "reason": "", "llm_raw": ""}
-        ok, stderr = _render_and_compile(tree, None, rule, workspace=workspace)
-        if ok:
-            return {"tree": tree, "precondition": None,
-                    "method": "deterministic", "reason": "", "llm_raw": ""}
-        det_noncompile_reason = "deterministic_noncompile: " + (stderr or "")[:140]
+        if tree is not None:
+            ok, stderr = _render_and_compile(tree, None, rule, workspace=workspace)
+            if ok:
+                return {"tree": tree, "precondition": None,
+                        "method": "deterministic", "reason": "", "llm_raw": ""}
+            det_noncompile_reason = "deterministic_noncompile: " + (stderr or "")[:140]
     else:
         det_noncompile_reason = None
 
@@ -224,6 +267,9 @@ def generate_tree(rule: dict, *, workspace=None, allow_llm: bool = True) -> dict
 
     tree = parsed["predicate"]
     precond = parsed.get("precondition")
+    policy_reason = _unknown_atoms_reason(tree, precond)
+    if policy_reason:
+        return _residual(policy_reason, raw)
     ok, stderr = _render_and_compile(tree, precond, rule, workspace=workspace)
     if not ok:
         return _residual("compile_fail: " + (stderr or "")[:180], raw)

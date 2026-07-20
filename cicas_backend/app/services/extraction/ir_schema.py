@@ -484,6 +484,7 @@ CONDITION_KINDS = {
     "version_is",         # values:[1|2|3] → FieldInSet(Version, …)
     "address_family",     # field, family:ipv4|ipv6 → SubtreeIPv4Conditional arm
     "general_name_allowed_set",  # ext, values:[rfc822Name|URI|...] → only these GeneralName tags appear
+    "policy_oid",          # value: CABF reserved policy OID → PolicyIdentifier membership
     "key_usage",          # bit → KeyUsageHas
     "eku_present",        # eku → ExtKeyUsageHas
     "field_boolean",      # legacy: cA → IsCA / FieldEq(field, True)
@@ -503,6 +504,7 @@ _LEGACY_TYPE_TO_KIND = {
     "version": "version_is", "field_value": "field_equals",
     "general_name_allowed_set": "general_name_allowed_set",
     "san_general_name_allowed_set": "general_name_allowed_set",
+    "policy_oid": "policy_oid",
 }
 
 

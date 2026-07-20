@@ -29,7 +29,7 @@ Inputs (snapshot written to inputs/ by --snapshot):
 Outputs (written to outputs/):
   outputs/detection_summary.json  REAL / SPURIOUS / UNCERTAIN + per-lint table
   outputs/detection_summary.md    the result rendered (paper §8.5)
-  outputs/strict_reportable_findings.jsonl conservative paper-facing findings
+  outputs/strict_reportable_findings.jsonl preliminary structural-screen findings
   outputs/triage_by_lint.json     per-lint firing + verdict counts
   outputs/uncertain_verified.jsonl cert-grounded verdict for each UNCERTAIN finding
   outputs/blame.jsonl             SAIV feedback ledger when DB access is available
@@ -40,20 +40,17 @@ Run:
 
 Expected current use:
   Rerun coverage first so native-overlap rules are marked lint_covered=true and
-  do not enter code generation.  This script then audits the generated-lint
-  findings that remain.  Strict reportable findings are limited to independently
-  confirmed findings with no upstream zlint finding on the same certificate;
-  NOCHECK and unresolved UNCERTAIN findings are retained in outputs but excluded
-  from reliable paper claims.  External-corpus strict reportability does not drop
-  independently confirmed findings by issuance date; effective-date questions
-  are audit metadata, not a denominator/reporting filter.
+  do not enter code generation. This script then audits the generated-lint
+  findings that remain. ``strict_reportable_findings.jsonl`` is a preliminary
+  structural screen: it limits rows to independently confirmed findings with no
+  upstream lint on the same certificate. The paper-facing conclusion additionally
+  runs audit_claimed_findings.py against the shipping-manifest source/code review;
+  NOCHECK rows remain unverified.
 """
 import argparse
 import json
-import subprocess
 import sys
 from collections import Counter
-from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -72,7 +69,6 @@ from app.services.certificate.codegen import results_attribution as attribution 
 ZLINT = BACKEND / "zlint" / "v3" / "zlint"
 TESTDATA = BACKEND / "zlint" / "v3" / "testdata"
 MANIFEST = INPUTS / "cicasgen_manifest.json"  # snapshot written by --snapshot
-CABF_BR_EFFECTIVE = datetime(2012, 7, 1, tzinfo=timezone.utc)
 
 
 def _safe_name(path: Path) -> str:
@@ -96,29 +92,6 @@ def _jsonl(rows) -> str:
 def _truncate(text, n=96):
     text = (text or "").replace("\n", " ").strip()
     return text if len(text) <= n else text[: n - 1] + "..."
-
-
-def _cert_not_before(cert_path: Path) -> datetime | None:
-    try:
-        proc = subprocess.run(
-            ["openssl", "x509", "-in", str(cert_path), "-noout", "-startdate"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except Exception:
-        return None
-    if proc.returncode != 0:
-        return None
-    raw = proc.stdout.strip()
-    if raw.startswith("notBefore="):
-        raw = raw.split("=", 1)[1]
-    for fmt in ("%b %d %H:%M:%S %Y %Z", "%b  %d %H:%M:%S %Y %Z"):
-        try:
-            return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-    return None
 
 
 def _is_strict_reportable_finding(row: dict, certs_dir: Path | None, manifest: dict) -> bool:
@@ -247,8 +220,8 @@ def render_new_lint_md(corpus_label: str, total_certs: int, new_rows: list[dict]
         L.append("- independent structural audit over new-lint findings: " +
                  ", ".join(f"{k}={v}" for k, v in sorted(audit_counts.items())))
     if strict_count is not None:
-        L.append(f"- strict reportable new-lint findings: **{strict_count}** "
-                 "(independent CONFIRMED and not quality-gated)")
+        L.append(f"- preliminary structural-screen findings: **{strict_count}** "
+                 "(independent CONFIRMED and no any-upstream result)")
     L.append("")
     L.append("Per CICAS-added lint:\n")
     L.append("| new lint | rule | section | fires | no-upstream certs | independent | rule text |")
@@ -434,8 +407,9 @@ def main():
     ap.add_argument("--certs", default=None,
                     help="external flat PEM corpus directory; report-only mode")
     ap.add_argument("--output-dir", default=None,
-                    help="output directory for --certs mode "
-                         "(default: experiments/new_lint_corpus_scan/outputs/<corpus>)")
+                    help="output directory; for --certs mode defaults to "
+                         "experiments/new_lint_corpus_scan/outputs/<corpus>, "
+                         "otherwise defaults to experiments/cert_detection/outputs")
     ap.add_argument("--limit", type=int, default=0, help="scan only N certs (smoke)")
     ap.add_argument("--workers", type=int, default=16,
                     help="parallel zlint worker processes for --certs mode")
@@ -449,13 +423,14 @@ def main():
                     help="for --certs mode, independently verify all generated findings "
                          "or only generated findings on certs with no upstream zlint finding")
     args = ap.parse_args()
+    output_dir = Path(args.output_dir).resolve() if args.output_dir else OUTPUTS
 
     if not ZLINT.exists():
         sys.exit(f"[error] augmented zlint binary not found: {ZLINT}\n"
                  f"        build it first: python3 cicas_backend/scripts/"
                  f"inject_and_build.py --emit --build")
 
-    OUTPUTS.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     if args.snapshot:
         INPUTS.mkdir(exist_ok=True)
         if MANIFEST.exists():
@@ -508,14 +483,14 @@ def main():
         ledger = []
 
     # outputs
-    (OUTPUTS / "triage_by_lint.json").write_text(json.dumps(t["by_lint"], indent=2))
-    (OUTPUTS / "uncertain_verified.jsonl").write_text(
+    (output_dir / "triage_by_lint.json").write_text(json.dumps(t["by_lint"], indent=2))
+    (output_dir / "uncertain_verified.jsonl").write_text(
         "".join(json.dumps(x) + "\n" for x in uncertain))
-    (OUTPUTS / "audit_independent.jsonl").write_text(
+    (output_dir / "audit_independent.jsonl").write_text(
         "".join(json.dumps(x) + "\n" for x in audit))
-    (OUTPUTS / "strict_reportable_findings.jsonl").write_text(
+    (output_dir / "strict_reportable_findings.jsonl").write_text(
         _jsonl(strict_reportable))
-    (OUTPUTS / "blame.jsonl").write_text(
+    (output_dir / "blame.jsonl").write_text(
         "".join(json.dumps(x) + "\n" for x in ledger))
     summary = {**t["summary"], "n_shipped_lints": n_shipped,
                "uncertain_verified": dict(uc),
@@ -528,11 +503,11 @@ def main():
                "genuine": t["summary"]["REAL"] + uc.get("CONFIRMED_REAL", 0),
                "triage_spurious": t["summary"]["SPURIOUS"],
                "false_positives": len(audit_false_positives) + len(unresolved_spurious)}
-    (OUTPUTS / "detection_summary.json").write_text(json.dumps(summary, indent=2))
+    (output_dir / "detection_summary.json").write_text(json.dumps(summary, indent=2))
     md = render_md(t["summary"], t["by_lint"], dict(uc), n_shipped, dict(ua),
                    len(strict_reportable), len(audit_false_positives),
                    len(unresolved_spurious))
-    (OUTPUTS / "detection_summary.md").write_text(md)
+    (output_dir / "detection_summary.md").write_text(md)
 
     print(md)
     assert not audit_false_positives, (
@@ -553,7 +528,7 @@ def main():
           f"(independent-confirmed); independent audit CONFIRMED={ua.get('CONFIRMED',0)} "
           f"REFUTED={ua.get('REFUTED',0)} NOCHECK={ua.get('NOCHECK',0)} "
           f"(NOCHECK excluded from reliable claims); "
-          f"wrote outputs/ -> {OUTPUTS}")
+          f"wrote outputs/ -> {output_dir}")
 
 
 if __name__ == "__main__":

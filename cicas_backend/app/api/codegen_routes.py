@@ -150,9 +150,9 @@ async def generate_code_from_rule(
 
         # 初始化原子模板生成器（保留 ZlintCodeGenerator 兼容类名）
         generator = ZlintCodeGenerator(
-            api_key=settings.LLM_API_KEY,
-            api_base=settings.LLM_API_BASE,
-            model=settings.LLM_MODEL,
+            api_key=settings.llm_api_key,
+            api_base=settings.llm_api_base,
+            model=settings.llm_model,
         )
         zlint_interface = ZLintInterface()
 
@@ -273,9 +273,9 @@ async def batch_generate_codes(
 
         # 初始化原子模板生成器（保留 ZlintCodeGenerator 兼容类名）
         generator = ZlintCodeGenerator(
-            api_key=settings.LLM_API_KEY,
-            api_base=settings.LLM_API_BASE,
-            model=settings.LLM_MODEL,
+            api_key=settings.llm_api_key,
+            api_base=settings.llm_api_base,
+            model=settings.llm_model,
         )
         zlint_interface = ZLintInterface()
 
@@ -459,9 +459,9 @@ async def generate_code_from_ir(
     try:
         # 初始化原子模板生成器（保留 ZlintCodeGenerator 兼容类名）
         generator = ZlintCodeGenerator(
-            api_key=settings.LLM_API_KEY,
-            api_base=settings.LLM_API_BASE,
-            model=settings.LLM_MODEL,
+            api_key=settings.llm_api_key,
+            api_base=settings.llm_api_base,
+            model=settings.llm_model,
         )
 
         # 生成代码（原子模板路径，必要时由 cascade 处理 residual）

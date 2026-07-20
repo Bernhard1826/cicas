@@ -122,9 +122,9 @@ After: {chunk.context_after or 'N/A'}
             return "[]"
 
         # 这里需要集成实际的 LLM 客户端
-        # 示例：使用 OpenAI API 或本地模型
+        # 示例：使用当前实验的 gpt-5.4 OpenAI-compatible API
         # response = self.llm_client.chat.completions.create(
-        #     model="gpt-4",
+        #     model="gpt-5.4",
         #     messages=[{"role": "user", "content": prompt}],
         #     temperature=0.1,
         # )

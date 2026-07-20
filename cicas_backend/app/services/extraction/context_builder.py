@@ -862,7 +862,7 @@ class ContextBuilder:
 
         # 动态计算 max_rules_per_batch：根据上下文窗口推算输出容量上限
         # 每条规则的 IR JSON 输出实际约 1200-1500 tokens（含所有字段）
-        # ⭐ 推理模型(GLM-Z1 等)在输出 JSON 前会消耗大量 thinking tokens（trivial 输入都 ~1163），
+        # 推理型模型在输出 JSON 前会消耗大量 thinking tokens（trivial 输入都 ~1163），
         # 大批(12)会让 thinking+JSON 超出 max_tokens 导致截断/空响应→拆分重试→限流→卡死。
         # 故对召回稳定性优先，硬上限降到 4 条/批。
         max_rules_per_batch = 4
