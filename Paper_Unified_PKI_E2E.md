@@ -6,9 +6,9 @@
 
 本文围绕这一缺口提出一个从规范文本到 zlint 检查代码的端到端框架。核心做法是先把规则解析为结构化中间表示，再用确定性条件判定其**lintability**，只对单证书可观测的规则生成代码。生成阶段不输出自由 Go 代码，而被限制在类型化的 DSL 与有限原子模板空间内；验证阶段使用同义判定、隔离编译检查和受控证书样本上的证书级执行验证，区分"代码忠实于 IR"与"代码忠实于原始规范"这两个不同问题。
 
-在 RFC 5280 与 CABF BR 上，本文审计确认 264 条单证书 lintable 规则；经严格复核，zlint 原生 certificate lint 可完整覆盖 165 条，剩余 99 条构成代码生成定义域。系统在该定义域内生成 90 条受限 DSL/Go lint 候选（86 条确定性生成、4 条 LLM 回退生成）；最终 77 条发射代码对原文规则与源上下文的 LLM 同义评判达到 unanimous EXPRESS，作为本文同义率分子进入 shipping manifest，并在隔离 zlint 副本中编译通过。生成阶段允许已登记的 NON_GENERIC 原子进入候选，但所有统计都必须把 GENERIC-only、GENERIC + NON_GENERIC 与 NON_GENERIC-only 分开报告。关键发现是：允许领域专用原语后，严格 codegen 定义域中的代码生成率达到 90/99 = 90.9%，最终发射全票同义率为 77/90 = 85.6%；但仍不能把可编译、IR 级忠实或非全票语义判断误记为规范级成功。
+在 RFC 5280 与 CABF BR 上，本文审计确认 260 条单证书 lintable 规则；经严格复核，zlint 原生 certificate lint 可完整覆盖 165 条，剩余 95 条构成代码生成定义域。系统在该定义域内生成 93 条受限 DSL/Go lint 候选（89 条确定性生成、4 条 LLM 回退生成）；最终 79 条发射代码对原文规则与源上下文的 LLM 同义评判达到 unanimous EXPRESS，作为本文同义率分子进入 shipping manifest，并在隔离 zlint 副本中编译通过。生成阶段允许已登记的 NON_GENERIC 原子进入候选，但所有统计都必须把 GENERIC-only、GENERIC + NON_GENERIC 与 NON_GENERIC-only 分开报告。关键发现是：允许领域专用原语后，严格 codegen 定义域中的代码生成率达到 93/95 = 97.9%，其中 73/95 = 76.8% 为 GENERIC-only、4/95 = 4.2% 为 GENERIC + NON_GENERIC、16/95 = 16.8% 为 NON_GENERIC-only；含 GENERIC 原子的生成合计 77/95 = 81.1%（占生成成功 77/93 = 82.8%）。最终发射全票同义率为 79/93 = 84.9%。将这 79 条同义 lint 注入 zlint 后，在 Tranco 与 CT 的 111,118 张真实证书中严格确认 4 个去重问题实例（1 个 AKI Error、3 个 Root CA CRLDP Warning），均无原生 zlint 同证书命中；但仍不能把可编译、IR 级忠实或非全票语义判断误记为规范级成功。
 
-外部验证以 zlint 维护者的人工映射表检验规则提取与 lintability 判定；当前 manifest 的真实语料证书扫描尚未重跑，故本文不把历史规则集的检测结果移植为当前结论。方法学上，本文主张把验证链路中能确定化的环节尽量确定化，并用"可归约子集的闭合 + 不可归约边界的披露"（即：能生成忠实 lint 的规则力求全覆盖，无法生成的则如实标注）取代单一的生成率或同义率指标。
+外部验证以 zlint 维护者的人工映射表检验规则提取与 lintability 判定，并以当前 manifest 的 testdata、Tranco 与 CT 重跑检验证书检测结果。方法学上，本文主张把验证链路中能确定化的环节尽量确定化，并用"可归约子集的闭合 + 不可归约边界的披露"（即：能生成忠实 lint 的规则力求全覆盖，无法生成的则如实标注）取代单一的生成率或同义率指标。
 
 **关键词**：公钥基础设施；证书合规检查；规范规则提取；中间表示；lintability 分析；受限代码生成；证书级执行验证；阶段感知式迭代验证
 
@@ -174,7 +174,7 @@ $$
 \tag{1}
 $$
 
-其中 $a \in \mathcal{A}$ 为原子模板谓词，$\bar{v}$ 为其参数列表。$\mathcal{A}$ 是一个**有限闭合**的原子模板集合，系统登记 149 个原子，其中 95 个 GENERIC、54 个 NON_GENERIC。当前实验允许已登记的 NON_GENERIC 原子进入生成，但输出与论文统计必须把 GENERIC-only、GENERIC + NON_GENERIC 与 NON_GENERIC-only 分开报告；未知原子仍被统一出口拒绝。独立 ledger 审计确认本次 90 条生成树中，70 条为 GENERIC-only、4 条为 GENERIC + NON_GENERIC、16 条为 NON_GENERIC-only；77 条 unanimous 发射 lint 中对应三类分别为 58、4、15。分级判据与代表性示例见附录 C。一条 lint 规则的代码体建模为有序对 $(p, q) \in \mathcal{T}_\varepsilon \times \mathcal{T}$，其中 $q \in \mathcal{T}$ 为主断言、$p \in \mathcal{T}_\varepsilon = \mathcal{T} \cup \{\varepsilon\}$ 为可选前提（$\varepsilon$ 是"无前提"占位符，是一个正常取值，与 §6.4 表"合成失败"的 $\bot$ 不同）。下式中 $c$ 为单张证书；$\lVert u \rVert(c) \in \{\mathrm{true}, \mathrm{false}\}$ 记 DSL 树或前提 $u$ 在 $c$ 上求值的布尔结果（原子模板按其语义求值，$\neg/\wedge/\vee$ 按经典命题逻辑）。执行语义为：
+其中 $a \in \mathcal{A}$ 为原子模板谓词，$\bar{v}$ 为其参数列表。$\mathcal{A}$ 是一个**有限闭合**的原子模板集合，系统登记 151 个原子，其中 98 个 GENERIC、53 个 NON_GENERIC。当前实验允许已登记的 NON_GENERIC 原子进入生成，但输出与论文统计必须把 GENERIC-only、GENERIC + NON_GENERIC 与 NON_GENERIC-only 分开报告；未知原子仍被统一出口拒绝。独立 ledger 审计确认本次 93 条生成树中，73 条为 GENERIC-only、4 条为 GENERIC + NON_GENERIC、16 条为 NON_GENERIC-only；也就是说，含 GENERIC 原子的生成合计为 77/95 = 81.1% 的 codegen 定义域、77/93 = 82.8% 的生成成功候选。79 条 unanimous 发射 lint 中对应三类分别为 60、4、15。分级判据与代表性示例见附录 C。一条 lint 规则的代码体建模为有序对 $(p, q) \in \mathcal{T}_\varepsilon \times \mathcal{T}$，其中 $q \in \mathcal{T}$ 为主断言、$p \in \mathcal{T}_\varepsilon = \mathcal{T} \cup \{\varepsilon\}$ 为可选前提（$\varepsilon$ 是"无前提"占位符，是一个正常取值，与 §6.4 表"合成失败"的 $\bot$ 不同）。下式中 $c$ 为单张证书；$\lVert u \rVert(c) \in \{\mathrm{true}, \mathrm{false}\}$ 记 DSL 树或前提 $u$ 在 $c$ 上求值的布尔结果（原子模板按其语义求值，$\neg/\wedge/\vee$ 按经典命题逻辑）。执行语义为：
 
 $$
 \lVert (p, q) \rVert(c) \;=\; \begin{cases}
@@ -340,7 +340,7 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
 
 ## 8. 实验评估
 
-本章使用前文提到的方法和框架进行实验，并得出量化结论。除内部分层指标（§8.1–8.2）外，§8.3 使用 zlint 维护者的人工金标外部验证**规则提取与 lintability 判定**；§8.4 明确当前 manifest 未重跑真实语料证书扫描，因而不报告跨规则集的检测计数。表 1 的严格覆盖数来自 `coverage_analysis/outputs/native_go_covered_audit_seeded_20260718_revised_summary.json` 与 `codegen_metrics/outputs/strict_audited_uncovered_20260718/domain_rule_ids.json`，代码生成与同义数来自 `codegen_metrics/outputs/strict_audited_uncovered_20260718/codegen_synonymy_summary.json` 及同目录 manifest、审计和编译输出。
+本章使用前文提到的方法和框架进行实验，并得出量化结论。除内部分层指标（§8.1–8.2）外，§8.3 使用 zlint 维护者的人工金标外部验证**规则提取与 lintability 判定**；§8.4 将当前 manifest 注入 zlint 并重跑 testdata、Tranco 与 CT，报告严格 no-upstream 与独立结构审计后的证书问题。表 1 的严格覆盖数来自 `coverage_analysis/outputs/native_go_covered_audit_seeded_20260718_revised_summary.json` 与 `codegen_metrics/outputs/strict_audited_uncovered_20260720/domain_rule_ids.json`，代码生成与同义数来自 `codegen_metrics/outputs/strict_audited_uncovered_20260720/codegen_synonymy_summary.json` 及同目录 manifest、审计和编译输出。
 
 ### 8.1 实验设置与结果快照
 
@@ -351,36 +351,36 @@ _图 4：SAIV 控制台。上排显示召回→分类→生成→验证四阶段
 | 指标 | 数 | 口径/说明 |
 |---|---:|---|
 | 召回规则总量 | 2080 | RFC 5280 640 + CABF BR 1440 |
-| **lintable（单证书可观测）** | **264** | 审计后的 lintability 口径：CABF 178 + RFC 5280 86；过程、跨证书、运行时、外部语义和 MAY/OPTIONAL 许可类规则不进入分母；CRL 文档规则不在本口径 |
-| zlint 覆盖（strict full，原生 lint） | **165** | 旧覆盖快照为 191/73；严格审计新增未覆盖 45 条，同时从旧 uncovered 中恢复原生覆盖 19 条，最终 165 条可防御地计为 zlint 原生 certificate lint 完整实现；CABF BR 规则允许由继承适用的 RFC 5280 lint 覆盖，CICAS 生成 lint 不计入原生覆盖 |
-| **未覆盖 lintable（codegen 定义域）** | **99** | 需本系统生成自有 lint（264 − 165），即下游代码生成 $\phi_G$ 的目标集；CABF 84 + RFC 5280 15 |
-| **生成成功（DSL 树 / Go 候选）** | **90** | 允许已登记 GENERIC 与 NON_GENERIC 原子，未知原子拒绝；**代码生成率 = 90/99 = 90.9%** |
-| 其中：确定性生成 | **86** | 由受限 DSL 规则、原子模板和确定性渲染直接生成 |
+| **lintable（单证书可观测）** | **260** | 审计后的 lintability 口径：CABF 175 + RFC 5280 85；过程、跨证书、运行时、外部语义和 MAY/OPTIONAL 许可类规则不进入分母；CRL 文档规则不在本口径 |
+| zlint 覆盖（strict full，原生 lint） | **165** | 旧覆盖快照为 187/73；严格审计新增未覆盖 41 条，同时从旧 uncovered 中恢复原生覆盖 19 条，最终 165 条可防御地计为 zlint 原生 certificate lint 完整实现；CABF BR 规则允许由继承适用的 RFC 5280 lint 覆盖，CICAS 生成 lint 不计入原生覆盖 |
+| **未覆盖 lintable（codegen 定义域）** | **95** | 需本系统生成自有 lint（260 − 165），即下游代码生成 $\phi_G$ 的目标集；CABF 81 + RFC 5280 14 |
+| **生成成功（DSL 树 / Go 候选）** | **93** | 允许已登记 GENERIC 与 NON_GENERIC 原子，未知原子拒绝；**代码生成率 = 93/95 = 97.9%**，其中 GENERIC-only / GENERIC + NON_GENERIC / NON_GENERIC-only 分别为 73/95 = 76.8%、4/95 = 4.2%、16/95 = 16.8%；含 GENERIC 原子的生成合计 77/95 = 81.1%（占生成成功 77/93 = 82.8%） |
+| 其中：确定性生成 | **89** | 由受限 DSL 规则、原子模板和确定性渲染直接生成 |
 | 其中：LLM 回退生成 | **4** | 确定性路径不能闭合时调用 LLM；输出仍须属于已登记 DSL 并通过编译门 |
-| 不能生成 | **9** | 9 条 `no_template`；均保留在定义域分母中 |
-| **最终发射全票同义（unanimous EXPRESS）** | **77** | 以最终 zlint-target lint 的 `CheckApplies`、`Execute`、severity/date 元数据整体对比原文规则和上下文；5/5 judge 为 EXPRESS 且无 DNE/error；**论文同义率 = 77/90 = 85.6%**（定义域端到端为 77/99 = 77.8%） |
+| 不能生成 | **2** | 2 条 `no_template`；均保留在定义域分母中 |
+| **最终发射全票同义（unanimous EXPRESS）** | **79** | 以最终 zlint-target lint 的 `CheckApplies`、`Execute`、severity/date 元数据整体对比原文规则和上下文；5/5 judge 为 EXPRESS 且无 DNE/error；**论文同义率 = 79/93 = 84.9%**（定义域端到端为 79/95 = 83.2%） |
 | 非全票但达 80% EXPRESS（诊断） | **3** | 已达到 $\lceil0.8k\rceil$ 个 EXPRESS 但非 unanimous；不计入本文同义率分子，也不进入 shipping manifest |
-| 最终发射不同义（DNE） | **8** | 已生成且完成最终发射同义评判，但未达到 EXPRESS 门限；这些候选不进入 shipping manifest |
+| 最终发射不同义（DNE） | **9** | 已生成且完成最终发射同义评判，但未达到 EXPRESS 门限；这些候选不进入 shipping manifest |
 | 最终发射不确定 | **2** | judge 原始 verdict 为 EXPRESS 但未达到 80% EXPRESS 诊断门槛；不计入本文同义率分子或 manifest |
 | 最终发射未判定 | **0** | 所有生成成功规则均完成最终发射同义评判；endpoint error 为 0 |
-| shipping manifest 编译门 | **77** | `shipping_lints_manifest.json` 中 77 条 unanimous lint 在隔离 zlint 副本中通过 `go test -run '^$' ./lints/cabf_br ./lints/rfc` |
-| 生成树原子使用审计 | **70 / 4 / 16** | 90 条生成树中 GENERIC-only / GENERIC + NON_GENERIC / NON_GENERIC-only；未知原子 0 |
-| 发射 lint 原子使用 | **58 / 4 / 15** | 77 条 unanimous shipping lint 中 GENERIC-only / GENERIC + NON_GENERIC / NON_GENERIC-only；未知原子 0 |
+| shipping manifest 编译门 | **79** | `shipping_lints_manifest.json` 中 79 条 unanimous lint 在隔离 zlint 副本中通过 `go test -run '^$' ./lints/cabf_br ./lints/rfc` |
+| 生成树原子使用审计 | **73 / 4 / 16** | 93 条生成树中 GENERIC-only / GENERIC + NON_GENERIC / NON_GENERIC-only；未知原子 0 |
+| 发射 lint 原子使用 | **60 / 4 / 15** | 79 条 unanimous shipping lint 中 GENERIC-only / GENERIC + NON_GENERIC / NON_GENERIC-only；未知原子 0 |
 | *（旁证）证书级执行验证 $\mathrm{Code}\equiv\mathrm{IR}$* | *35* | *IR 级忠实性证据、非同义率分子；正文同义率只采用最终发射代码与原文规则的 LLM 判定* |
 
 表 1 的代码生成率和同义率均以审计后的 codegen 定义域逐条核算，不使用旧的 row-level 片段同义口径，也不把 80% EXPRESS 投票门槛作为论文同义率。row-level 评判与 80% EXPRESS 只保留为调试诊断；论文同义率只比较 shipping manifest 中、在隔离 zlint 副本注入并编译的最终发射代码整体与原文规则，且要求 unanimous EXPRESS。该结果仍是 LLM 语义判定，不能记作形式化的 $\mathrm{Code}_{\mathrm{zlint}}\equiv\mathrm{Spec}$ 证明。最终运行允许已登记 NON_GENERIC 原子，但把它们单独披露；未知原子和固定标准绑定的专用模板仍不允许进入 DSL 注册表。R31068 原先暴露出"已存在 `rfc822Name` 后检查编码"不能表达"Internet mail address 必须选择 `rfc822Name` GeneralName"的问题；该条已按重新提取/重新判定 lintability 的路径归入 not lintable，因为单张证书暴露的是已选择的 GeneralName tag 和值，而非签发者在编码前的外部身份意图。
 
 本轮复核还对 R29362（§7.1.2.4.2）执行了 canonical re-extraction：其表项虽可检查 EKU 内容，但规范前提是该 CA "will be used as a Precertificate Signing CA"，该 intended-use 条件不由单张证书编码决定，因此重新判为 `CrossArtifact` / not lintable；该调整通过重提取、快照刷新和账本同步传播，未直接修改统计分母。同一原则也用于本轮发现的两个 RFC 5280 真问题：R31065 的前件是"唯一 subject identity 是 alternative name form"，该语义身份条件不能由单张证书字节独立判定；R30970 要求 CA certificates 包含 BasicConstraints，但当 BasicConstraints 缺失时，CA-role 前件本身不能独立于被检查扩展确定。因此二者均经重新抽取/重新判定退出 lintable 与 codegen 定义域，而不是用本地过滤器或人工改库移出。
 
-未进入 shipping manifest 的规则均按负结果保留：9 条无法生成，8 条在最终同义判断中为 DOES_NOT_EXPRESS，3 条虽达 80% EXPRESS 诊断门槛但非 unanimous，另有 2 条为不确定。它们全部不计入成功分子。本次生成残差包括 X.500 DN 非空 subject 判定、NameConstraints 子树 minimum 字段、IDNA 标签分隔符规范化、整证 DER 编码、table-defined DN 属性顺序/编码、RFC 5952 IPv6 文本规范化等当前 DSL 不能表达或未通过类型校验的规则；本文没有为这些残差新增固定标准绑定原子。
+未进入 shipping manifest 的规则均按负结果保留：2 条无法生成，9 条在最终同义判断中为 DOES_NOT_EXPRESS，3 条虽达 80% EXPRESS 诊断门槛但非 unanimous，另有 2 条为不确定。它们全部不计入成功分子。本次生成残差包括 X.500 DN 非空 subject 判定、NameConstraints 子树 minimum 字段、IDNA 标签分隔符规范化、整证 DER 编码、table-defined DN 属性顺序/编码、RFC 5952 IPv6 文本规范化等当前 DSL 不能表达或未通过类型校验的规则；本文没有为这些残差新增固定标准绑定原子。
 
 第一层质量信号是 G1 守恒（§7.2 定理 1）：关键词召回的规则总量，在下游任何分类步骤中都不应增减。当前快照下守恒严格成立：
 
 $$
-\underbrace{2080}_{\text{召回}} \;=\; \underbrace{513}_{\text{噪声}} + \underbrace{1567}_{\text{真规则}}, \qquad \underbrace{1567}_{\text{真规则}} \;=\; \underbrace{264}_{\text{lintable}} + \underbrace{1303}_{\text{not lintable}}.
+\underbrace{2080}_{\text{召回}} \;=\; \underbrace{513}_{\text{噪声}} + \underbrace{1567}_{\text{真规则}}, \qquad \underbrace{1567}_{\text{真规则}} \;=\; \underbrace{260}_{\text{lintable}} + \underbrace{1307}_{\text{not lintable}}.
 $$
 
-两式逐项相等，即 G1 残差 $\mathcal{L}_{\mathrm{recall}} = 0$、守恒顶两层闭合（`coverage_analysis/inputs/extraction_rules.jsonl` 与同目录输出可确定性复算）。lintable 的 264 条按标准源分为 CABF 178 条与 RFC 5280 86 条；旧覆盖快照为 191 条 full / 73 条 uncovered，经严格 native-zlint 复核后有 45 条旧 covered 不能防御地计为原生完整覆盖，同时有 19 条旧 uncovered 被确认已由原生 zlint 完整覆盖，故 strict full 为 **165** 条，余 **99** 条即下游代码生成 $\phi_G$ 的定义域。
+两式逐项相等，即 G1 残差 $\mathcal{L}_{\mathrm{recall}} = 0$、守恒顶两层闭合（`coverage_analysis/inputs/extraction_rules.jsonl` 与同目录输出可确定性复算）。lintable 的 260 条按标准源分为 CABF 175 条与 RFC 5280 85 条；旧覆盖快照为 187 条 full / 73 条 uncovered，经严格 native-zlint 复核后有 41 条旧 covered 不能防御地计为原生完整覆盖，同时有 19 条旧 uncovered 被确认已由原生 zlint 完整覆盖，故 strict full 为 **165** 条，余 **95** 条即下游代码生成 $\phi_G$ 的定义域。
 
 ### 8.2 lint 覆盖分析
 
@@ -420,9 +420,9 @@ $$
 
 其中 SectionPrefixMatch 在规则章节号与某 lint 引用章节号有公共前缀时为真；Family(·) 把主体路径映射到具体字段族，对模糊/未解析主体返回 ∅ 而不降级（粗主语的真匹配得以保留）。算法仅 Stage-0、Stage-2 调用 LLM（评判器 temperature=0，提示含方向反转/字段错位/约束类型混淆三类正反例），摘要离线缓存、CABF 全集候选分批送评判器，其余确定性。
 
-264 条 lintable 规则中，旧自动覆盖快照给出 191 条 full、73 条 uncovered；本次定稿进一步做 strict native-source audit：严格审计新增未覆盖 45 条，严格复核从旧未覆盖中恢复原生覆盖 19 条。因此最终采用 **zlint 严格完整覆盖 165 条、未覆盖 99 条**（表 2）；未覆盖的 99 条即代码生成 $\phi_G$ 的定义域。该严格复核不直接修改数据库覆盖字段，而由 `strict_audited_uncovered_20260718/domain_rule_ids.json` 显式给出下游实验分母。
+260 条 lintable 规则中，旧自动覆盖快照给出 187 条 full、73 条 uncovered；本次定稿进一步做 strict native-source audit：严格审计新增未覆盖 41 条，严格复核从旧未覆盖中恢复原生覆盖 19 条。因此最终采用 **zlint 严格完整覆盖 165 条、未覆盖 95 条**（表 2）；未覆盖的 95 条即代码生成 $\phi_G$ 的定义域。该严格复核不直接修改数据库覆盖字段，而由 `strict_audited_uncovered_20260720/domain_rule_ids.json` 显式给出下游实验分母。
 
-**表 2：zlint 原生 lint 数，及其对 264 条 lintable 规则的覆盖（按规则源）**
+**表 2：zlint 原生 lint 数，及其对 260 条 lintable 规则的覆盖（按规则源）**
 
 | 项 | CABF | RFC 5280 | 合计 |
 |---|---:|---:|---:|
@@ -430,9 +430,9 @@ $$
 | *　— 其中证书 lint（单证书口径）* | *164* | *115* | *279* |
 | *　— 其中 CRL lint（单证书口径外）* | *6* | *7* | *13* |
 | strict full（完整覆盖） | 94 | 71 | **165** |
-| 未覆盖（codegen 定义域） | 84 | 15 | **99** |
+| 未覆盖（codegen 定义域） | 81 | 14 | **95** |
 | 待判覆盖（不计入 codegen 定义域） | 0 | 0 | **0** |
-| lintable 合计 | 178 | 86 | **264** |
+| lintable 合计 | 175 | 85 | **260** |
 
 前三行（斜体）为 zlint 侧按其 `Source` 元数据字段从项目内置 v3 源码直接计得的 lint 数（单位：lint，13 条 CRL lint 经 `RegisterRevocationListLint` 识别、不属本文单证书口径）；其余各行为我方 lintable 规则的覆盖档（单位：规则）。full 计的是"我方某条规则是否被某条 zlint 原生 lint 完整实现"，不要求同源；与 zlint lint 总数不构成简单比值主要原因是一条 lint 可命中多条规则。
 
@@ -453,7 +453,7 @@ $$
 
 ### 8.4 证书检测的报告边界
 
-本次定稿的 shipping manifest 为当前 77 条 unanimous EXPRESS lint。旧证书扫描使用的是历史 manifest，未对当前 77 条重新执行；为避免把不同规则集的 finding 误写成当前实验结论，本文不报告 testdata、Tranco 或 CT 的问题计数。证书检测可作为后续实验：应将当前 `shipping_lints_manifest.json` 注入隔离 zlint，再对保存的 DER 重新运行，并对每个 non-pass 以原文义务、原生 zlint 非覆盖性和独立 DER 条件重推三项共同审计。
+本次定稿的 shipping manifest 为当前 79 条 unanimous EXPRESS lint，并已注入隔离 zlint 重跑证书检测。zlint testdata 的 1128 张可解析证书上，CICAS 生成 lint 产生 2962 行 non-pass；独立结构审计确认其中 137 行 fixture 违规，折叠为 101 个证书-问题实例（53 个 Error、48 个 Warn），但 testdata 只作为代码与审计门，不计作真实生态发现。Tranco Top 1M 证书链样本含 47,791 张证书，CT 近期样本含 63,327 张证书；两者分别产生 57,583 与 80,021 行 CICAS non-pass，其中 no-upstream 候选为 1042 与 167 行。独立结构审计最终确认 Tranco 8 行、CT 2 行；跨语料按证书与问题去重后为 **4 个真实问题实例**：1 个 Error 为同一 CA 证书的 AKI 含 `authorityCertSerialNumber` / `authorityCertIssuer`（BR §7.1.2.11.1 MUST NOT），3 个 Warning 为 Root CA Certificate 含 CRL Distribution Points（BR §7.1.2.11.2 SHOULD NOT，其中 1 个同时出现在 Tranco 与 CT）。这些严格确认行均无原生 zlint 同证书命中，且均回到原文义务与 DER/OpenSSL 结构重新确认。
 
 ## 9. 讨论
 
@@ -479,13 +479,13 @@ $$
 
 ### 9.4 局限性与有效性威胁
 
-本文结论严格受限于所用输入表示（结构化 IR）、受限代码空间与验证流程，更适合可在单文档上下文闭合的静态约束，不应外推为"所有 PKI 规范均可完全自动化"。七类边界：**(i) 方法表达力**——同义判定端点仍由 LLM 实现；系统登记 149 个原子模板，其中 54 个为 NON_GENERIC，最终 77 条 unanimous 发射 lint 中 15 条完全依赖 NON_GENERIC、4 条同时使用 GENERIC 与 NON_GENERIC；这些是领域专用可执行谓词，不是完全通用合成能力；**(ii) 组件必要性未消融**——知识图谱/受限 DSL/SAIV 的支持分别为工程取舍、架构论证与未消融项，本文不主张图检索相对普通 RAG 的量化优越性；**(iii) 现代 LLM 基线缺位**——直接生成 Go 的对比未做；**(iv) 覆盖与泛化边界**——lintable 总量 264 与 codegen 目标 99 不同口径，跨体系泛化本文仅给机制论证；**(v) 端到端口径**——77 条 shipping lint 达到 unanimous EXPRESS 并通过编译，但这不是"代码≡规范"的形式化证明，且当前 manifest 尚未重跑证书检测；**(vi) 同义端点盲区**——最终发射代码同义由比对 zlint 代码摘要与原文的 LLM 评判器给出，并非证书级执行验证那种与模型无关的检查，且其"原文"取自抽取时逐字记录的 rule_text 与源上下文；因此若原始片段或 IR 已遗漏语义，同义评判器未必能独立发现。**(vii) 跨标准覆盖边界**——§8.2 已允许 CABF BR 规则由 RFC 5280 原生 lint 覆盖，但该判断仍依赖字段级语义比对；若源上下文或反向 IR 摘要缺失关键条件，覆盖档仍可能被高估或低估。此外生成 lint 以 `cicasgen_*` 前缀与 zlint 两端互拒以防"自己覆盖自己"。
+本文结论严格受限于所用输入表示（结构化 IR）、受限代码空间与验证流程，更适合可在单文档上下文闭合的静态约束，不应外推为"所有 PKI 规范均可完全自动化"。七类边界：**(i) 方法表达力**——同义判定端点仍由 LLM 实现；系统登记 151 个原子模板，其中 53 个为 NON_GENERIC，最终 79 条 unanimous 发射 lint 中 15 条完全依赖 NON_GENERIC、4 条同时使用 GENERIC 与 NON_GENERIC；这些是领域专用可执行谓词，不是完全通用合成能力；**(ii) 组件必要性未消融**——知识图谱/受限 DSL/SAIV 的支持分别为工程取舍、架构论证与未消融项，本文不主张图检索相对普通 RAG 的量化优越性；**(iii) 现代 LLM 基线缺位**——直接生成 Go 的对比未做；**(iv) 覆盖与泛化边界**——lintable 总量 260 与 codegen 目标 95 不同口径，跨体系泛化本文仅给机制论证；**(v) 端到端口径**——79 条 shipping lint 达到 unanimous EXPRESS 并通过编译，但这不是"代码≡规范"的形式化证明；**(vi) 同义端点盲区**——最终发射代码同义由比对 zlint 代码摘要与原文的 LLM 评判器给出，并非证书级执行验证那种与模型无关的检查，且其"原文"取自抽取时逐字记录的 rule_text 与源上下文；因此若原始片段或 IR 已遗漏语义，同义评判器未必能独立发现。**(vii) 跨标准覆盖边界**——§8.2 已允许 CABF BR 规则由 RFC 5280 原生 lint 覆盖，但该判断仍依赖字段级语义比对；若源上下文或反向 IR 摘要缺失关键条件，覆盖档仍可能被高估或低估。此外生成 lint 以 `cicasgen_*` 前缀与 zlint 两端互拒以防"自己覆盖自己"。
 
 ## 10. 结论
 
 本文研究 PKI 规范到合规检查代码的端到端自动化，核心问题是如何在缺少逐条人工真值时，把规范规则、lintability 边界、生成代码和验证证据放在一条可复核链路上。实验表明，RFC 5280 与 CABF BR 中只有一部分真规则可还原为单证书静态 lint；在这些规则中，现有 zlint 仍存在可量化的原生覆盖缺口，本文系统可为未覆盖规则生成一批可编译、可审计的候选 lint。
 
-最重要的结论是负向的：$\mathrm{Code}\equiv\mathrm{IR}$ 与 $\mathrm{Code}\equiv\mathrm{Spec}$ 不能混为一谈。最终代码是否表达规范本身仍需要独立同义判定和执行证据支撑；同时，NON_GENERIC 原子必须作为领域专用原语单独披露，不能并入 GENERIC-only 合成能力。外部 zlint 人工金标检验规则提取与 lintability 判定；当前 manifest 的证书级检测留作后续重跑，本文不把历史规则集的发现移植为当前结论。由此，本文的方法学主张是：验证链路中能确定化的环节应尽量确定化，同时必须诚实披露不能归约、不能消融或仍依赖语义评判器的边界。
+最重要的结论是负向的：$\mathrm{Code}\equiv\mathrm{IR}$ 与 $\mathrm{Code}\equiv\mathrm{Spec}$ 不能混为一谈。最终代码是否表达规范本身仍需要独立同义判定和执行证据支撑；同时，NON_GENERIC 原子必须作为领域专用原语单独披露，不能并入 GENERIC-only 合成能力。外部 zlint 人工金标检验规则提取与 lintability 判定；当前 manifest 的证书级检测确认了少量原生 zlint 未命中的真实问题，但本文不把未通过 no-upstream 与独立结构审计的 raw finding 写作结论。由此，本文的方法学主张是：验证链路中能确定化的环节应尽量确定化，同时必须诚实披露不能归约、不能消融或仍依赖语义评判器的边界。
 
 ## 参考文献
 
@@ -606,7 +606,7 @@ GraphRAG 检索（§4.2）围绕一组核心关系构建上下文，并显式区
 
 **命题 1（词汇封闭性）**：若 DSL 树 $t$ 的某个叶参数标识符不属于 $\mathcal{V}$ 中签名所要求的分量，则解析函数 $\eta$ 必判其为错误、$t \notin \mathcal{T}_{\mathcal{V}}$；等价地，任何 $t \in \mathcal{T}_{\mathcal{V}}$ 都不含 $\mathcal{V}$ 之外的字段名、OID 或正则。该性质由 $\mathcal{V}$ 的有限枚举与每个原子模板的类型化签名 $\mathrm{sig}(a)$（§6.2）确定性保证。
 
-**代表性原子模板。** 原子模板集 $\mathcal{A}$（登记全集 $|\mathcal{A}|=149$）按语义簇组织，每个原子模板有类型化签名 $\mathrm{sig}(a)$（§6.2）。下表按簇节选关键原子模板（完整 149 项随代码与数据一并公开）；本次 77 条 unanimous 发射 lint 的原子使用分布见本附录末尾。
+**代表性原子模板。** 原子模板集 $\mathcal{A}$（登记全集 $|\mathcal{A}|=151$）按语义簇组织，每个原子模板有类型化签名 $\mathrm{sig}(a)$（§6.2）。下表按簇节选关键原子模板（完整 151 项随代码与数据一并公开）；本次 79 条 unanimous 发射 lint 的原子使用分布见本附录末尾。
 
 | 簇 | 原子模板 | 签名 | 语义 |
 |---|---|---|---|
@@ -621,7 +621,7 @@ GraphRAG 检索（§4.2）围绕一组核心关系构建上下文，并显式区
 
 **原子模板的通用性分级（GENERIC / NON_GENERIC）。** 原子模板按两条正交判据分级（与参数个数无关）：一个原子模板是 **GENERIC** 当且仅当 (1) 它表达一类*通用* PKI 概念——可跨规则复用的一类证书属性判定——且 (2) 它参数化于字段/值、不绑定任何特定 rule_id 或语料特有 OID/单一条款；否则为 **NON_GENERIC**（其逻辑特化于某扩展的内部结构或单一 RFC/CABF 条款，即便带参数，语义也固定于该构造）。NON_GENERIC 的含义是"领域专用原语"，不是"按规则 ID 硬编码输出"：实现中不允许原子模板读取 rule_id 或为某条规则直接返回固定结果；它只能检查证书 DER/x509 结构中的可观测谓词。零参原子模板可属任一类（`IsCA` 为 GENERIC，`NotAfterIsNoExpirySentinel` 为 NON_GENERIC）。例如参数化于扩展 OID 的 `AccessDescriptionCountInRange` / `AccessLocationUniquePerMethod` 计为 GENERIC，而旧的固定 AIA 别名仍计为 NON_GENERIC。该分级在代码中固化为 `GENERIC_ATOMS` / `NON_GENERIC_ATOMS` 两个集合并带分区完整性断言，可确定性复算。
 
-$\mathcal{A}$ 的 149 个登记原子模板中 **95 个 GENERIC、54 个 NON_GENERIC**。下表只列出 NON_GENERIC 的代表性示例；完整清单随代码与数据公开。
+$\mathcal{A}$ 的 151 个登记原子模板中 **98 个 GENERIC、53 个 NON_GENERIC**。下表只列出 NON_GENERIC 的代表性示例；完整清单随代码与数据公开。
 
 | 代表性 NON_GENERIC 原子模板 | 特化对象 | 语义 |
 |---|---|---|
@@ -633,13 +633,13 @@ $\mathcal{A}$ 的 149 个登记原子模板中 **95 个 GENERIC、54 个 NON_GEN
 | `SubtreeIPListAnyHasOctetCountAndNotAllZero` | NameConstraints IP 子树 | IP 子树是否存在指定字节数且非全零的项 |
 | `WildcardFilter` | DNS 名称模式 | 域名通配符是否满足特化过滤规则 |
 
-最终实验允许已登记 NON_GENERIC 原子模板进入代码生成，但必须单独统计；未知原子仍在统一出口被拒绝。独立脚本遍历最终 ledger，确认 **90/90** 生成树无未知原子，其中 70 条为 GENERIC-only、4 条为 GENERIC + NON_GENERIC、16 条为 NON_GENERIC-only。77 条 unanimous 发射 lint 中，58 条为 GENERIC-only、4 条为 GENERIC + NON_GENERIC、15 条为 NON_GENERIC-only。
+最终实验允许已登记 NON_GENERIC 原子模板进入代码生成，但必须单独统计；未知原子仍在统一出口被拒绝。独立脚本遍历最终 ledger，确认 **93/93** 生成树无未知原子，其中 73 条为 GENERIC-only、4 条为 GENERIC + NON_GENERIC、16 条为 NON_GENERIC-only；含 GENERIC 原子的生成合计 77/95 = 81.1% 的 codegen 定义域、77/93 = 82.8% 的生成成功候选。79 条 unanimous 发射 lint 中，60 条为 GENERIC-only、4 条为 GENERIC + NON_GENERIC、15 条为 NON_GENERIC-only。
 
 | 源 | 发射 lint | GENERIC-only | GENERIC + NON_GENERIC | 含 GENERIC 合计 | NON_GENERIC-only |
 |---|---:|---:|---:|---:|---:|
 | CABF-BR | 65 | 48 (73.8%) | 4 (6.2%) | 52 (80.0%) | 13 (20.0%) |
-| RFC 5280 | 12 | 10 (83.3%) | 0 (0.0%) | 10 (83.3%) | 2 (16.7%) |
-| **合计** | **77** | **58 (75.3%)** | **4 (5.2%)** | **62 (80.5%)** | **15 (19.5%)** |
+| RFC 5280 | 14 | 12 (85.7%) | 0 (0.0%) | 12 (85.7%) | 2 (14.3%) |
+| **合计** | **79** | **60 (75.9%)** | **4 (5.1%)** | **64 (81.0%)** | **15 (19.0%)** |
 
 **渲染与元数据绑定。** 所有 DSL 树经 $\rho$ 渲染后嵌入一个固定的 zlint Go 外壳（`RegisterCertificateLint` 注册、`CheckApplies`/`Execute` 方法对），规则间差异完全集中在检查体与导入；$\Phi_{\mathrm{post}}$（§6.4）确定性绑定 `Description`/`Citation`/`Name` 与各规范源的 `PACKAGE`/`SOURCE`/`EFFECTIVE_DATE` 元数据（如 RFC5280$\mapsto$`RFC5280`、CABF-TLS-BR$\mapsto$`CABFBaselineRequirements` 等）。义务级别到严重度的映射为 MUST/MUST NOT/SHALL/SHALL NOT/REQUIRED $\mapsto$ `lint.Error`（lint 名前缀 `e_`）、SHOULD/SHOULD NOT/RECOMMENDED $\mapsto$ `lint.Warn`（`w_`）；MAY/OPTIONAL 已在 §5 的 $C_1$ 处被排除，故本系统不产生 `lint.Notice` 级输出。
 
