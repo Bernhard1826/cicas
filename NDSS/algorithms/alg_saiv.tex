@@ -24,10 +24,10 @@ acceptance.
 \State $C \gets \{\phi_G(r): r\in \RLunc\}$
 \State $t\gets 0$
 \Repeat
-  \State compute residuals $\Lrec$~\eqref{eq:recall-res},
-    $\Lcode$~\eqref{eq:code-res}, $\Nviol$
-  \If{all residuals $<\theta$}
-    \State \textbf{break} \Comment{simultaneous closure}
+  \State compute objective residuals $\Lrec$~\eqref{eq:recall-res},
+    $\Lcode$~\eqref{eq:code-res}; lintability check $\Nviol$
+  \If{$\Ltot<\theta$ \textbf{and} $\Nviol=0$}
+    \State \textbf{break} \Comment{objectives converged, checks clear}
   \EndIf
   \State $\mathit{stage}\gets \textsc{StageAttribution}(\cdots)$
     \Comment{Eq.~\eqref{eq:route}}

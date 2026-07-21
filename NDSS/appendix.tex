@@ -279,12 +279,13 @@ verification chain.
 
 To coordinate the modules and safeguard their output quality without manual
 ground truth, we propose the Stage-Aware Iterative Verification (SAIV)
-framework. The basic idea is to predefine several quantifiable objectives, measure
-the gap between the current and ideal states by each objective's computable
-residual, and when a residual has not reached its threshold, the operator uses
-the residual signal to locate the offending module and applies the corresponding
-repair, then re-measures and proceeds to the next iteration, until all residuals
-converge simultaneously.
+framework. The basic idea is to predefine two quantifiable optimization
+objectives, measure the gap between the current and ideal states by each
+objective's computable residual, and when a residual has not reached its
+threshold, the operator uses the residual signal to locate the offending module
+and applies the corresponding repair, then re-measures and proceeds to the next
+iteration, until both residuals converge. Alongside the two objectives, two
+auxiliary checks police the lintability decision without entering this loop.
 
 \subsection{Formal Definition}
 \label{subsec:saiv-formal}
@@ -309,15 +310,20 @@ rule by rule to the remaining genuine rules, outputting the three-way partition
 $(\RN, \RL, \RU)$. The operator uses the computable signals these modules produce
 to choose the next round's repair operation.
 
-\subsection{Three Iteration Objectives (Optimization Targets)}
+\subsection{Two Iteration Objectives and Two Auxiliary Lintability Checks}
 \label{subsec:targets}
 
-SAIV borrows the idea of backpropagation. It first fixes the objectives the whole
-pipeline is to optimize, then the operator chooses the next round's repair operation
-according to computable signals. This subsection gives the three objectives; the
-subsequent subsections all revolve around approaching them. Each objective has a
-directly computable residual; when all three residuals are simultaneously zero,
-the pipeline is deemed to have converged. The three residuals differ in form.
+SAIV borrows the idea of backpropagation. It fixes two optimization objectives
+the whole pipeline is trained to approach, and keeps apart from them two
+auxiliary checks that police the lintability decision $\phi_C$ rather than drive
+optimization. The two objectives G1 and G2 each carry a directly computable
+residual, $\Lrec$ and $\Lcode$, whose weighted sum is the total loss $\Ltot$, so
+convergence is defined by $\Ltot$ alone. S1 and S2 are checks, not objectives,
+and add no term to $\Ltot$. They form the two sides of a single consistency test
+on $\phi_C$, S1 auditing the not-lintable verdict and S2 the lintable verdict,
+each firing only to correct a suspected misclassification. The subsequent subsections
+revolve around the two objectives, while the two checks gate the labels those
+objectives consume.
 
 \medskip
 \noindent\textbf{G1 (recall completeness).}
@@ -355,50 +361,74 @@ code\_summary of rule $r$'s DSL tree $t_r$; $\smech$ per
 The residual is the code-faithfulness residual $\Lcode$.
 
 \medskip
-\noindent\textbf{G3 (reverse executability of covered rules).} If a rule has a
-corresponding implementation in a lint tool such as zlint, it must be lintable;
-the objective is a violation count $\Nviol = 0$. The operator computes $\Nviol$
-by a reverse coverage check---running the coverage judge over the not-lintable
-set $\RU$ and counting the rules it rates full or partial; each such hit is
-adjudicated as either a $\phi_C$ false negative (re-extracted to lintable) or a
-spurious coverage match (kept not-lintable).
+\noindent\textbf{S1 (reverse executability of covered rules).} The first
+auxiliary check, auditing the not-lintable verdict. If a rule has a corresponding
+implementation in a lint tool such as zlint it must be lintable, so the check
+counts the violations $\Nviol$ and is clear when $\Nviol = 0$. The operator
+computes $\Nviol$ by a reverse coverage check---running the coverage judge over
+the not-lintable set $\RU$ and counting the rules it rates full or partial; each
+such hit is adjudicated as either a $\phi_C$ false negative (re-extracted to
+lintable) or a spurious coverage match (kept not-lintable).
 
 \medskip
-On top of these labels, SAIV formalizes three kinds of quality signals as
-computable residuals: the recall-conservation residual $\Lrec$
-(\S\ref{app:saiv}, Eq.~\eqref{eq:recall-res}) measures, by symmetric
-normalization, the degree to which the ideal identity of Theorem~\ref{thm:recall}
-is violated; the code-faithfulness residual $\Lcode$
-(\S\ref{app:saiv}, Eq.~\eqref{eq:code-res}) is the average gap of
-correctness labels over the lintable set; the two are weighted into the
-total loss $\Ltot$ (\S\ref{app:saiv}, Eq.~\eqref{eq:total}, with normalized
-weights). Since recall is conserved ($\Lrec = 0$), the total loss is governed
-by $\Lcode$ alone. The third is the dual-verdict-source consistency
-residual $\Nviol$ (\S\ref{subsec:algo}).
+\noindent\textbf{S2 (synthesizability of lintable rules).} The dual check,
+auditing the lintable verdict. A rule judged lintable should be synthesizable
+within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
+rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
+$\mathcal{P}_A$ are exhausted is a candidate signal that $\phi_C$ mislabeled it.
+S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
+marker as a diagnostic, and each persistent abstention is reviewed against the
+four-condition decision of \S\ref{sec:lintability} and adjudicated as either a
+$\phi_C$ false positive (re-derived to not-lintable) or a genuine $\Tv$
+expressiveness gap (kept as a logged abstention). In the shipping corpus both
+no-template abstentions are $\Tv$ gaps, so neither is re-adjudicated as
+not-lintable.
+
+\medskip
+On top of these labels, SAIV computes the two objective residuals. The
+recall-conservation residual $\Lrec$ (\S\ref{app:saiv},
+Eq.~\eqref{eq:recall-res}) measures, by symmetric normalization, the degree to
+which the ideal identity of Theorem~\ref{thm:recall} is violated, and the
+code-faithfulness residual $\Lcode$ (\S\ref{app:saiv}, Eq.~\eqref{eq:code-res})
+is the average gap of correctness labels over the lintable set; the two are
+weighted into the total loss $\Ltot$ (\S\ref{app:saiv}, Eq.~\eqref{eq:total},
+with normalized weights). Since recall is conserved ($\Lrec = 0$), the total loss
+is governed by $\Lcode$ alone. The two auxiliary checks stay outside $\Ltot$;
+their signals are the violation count $\Nviol$ of S1 and the abstention review of
+S2 (\S\ref{subsec:algo}).
 
 \begin{table*}[tb]
 \centering
 \footnotesize
-\caption{The three SAIV objectives, their residuals, and repair routing.}
+\caption{The two SAIV objectives and the two auxiliary lintability checks, with
+their signals and repair routing.}
 \label{tab:saiv-objectives}
-\begin{tabular}{@{}llp{4.2cm}p{5.2cm}@{}}
+\begin{tabular}{@{}llp{4.0cm}p{5.0cm}@{}}
 \toprule
-Objective & Residual & Main repair direction & Repair target \\
+Item & Signal & Main repair direction & Repair target \\
 \midrule
+\multicolumn{4}{@{}l}{\emph{Iteration objectives --- define $\Ltot$ and
+  convergence}}\\
 G1 Recall completeness & $\Lrec$ (Eq.~\eqref{eq:recall-res}) & --- &
   recall logic \\
 G2 Synonymy & $\Lcode$ (Eq.~\eqref{eq:code-res}) &
   IR-content, DSL-generation, and verification-judgment repairs &
   IR-content correction / DSL-tree re-synthesis / judgment \& summary
   re-check \\
-G3 Dual-verdict consistency & $\Nviol$ (\S\ref{subsec:algo}) &
+\midrule
+\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- police $\phi_C$,
+  outside $\Ltot$}}\\
+S1 Reverse executability & $\Nviol$ (\S\ref{subsec:algo}) &
   verification-judgment consistency repair &
-  $\phi_C$ false negatives / external-coverage-label false positives \\
+  $\phi_C$ false negatives / spurious coverage matches \\
+S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention (\S\ref{subsec:algo}) &
+  generation repair then vocabulary expansion &
+  $\phi_C$ false positives / $\Tv$ expressiveness gaps \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-The table (Table~\ref{tab:saiv-objectives}) gives only the objective-to-repair-direction correspondence; the
+The table (Table~\ref{tab:saiv-objectives}) gives only the item-to-repair-direction correspondence; the
 concrete repair operations and their notation are defined in
 \S\ref{subsec:repair}.
 
@@ -451,8 +481,9 @@ Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
-\textbf{Termination conditions}: $\Ltot < \theta$ (default $0.05$), reaching the
-maximum iteration $K = 10$, or no residual decreasing in a round. If every
+\textbf{Termination conditions}: $\Ltot < \theta$ (default $0.05$) with the two
+lintability checks clear, reaching the maximum iteration $K = 10$, or no residual
+decreasing in a round. If every
 accepted stage-repair operation is monotone (reducing that stage's error, or
 leaving it unchanged), then $\Ltot$ is non-increasing each round; the actual
 system uses a ``stop when no decrease'' policy, so it guarantees finite-round
