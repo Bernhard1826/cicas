@@ -24,6 +24,9 @@ HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parents[1]
 OUTPUTS = HERE / "outputs"
 DB_URL = os.environ.get("CICAS_DB_URL", "postgresql://postgres:123456@localhost:15432/cicas")
+COVERAGE_OUTPUTS = BACKEND / "experiments/coverage_analysis/outputs"
+COVERAGE_TABLE = COVERAGE_OUTPUTS / "coverage_table.json"
+ZLINT_CATALOG = BACKEND / "experiments/coverage_analysis/inputs/zlint_lint_catalog.json"
 
 STRICT_AUDIT_FULL = (
     BACKEND
@@ -137,6 +140,20 @@ def _load_db_snapshot() -> dict:
     return {"rows": rows, "by_id": by_id}
 
 
+def _load_zlint_reference() -> dict:
+    for path in (COVERAGE_TABLE, ZLINT_CATALOG):
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        ref = data.get("zlint_reference", data)
+        if isinstance(ref, dict) and "CABF" in ref and "RFC5280" in ref:
+            return ref
+    raise SystemExit(
+        "cannot find zlint reference counts; run "
+        "cicas_backend/experiments/coverage_analysis/run.py first"
+    )
+
+
 def build_domain() -> dict:
     audit_false, audit_meta = _strict_not_covered_from_audits()
     rescue_true, rescue_meta = _strict_covered_rescues_from_uncovered()
@@ -166,7 +183,10 @@ def build_domain() -> dict:
 
     strict_uncovered = (old_uncovered - rescue_true) | audit_false
     strict_covered = (old_covered - audit_false) | rescue_true
+    by_source_lintable = Counter(row["source"] for row in rows)
+    by_source_strict_covered = Counter(by_id[rid]["source"] for rid in strict_covered)
     by_source = Counter(by_id[rid]["source"] for rid in strict_uncovered)
+    by_source_old_covered = Counter(by_id[rid]["source"] for rid in old_covered)
     by_source_old_uncovered = Counter(by_id[rid]["source"] for rid in old_uncovered)
     by_source_newly_uncovered = Counter(by_id[rid]["source"] for rid in audit_false)
     by_source_rescued = Counter(by_id[rid]["source"] for rid in rescue_true)
@@ -221,16 +241,134 @@ def build_domain() -> dict:
         },
         "by_source": {
             source: {
+                "lintable": by_source_lintable[source],
+                "strict_native_covered": by_source_strict_covered[source],
                 "strict_uncovered": by_source[source],
+                "old_db_native_covered": by_source_old_covered[source],
                 "old_db_uncovered": by_source_old_uncovered[source],
                 "newly_uncovered_from_old_covered": by_source_newly_uncovered[source],
                 "newly_covered_from_old_uncovered": by_source_rescued[source],
             }
-            for source in sorted(by_source)
+            for source in sorted(by_source_lintable)
         },
         "rule_ids": [row["rule_id"] for row in source_rows],
         "rows": source_rows,
     }
+
+
+def build_strict_coverage_table(domain: dict, domain_output: Path | None = None) -> dict:
+    ref = _load_zlint_reference()
+    source_map = {"CABF": "CABF-BR", "RFC5280": "RFC5280"}
+    rows = []
+    total = {
+        "lintable": 0,
+        "strict_native_covered": 0,
+        "strict_uncovered": 0,
+        "old_db_native_covered": 0,
+        "old_db_uncovered": 0,
+        "newly_uncovered_from_old_covered": 0,
+        "newly_covered_from_old_uncovered": 0,
+    }
+    for label in ("CABF", "RFC5280"):
+        source = source_map[label]
+        counts = domain["by_source"].get(source, {})
+        row = {
+            "source": label,
+            "lintable": int(counts.get("lintable", 0)),
+            "strict_native_covered": int(counts.get("strict_native_covered", 0)),
+            "strict_uncovered": int(counts.get("strict_uncovered", 0)),
+            "old_db_native_covered": int(counts.get("old_db_native_covered", 0)),
+            "old_db_uncovered": int(counts.get("old_db_uncovered", 0)),
+            "newly_uncovered_from_old_covered": int(counts.get("newly_uncovered_from_old_covered", 0)),
+            "newly_covered_from_old_uncovered": int(counts.get("newly_covered_from_old_uncovered", 0)),
+            "zlint_reference": ref[label],
+        }
+        rows.append(row)
+        for key in total:
+            total[key] += row[key]
+    total["zlint_reference"] = {
+        "total": sum(ref[label]["total"] for label in ("CABF", "RFC5280")),
+        "cert": sum(ref[label]["cert"] for label in ("CABF", "RFC5280")),
+        "crl": sum(ref[label]["crl"] for label in ("CABF", "RFC5280")),
+    }
+    return {
+        "generated_at": domain["generated_at"],
+        "definition": (
+            "Table IV strict native-zlint coverage: start from the DB coverage "
+            "snapshot, then apply the strict native-Go coverage audit deltas. "
+            "CICAS-generated lints are excluded from native zlint counts."
+        ),
+        "inputs": {
+            "db_coverage_snapshot": str(COVERAGE_TABLE),
+            "zlint_reference_catalog": str(ZLINT_CATALOG),
+            "strict_domain_rule_ids": str(domain_output) if domain_output else None,
+            **domain["inputs"],
+        },
+        "by_source": rows,
+        "total": total,
+        "zlint_reference": ref,
+        "conservation": {
+            "lintable_equals_strict_covered_plus_uncovered": (
+                total["lintable"]
+                == total["strict_native_covered"] + total["strict_uncovered"]
+            ),
+            "strict_covered_formula": (
+                "old_db_native_covered - newly_uncovered_from_old_covered "
+                "+ newly_covered_from_old_uncovered"
+            ),
+            "strict_uncovered_formula": (
+                "old_db_uncovered + newly_uncovered_from_old_covered "
+                "- newly_covered_from_old_uncovered"
+            ),
+        },
+    }
+
+
+def render_strict_coverage_md(table: dict) -> str:
+    by = {row["source"]: row for row in table["by_source"]}
+    cabf, rfc = by["CABF"], by["RFC5280"]
+    ref_c, ref_r = cabf["zlint_reference"], rfc["zlint_reference"]
+    total = table["total"]
+    ref_t = total["zlint_reference"]
+    return "\n".join(
+        [
+            "# Table IV — strict native zlint coverage of lintable rules",
+            "",
+            "| Item | CABF | RFC 5280 | Total |",
+            "|---|---:|---:|---:|",
+            f"| zlint cognate lints, total (ref.) | {ref_c['total']} | {ref_r['total']} | {ref_t['total']} |",
+            f"| of which cert. lints | {ref_c['cert']} | {ref_r['cert']} | {ref_t['cert']} |",
+            f"| of which CRL lints | {ref_c['crl']} | {ref_r['crl']} | {ref_t['crl']} |",
+            (
+                "| full (full coverage) | "
+                f"{cabf['strict_native_covered']} | {rfc['strict_native_covered']} | "
+                f"{total['strict_native_covered']} |"
+            ),
+            (
+                "| uncovered (codegen domain) | "
+                f"{cabf['strict_uncovered']} | {rfc['strict_uncovered']} | "
+                f"{total['strict_uncovered']} |"
+            ),
+            f"| lintable total | {cabf['lintable']} | {rfc['lintable']} | {total['lintable']} |",
+            "",
+            "## Provenance",
+            "",
+            (
+                "- DB coverage snapshot: "
+                f"{total['old_db_native_covered']} covered / {total['old_db_uncovered']} uncovered."
+            ),
+            (
+                "- Strict audit delta: "
+                f"{total['newly_uncovered_from_old_covered']} old-covered rows removed from strict coverage; "
+                f"{total['newly_covered_from_old_uncovered']} old-uncovered rows restored as strict coverage."
+            ),
+            (
+                "- Strict result: "
+                f"{total['strict_native_covered']} covered / {total['strict_uncovered']} uncovered; "
+                f"{total['lintable']} = {total['strict_native_covered']} + {total['strict_uncovered']}."
+            ),
+        ]
+    ) + "\n"
 
 
 def main() -> int:
@@ -238,6 +376,11 @@ def main() -> int:
     ap.add_argument(
         "--output",
         default=str(OUTPUTS / "strict_audited_uncovered_20260718" / "domain_rule_ids.json"),
+    )
+    ap.add_argument(
+        "--strict-coverage-output",
+        default=str(COVERAGE_OUTPUTS / "strict_coverage_table.json"),
+        help="write the Table IV strict coverage aggregate next to coverage outputs",
     )
     args = ap.parse_args()
 
@@ -263,8 +406,20 @@ def main() -> int:
         + "\n",
         encoding="utf-8",
     )
+    strict_table_path = Path(args.strict_coverage_output)
+    strict_table_path.parent.mkdir(parents=True, exist_ok=True)
+    strict_table = build_strict_coverage_table(data, out_path)
+    strict_table_path.write_text(
+        json.dumps(strict_table, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    strict_table_path.with_suffix(".md").write_text(
+        render_strict_coverage_md(strict_table),
+        encoding="utf-8",
+    )
     print(json.dumps(data["strict_native_coverage_counts"], indent=2, ensure_ascii=False))
     print(f"wrote {out_path}")
+    print(f"wrote {strict_table_path}")
     return 0
 
 

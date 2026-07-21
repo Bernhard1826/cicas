@@ -29,15 +29,25 @@ Outputs (written to outputs/):
   outputs/coverage_table.json    Table 2 as data
   outputs/coverage_table.md      Table 2 rendered
   outputs/per_rule_coverage.jsonl per-rule full/none verdict
+  outputs/strict_coverage_table.json
+                                  Table IV strict native-zlint coverage, written
+                                  by ../codegen_metrics/build_strict_uncovered_domain.py
+                                  from this DB snapshot plus strict audit ledgers
 
 Run:
   python3 cicas_backend/experiments/coverage_analysis/run.py            # aggregate + render Table 2
   python3 cicas_backend/experiments/coverage_analysis/run.py --snapshot # also refresh inputs/
+  python3 cicas_backend/experiments/codegen_metrics/build_strict_uncovered_domain.py
+                                  # refresh strict Table IV coverage artifact
 
 Expected (current refreshed snapshot):
-  lint-able 274 = CABF 187 + RFC5280  87
-  full      201 = CABF 128 + RFC5280  73
-  uncovered  73 = CABF  59 + RFC5280  14   (= judged code-generation domain phi_G)
+  DB coverage snapshot:
+  lint-able 260 = CABF 175 + RFC5280  85
+  full      187 = CABF 116 + RFC5280  71
+  uncovered  73 = CABF  59 + RFC5280  14
+  Strict audited Table IV coverage:
+  full      165 = CABF  94 + RFC5280  71
+  uncovered  95 = CABF  81 + RFC5280  14   (= code-generation domain phi_G)
   pending     0 = CABF   0 + RFC5280   0
   native zlint cert reference: CABF 164 lints, RFC5280 115 lints
 
