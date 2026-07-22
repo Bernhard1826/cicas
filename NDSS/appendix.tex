@@ -1,15 +1,15 @@
 %-------------------------------------------------------------------------------
-% Technical appendices A--F (English translation of the source appendices).
+% Technical appendices A--F, English translation of the source appendices.
 %-------------------------------------------------------------------------------
 
 \section{Knowledge-Graph Relation Types and Retrieval Admissibility}
 \label{app:kg}
 
-GraphRAG retrieval (\S\ref{sec:method-graphrag}) builds context around a set of
+The Deterministic Context Retrieval procedure of \S\ref{sec:method-graphrag} builds context around a set of
 core relations and explicitly distinguishes ``relations admissible into
 retrieval'' from ``relations used only in post-processing''
-(Table~\ref{tab:kgrel}). The retrieval stage
-obeys four constraints (GR-1 to GR-4): no inferred normative rule may enter
+as shown in Table~\ref{tab:kgrel}. The retrieval stage
+obeys four constraints, GR-1 through GR-4: no inferred normative rule may enter
 retrieval; only raw specification nodes may enter retrieval; no inferential
 relation may enter retrieval; and all context must be traceable to a
 specification source.
@@ -30,8 +30,8 @@ core & DEFINES & link from a term/field/definition passage to its defined
 core & REFERENCES & explicit reference to another spec/section/algorithm & Yes \\
 core & APPLIES TO & link from a rule to the abstract concept it constrains
   & Yes \\
-aux & AFFECTS & link from a rule to the concrete certificate field it affects
-  (used by the field resolver) & No \\
+aux & AFFECTS & link from a rule to the concrete certificate field it affects;
+  used by the field resolver & No \\
 aux & DERIVED FROM & provenance link from a derived rule to its source section
   & No \\
 inferred & OVERRIDES & a more specific rule overrides a general one (produced by
@@ -45,10 +45,10 @@ inferred & CONFLICTS WITH & potential conflict between rules (produced by the
 \section{Key Fields of the Structured IR}
 \label{app:ir}
 
-The system internally uses a machine-readable IR object (JSON-serialized).
+The system internally uses a JSON-serialized, machine-readable IR object.
 Beyond the core four-tuple of \S\ref{sec:method-dual-layer}, its key fields are listed in Table~\ref{tab:irfields};
 the remaining fields support provenance, normalization, matching, and downstream
-product generation. The lintability decision (\S\ref{sec:lintability}) directly
+product generation. The lintability decision in \S\ref{sec:lintability} directly
 uses only the four fields obligation, assertion\_subject, enforcement\_phase, and
 rule\_category.
 
@@ -57,70 +57,89 @@ rule\_category.
 \footnotesize
 \caption{Key fields of the structured IR.}
 \label{tab:irfields}
-\begin{tabular}{@{}l l p{4.6cm}@{}}
+\begin{tabularx}{\columnwidth}{@{}l l X@{}}
 \toprule
 Field & Role & Meaning \\
 \midrule
 subject & core & constrained certificate field or path \\
-obligation & core & RFC~2119 deontic level (MUST/SHOULD/\dots) \\
-predicate & core & constraint relation (presence, equality,
-  containment, range) \\
+obligation & core & RFC~2119 deontic level, such as MUST/SHOULD/\dots \\
+predicate & core & constraint relation, such as presence, equality,
+  containment, or range \\
 constraint & core & constraint value, pattern, or condition \\
-rule\_category & key ext. & rule's semantic category
-  (encoding\_constraint, definition, algorithm\_ref, \dots) \\
-assertion\_subject & key ext. & assertion subject (Certificate / CA /
-  RelyingParty / external ecosystem) \\
+rule\_category & key ext. & rule's semantic category, such as
+  encoding\_constraint, definition, algorithm\_ref, \dots \\
+assertion\_subject & key ext. & assertion subject, such as Certificate / CA /
+  RelyingParty / external ecosystem \\
 enforcement\_phase & key ext. & phase the constraint depends on
-  (encoding / runtime / external validation) \\
+  such as encoding / runtime / external validation \\
 source\_section & key ext. & specification source and section
   identifier \\
 source\_span & key ext. & character/sentence span in the source text \\
 evidence\_text & key ext. & source fragment supporting this IR record \\
 context\_nodes & key ext. & definition, field metadata, or cited
-  context nodes from GraphRAG retrieval \\
+  context nodes from Deterministic Context Retrieval \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \section{Construction Details of the Restricted Code Space $\Tv$}
 \label{app:tv}
 
 \textbf{The seven components of the vocabulary $\mathcal{V}$.} $\mathcal{V}$ is
-the disjoint union of seven finite sets frozen at system startup
-(\S\ref{subsec:tv}): certificate fields $\mathcal{F}_{\mathrm{cert}}$
-($\sim$40, e.g., c.Version, c.DNSNames, c.IPAddresses),
-DN fields $\mathcal{F}_{\mathrm{dn}}$ ($\sim$15, e.g., Subject.CommonName,
-Subject.Country), OID constants $\mathcal{O}$ ($\sim$30, corresponding to
-zlint util.*OID), KeyUsage bits $\mathcal{B}_{\mathrm{KU}}$ (9),
-ExtKeyUsage bits $\mathcal{B}_{\mathrm{EKU}}$ ($\sim$10), ASN.1 encoding types
-$\mathcal{E}_{\mathrm{ASN1}}$ (5, e.g., UTF8String,
-PrintableString, IA5String), and named regexes
-$\mathcal{R}_{\mathrm{regex}}$ ($\sim$20, each an audited literal RE2 pattern).
-All components are frozen finite sets; the LLM receives a full enumeration of
+the disjoint union of seven finite sets
+shown in Table~\ref{tab:vocab}: certificate fields $\mathcal{F}_{\mathrm{cert}}$,
+DN fields $\mathcal{F}_{\mathrm{dn}}$ over the Subject and Issuer names, OID
+constants $\mathcal{O}$, including zlint util.* extension and algorithm OIDs
+together with well-known CABF and RFC OIDs, KeyUsage bits $\mathcal{B}_{\mathrm{KU}}$,
+ExtKeyUsage bits $\mathcal{B}_{\mathrm{EKU}}$, ASN.1 encoding types
+$\mathcal{E}_{\mathrm{ASN1}}$, and named regexes $\mathcal{R}_{\mathrm{regex}}$,
+each an audited literal RE2 pattern. Table~\ref{tab:vocab} gives the size and
+representative members of each component.
+All components are finite sets; the LLM receives a full enumeration of
 each component in the prompt, so any identifier outside $\mathcal{V}$ in its
-output triggers an $\eta$ parse error (Proposition~\ref{prop:vocab}).
+output triggers an $\eta$ parse error.
 
-\begin{proposition}[Vocabulary closure]\label{prop:vocab}
-If some leaf parameter identifier of a DSL tree $t$ does not belong to the
-component required by its signature in $\mathcal{V}$, then the parsing function
-$\eta$ necessarily judges it erroneous and $t \notin \Tv$; equivalently, any
-$t \in \Tv$ contains no field name, OID, or regex outside $\mathcal{V}$. This
-property is guaranteed deterministically by the finite enumeration of
-$\mathcal{V}$ and the typed signature $\mathrm{sig}(a)$ of each atomic template
-(\S\ref{subsec:tv}).
-\end{proposition}
+\begin{table*}[tb]
+\centering
+\footnotesize
+\caption{The seven frozen components of the restricted vocabulary $\mathcal{V}$,
+with their sizes and representative members. The LLM may emit only identifiers
+drawn from these closed sets; the full enumerations are released with the code
+and data.}
+\label{tab:vocab}
+\begin{tabularx}{\textwidth}{@{}l l r X@{}}
+\toprule
+Symbol & Component & Size & Representative members \\
+\midrule
+$\mathcal{F}_{\mathrm{cert}}$ & Certificate fields & 52 &
+  c.Version, c.NotAfter, c.KeyUsage, c.DNSNames, c.IPAddresses \\
+$\mathcal{F}_{\mathrm{dn}}$ & DN fields over Subject / Issuer & 38 &
+  Subject.CommonName, Subject.Organization, Subject.Country, Issuer.CommonName \\
+$\mathcal{O}$ & OID constants & 99 &
+  util.BasicConstOID, util.SubjectAlternateNameOID, util.AiaOID \\
+$\mathcal{B}_{\mathrm{KU}}$ & KeyUsage bits & 9 &
+  DigitalSignature, KeyEncipherment, CertSign, CRLSign \\
+$\mathcal{B}_{\mathrm{EKU}}$ & ExtKeyUsage bits & 11 &
+  ServerAuth, ClientAuth, CodeSigning, EmailProtection \\
+$\mathcal{E}_{\mathrm{ASN1}}$ & ASN.1 encoding types & 11 &
+  PrintableString, IA5String, UTF8String, BMPString \\
+$\mathcal{R}_{\mathrm{regex}}$ & Named RE2 regexes & 28 &
+  Re\_LDH\_Hostname, Re\_Rfc5321Mailbox, Re\_TorV3Onion \\
+\bottomrule
+\end{tabularx}
+\end{table*}
 
 \textbf{Representative atomic templates.} The atomic-template set $\mathcal{A}$
-($|\mathcal{A}|=151$) is organized by semantic cluster, each with a typed
-signature $\mathrm{sig}(a)$ (\S\ref{subsec:tv}). Table~\ref{tab:atoms} excerpts
-key atomic templates by cluster (all 151 are released with the code and data).
+has $|\mathcal{A}|=151$ and is organized by semantic cluster, each with a typed
+signature $\mathrm{sig}(a)$ described in \S\ref{subsec:tv}. Table~\ref{tab:atoms} excerpts
+key atomic templates by cluster, and all 151 are released with the code and data.
 
 \begin{table*}[tb]
 \centering
 \footnotesize
 \caption{Representative atomic templates by semantic cluster.}
 \label{tab:atoms}
-\begin{tabular}{@{}l p{4.2cm} l p{6cm}@{}}
+\begin{tabularx}{\textwidth}{@{}l p{4.2cm} l X@{}}
 \toprule
 Cluster & Atomic template & Signature & Semantics \\
 \midrule
@@ -142,22 +161,23 @@ V NameConstraints & SubtreeIPListAny\-HasOctetCount\-AndNotAllZero &
 VI Special structure & DomainComponentOrdered & $()$ &
   domainComponent in reverse order per RFC~4519 \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table*}
 
 There are three combinators $\{\neg, \wedge, \vee\}$, with semantics following
 classical propositional logic.
 
-\textbf{Generality grading of atomic templates (GENERIC / NON\_GENERIC).} Atomic
-templates are graded by two orthogonal criteria (independent of the number of
-parameters): an atomic template is GENERIC iff (1) it expresses a
+\textbf{Generality grading of atomic templates: GENERIC and NON\_GENERIC.} Atomic
+templates are graded by two orthogonal criteria independently of the number of
+parameters: an atomic template is GENERIC if and only if, first, it expresses a
 general PKI concept---a class of certificate-attribute judgments reusable
-across rules---and (2) it is parameterized over fields/values and bound to no
+across rules---and, second, it is parameterized over fields/values and bound to no
 specific rule\_id or corpus-specific OID/single clause; otherwise it is
-NON\_GENERIC (its logic specialized to the internal structure of some
-extension or a single RFC/CABF clause, its semantics fixed to that construct even
-when parameterized). A zero-parameter atomic template may belong to either class
-(IsCA is GENERIC, NotAfterIsNoExpirySentinel is NON\_GENERIC).
+NON\_GENERIC. In that case, its logic is specialized to the internal structure of
+some extension or a single RFC/CABF clause, and its semantics remain fixed to
+that construct even when parameterized. A zero-parameter atomic template may
+belong to either class. For example, IsCA is GENERIC, while
+NotAfterIsNoExpirySentinel is NON\_GENERIC.
 This grading is fixed in code as the two sets GENERIC\_ATOMS /
 NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
 deterministically recomputable.
@@ -171,7 +191,7 @@ examples; the full list is released with the code and data.
 \footnotesize
 \caption{Representative NON\_GENERIC atomic templates.}
 \label{tab:nongeneric}
-\begin{tabular}{@{}p{4.6cm} p{3cm} p{6.2cm}@{}}
+\begin{tabularx}{\textwidth}{@{}p{4.6cm} p{3cm} X@{}}
 \toprule
 Representative NON\_GENERIC atomic template & Specialization target &
   Semantics \\
@@ -193,37 +213,34 @@ SubtreeIPListAny\-HasOctetCount\-AndNotAllZero & NameConstraints IP subtree
 WildcardFilter & DNS name patterns & whether a domain wildcard
   satisfies the specialized filter rule \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table*}
 
-NON\_GENERIC atomic templates are allowed into code generation (they correspond
-to real PKI constructs, not padding to inflate the corpus), but must be
-explicitly marked and their proportion disclosed: among the 93
-generated lints, 73 use only GENERIC atomic templates, 4 mix GENERIC
-and NON\_GENERIC templates, and 16 use only NON\_GENERIC atomic templates.
-Equivalently, GENERIC-participating generation accounts for 77/95 (81.1\%) of
-the code-generation domain and 77/93 (82.8\%) of generated lints; among the 79
-final-shipping unanimous lints, the corresponding split is 60, 4, and 15.
+NON\_GENERIC atomic templates are allowed into code generation---they correspond
+to real PKI constructs, not padding to inflate the corpus---but are explicitly
+marked. The GENERIC/NON\_GENERIC split of the 93 generated lints is reported in
+\S\ref{sec:eval}; among the 79 final-shipping unanimous lints the split is 60
+GENERIC-only, 4 mixed, and 15 NON\_GENERIC-only.
 
 \textbf{Rendering and metadata binding.} After $\rho$ renders them, all DSL trees
-are embedded into a fixed zlint Go shell (registration via
-RegisterCertificateLint, the CheckApplies/Execute
-method pair), so inter-rule differences are entirely concentrated in the check
-body and imports; $\Phi_{\mathrm{post}}$ (\S\ref{subsec:synth}) deterministically
+are embedded into a fixed zlint Go shell, with registration via
+RegisterCertificateLint and the CheckApplies/Execute
+method pair, so inter-rule differences are entirely concentrated in the check
+body and imports; $\Phi_{\mathrm{post}}$ of \S\ref{subsec:synth} deterministically
 binds Description/Citation/Name and each source's
-PACKAGE/SOURCE/EFFECTIVE\_DATE metadata (e.g.,
+PACKAGE/SOURCE/EFFECTIVE\_DATE metadata. For example,
 RFC5280 $\mapsto$ RFC5280, CABF-TLS-BR $\mapsto$
-CABFBaselineRequirements). The obligation-to-severity mapping is
-MUST/MUST NOT/SHALL/SHALL NOT/REQUIRED $\mapsto$ lint.Error (lint-name
-prefix e\_), and SHOULD/SHOULD NOT/RECOMMENDED $\mapsto$
-lint.Warn (w\_); MAY/OPTIONAL is already excluded by $C_1$ of
+CABFBaselineRequirements. The obligation-to-severity mapping is
+MUST/MUST NOT/SHALL/SHALL NOT/REQUIRED $\mapsto$ lint.Error with lint-name
+prefix e\_, and SHOULD/SHOULD NOT/RECOMMENDED $\mapsto$
+lint.Warn with lint-name prefix w\_; MAY/OPTIONAL is already excluded by $C_1$ of
 \S\ref{sec:lintability}, so the system produces no lint.Notice-level
 output.
 
 \section{Phrase Dictionary of the Mechanical Translation $\smech$}
 \label{app:sigma}
 
-$\smech$ (defined in \S\ref{subsec:mech}) consists of an
+$\smech$, defined in \S\ref{subsec:mech}, consists of an
 atomic-template-to-phrase dictionary $\mathcal{M} : \mathcal{A} \to
 \mathcal{L}_{\mathrm{NL}}$ and three combinator reduction rules. Representative
 entries appear in Table~\ref{tab:phrasedict}.
@@ -233,7 +250,7 @@ entries appear in Table~\ref{tab:phrasedict}.
 \footnotesize
 \caption{Representative entries of the phrase dictionary $\mathcal{M}$.}
 \label{tab:phrasedict}
-\begin{tabular}{@{}p{3.1cm} p{4.6cm}@{}}
+\begin{tabularx}{\columnwidth}{@{}p{3.1cm} X@{}}
 \toprule
 Atomic template & $\mathcal{M}(a)$ phrase template \\
 \midrule
@@ -244,42 +261,33 @@ FieldEq(F, v) & ``\{F\} equals \{v\}'' \\
 FieldEncodedAs(F, T) & ``\{F\} is encoded as ASN.1 \{T\}'' \\
 KeyUsageHas(B) & ``the KeyUsage bit \{B\} is asserted'' \\
 ListAllMatch(F, T) & ``every entry of \{F\} satisfies
-  ($\smech(T)$)'' \\
+  the result of $\smech(T)$'' \\
 SubtreeIPListAny\-HasOctetCount\-AndNotAllZero(F, n) & ``the
   NameConstraints IP subtree \{F\} contains a non-zero entry of \{n\}
   octets'' \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 Combinator reduction: $\smech(\neg t) = $ ``NOT ($\smech(t)$)'';
 $\smech(t_1 \wedge t_2) = $ ``($\smech(t_1)$) AND ($\smech(t_2)$)''; $\vee$
 likewise; the atomic-template base case $\smech(a) = \mathcal{M}(a)$. For a
 conditional pair $(p,q)$: when $p = \neg(p')$, it outputs ``WHEN NOT
-($\smech(p')$), THEN $\smech(q)$'' (the NEG-PRE template that eliminates double
-negation); otherwise it outputs ``WHEN ($\smech(p)$), THEN $\smech(q)$''; and
+($\smech(p')$), THEN $\smech(q)$'', the NEG-PRE template that eliminates double
+negation; otherwise it outputs ``WHEN ($\smech(p)$), THEN $\smech(q)$''; and
 when $p = \varepsilon$ it outputs the single sentence $\smech(q)$.
 
-\begin{proposition}[Invertibility of $\smech$]\label{prop:invert}
-Given the output of $\smech(t)$, the original DSL tree $t$ can be mechanically
-recovered up to atomic-template-level equivalence (synonymous atomic templates
-mapped to the same phrase are indistinguishable; all other structure is
-preserved); hence $\smech$ preserves DSL-tree structural information in the
-verification chain.
-\end{proposition}
-
 %-------------------------------------------------------------------------------
-% Stage-Aware Iterative Verification (SAIV) --- moved out of the main body and
-% merged inline here (previously the separate file 07_saiv.tex, now deleted).
-% Its exact residual forms and stage-routing rule appear later in
-% \S\ref{app:saiv} and \S\ref{subsec:stage-attribution}, respectively.
+% Stage-Aware Iterative Verification, abbreviated SAIV --- moved out of the main body and
+% merged inline here; previously the separate file 07_saiv.tex, now deleted.
 %-------------------------------------------------------------------------------
-\section{Stage-Aware Iterative Verification (SAIV)}
+\section{Stage-Aware Iterative Verification: SAIV}
 \label{sec:saiv}
 
 To coordinate the modules and safeguard their output quality without manual
-ground truth, we propose the Stage-Aware Iterative Verification (SAIV)
-framework. The basic idea is to predefine two quantifiable optimization
+ground truth, we propose the Stage-Aware Iterative Verification framework,
+abbreviated SAIV.
+The basic idea is to predefine two quantifiable optimization
 objectives, measure the gap between the current and ideal states by each
 objective's computable residual, and when a residual has not reached its
 threshold, the operator uses the residual signal to locate the offending module
@@ -290,25 +298,20 @@ auxiliary checks police the lintability decision without entering this loop.
 \subsection{Formal Definition}
 \label{subsec:saiv-formal}
 
-The whole pipeline $\Pi$ is the composition of four modules chained in
-sequence---extraction $\to$ classification $\to$ generation $\to$
-verification:
+The whole pipeline $\Pi$ chains four modules---extraction $\to$ classification
+$\to$ generation $\to$ verification:
 \begin{equation}\label{eq:pipeline}
   \Pi = \phi_V \circ \phi_G \circ \phi_C \circ \phi_R
 \end{equation}
-where the extraction module $\phi_R$ produces the intermediate representation,
-the classification module $\phi_C$ (the four-condition lintability decision of
-\S\ref{sec:lintability}) filters out the lintable rules, the generation module
-$\phi_G$ (restricted to the DSL code space $\Tv$ of \S\ref{sec:codegen})
-synthesizes checking code, and the verification module $\phi_V$ (the three-layer
-semantic alignment of \S\ref{sec:codegen}) handles acceptance. Here $\phi_C$ is
-the single-rule lintability predicate defined in \S\ref{sec:lintability}
-($r \mapsto \{0,1\}$); the $\psi_C$ appearing in Algorithm~\ref{alg:saiv} is its
-set-level lift: it first removes Layer-1 false positives from the
-keyword-recall set $\Rkw$ to obtain the noise set $\RN$, then applies $\phi_C$
-rule by rule to the remaining genuine rules, outputting the three-way partition
-$(\RN, \RL, \RU)$. The operator uses the computable signals these modules produce
-to choose the next round's repair operation.
+where $\phi_R$ is extraction, $\phi_C$ is the four-condition lintability decision
+of \S\ref{sec:lintability}, $\phi_G$ is the DSL code space $\Tv$ of
+\S\ref{sec:codegen}, and $\phi_V$ is the three-layer semantic alignment of
+\S\ref{sec:codegen}. $\phi_C$ is the
+single-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_C$ of
+Algorithm~\ref{alg:saiv} is its set-level lift, which strips the noise $\RN$ from
+$\Rkw$ and sorts the remaining genuine rules into lintable $\RL$ and not-lintable
+$\RU$, giving the partition $(\RN, \RL, \RU)$. The operator drives the loop from
+the computable signals these modules produce.
 
 \subsection{Two Iteration Objectives and Two Auxiliary Lintability Checks}
 \label{subsec:targets}
@@ -326,7 +329,7 @@ revolve around the two objectives, while the two checks gate the labels those
 objectives consume.
 
 \medskip
-\noindent\textbf{G1 (recall completeness).}
+\noindent\textbf{G1: recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
 If the classification $\psi_C$ assigns each keyword-recalled candidate in
 $\Rkw(\mathcal{D})$ to exactly one of the three classes---noise, lintable, and
@@ -335,9 +338,9 @@ not-lintable---then recall is conserved from recall to classification:
   |\Rkw(\mathcal{D})| = |\RN| + |\RL| + |\RU|
 \end{equation}
 \end{theorem}
-\noindent where $\mathcal{D}$ is the standard-document corpus (written D in
-ASCII inside the Algorithm~\ref{alg:saiv} listing), $\RN$ is noise (containing
-RFC~2119 keywords but not genuine rules), $\RL$ the lintable rules, and $\RU$
+\noindent where $\mathcal{D}$ is the standard-document corpus, written D in
+ASCII inside the Algorithm~\ref{alg:saiv} listing, $\RN$ is noise that contains
+RFC~2119 keywords but not genuine rules, $\RL$ the lintable rules, and $\RU$
 the not-lintable rules. The executable class $\RL$ is further split by ``whether
 it is already implemented by an existing external lint tool'':
 \begin{equation}\label{eq:split}
@@ -350,28 +353,40 @@ executable set so the later objectives can be pursued separately. The uncovered
 subset $\RLunc$ is the most important observation domain for generation that
 ``fills the ecosystem gap,'' while the covered subset $\RLcov$ provides external
 evidence of reverse executability. The residual is the recall-conservation
-residual $\Lrec$, computable without manual ground truth and currently closed
-(Table~\ref{tab:snapshot}).
+residual $\Lrec$, a symmetric normalization of the gap in
+Theorem~\ref{thm:recall}, computable without manual ground truth and currently
+closed, as shown in Table~\ref{tab:snapshot}:
+\begin{equation}\label{eq:recall-res}
+  \Lrec = 1 - \frac{\min\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
+  {\max\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
+\end{equation}
 
 \medskip
-\noindent\textbf{G2 (code--specification synonymy for uncovered rules).} For the
-uncovered subset $\RLunc$, the code summary $\smech(t_r)$ (the
-code\_summary of rule $r$'s DSL tree $t_r$; $\smech$ per
-\S\ref{subsec:mech}) is required to be synonymous with the specification text.
-The residual is the code-faithfulness residual $\Lcode$.
+\noindent\textbf{G2: code--specification synonymy for uncovered rules.} For the
+uncovered subset $\RLunc$, the code summary $\smech(t_r)$, the code\_summary of
+rule $r$'s DSL tree $t_r$ computed by $\smech$ of \S\ref{subsec:mech}, is
+required to be synonymous with the specification text.
+The residual $\Lcode$ is the average, over $\RLunc$, of the per-rule correctness
+label $\lambda_{\mathrm{code}}(r) = \ind[\mathrm{compile}(\rho(t_r))] \cdot
+\mathrm{syn}(\smech(t_r), \mathrm{spec}(r))$, where $\rho(t_r)$ is the rendered Go
+code and $\mathrm{spec}(r)$ the rule text. The structural-completeness score is
+$\equiv 1$ in the fixed zlint shell, so it drops out:
+\begin{equation}\label{eq:code-res}
+  \Lcode = 1 - \frac{1}{|\RLunc|}\sum_{r\in\RLunc}\lambda_{\mathrm{code}}(r)
+\end{equation}
 
 \medskip
-\noindent\textbf{S1 (reverse executability of covered rules).} The first
+\noindent\textbf{S1: reverse executability of covered rules.} The first
 auxiliary check, auditing the not-lintable verdict. If a rule has a corresponding
 implementation in a lint tool such as zlint it must be lintable, so the check
 counts the violations $\Nviol$ and is clear when $\Nviol = 0$. The operator
 computes $\Nviol$ by a reverse coverage check---running the coverage judge over
 the not-lintable set $\RU$ and counting the rules it rates full or partial; each
-such hit is adjudicated as either a $\phi_C$ false negative (re-extracted to
-lintable) or a spurious coverage match (kept not-lintable).
+such hit is adjudicated as either a $\phi_C$ false negative and re-extracted to
+lintable, or a spurious coverage match and kept not-lintable.
 
 \medskip
-\noindent\textbf{S2 (synthesizability of lintable rules).} The dual check,
+\noindent\textbf{S2: synthesizability of lintable rules.} The dual check,
 auditing the lintable verdict. A rule judged lintable should be synthesizable
 within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
 rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
@@ -379,23 +394,20 @@ $\mathcal{P}_A$ are exhausted is a candidate signal that $\phi_C$ mislabeled it.
 S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
 marker as a diagnostic, and each persistent abstention is reviewed against the
 four-condition decision of \S\ref{sec:lintability} and adjudicated as either a
-$\phi_C$ false positive (re-derived to not-lintable) or a genuine $\Tv$
-expressiveness gap (kept as a logged abstention). In the shipping corpus both
+$\phi_C$ false positive and re-derived to not-lintable, or a genuine $\Tv$
+expressiveness gap and kept as a logged abstention. In the shipping corpus both
 no-template abstentions are $\Tv$ gaps, so neither is re-adjudicated as
 not-lintable.
 
 \medskip
-On top of these labels, SAIV computes the two objective residuals. The
-recall-conservation residual $\Lrec$ (\S\ref{app:saiv},
-Eq.~\eqref{eq:recall-res}) measures, by symmetric normalization, the degree to
-which the ideal identity of Theorem~\ref{thm:recall} is violated, and the
-code-faithfulness residual $\Lcode$ (\S\ref{app:saiv}, Eq.~\eqref{eq:code-res})
-is the average gap of correctness labels over the lintable set; the two are
-weighted into the total loss $\Ltot$ (\S\ref{app:saiv}, Eq.~\eqref{eq:total},
-with normalized weights). Since recall is conserved ($\Lrec = 0$), the total loss
-is governed by $\Lcode$ alone. The two auxiliary checks stay outside $\Ltot$;
-their signals are the violation count $\Nviol$ of S1 and the abstention review of
-S2 (\S\ref{subsec:algo}).
+The two objective residuals are weighted into the total loss in
+Eq.~\eqref{eq:total}, with $w_R + w_C = 1$:
+\begin{equation}\label{eq:total}
+  \Ltot = w_R\cdot\Lrec + w_C\cdot\Lcode
+\end{equation}
+Since recall is conserved, $\Lrec = 0$, $\Ltot$ is governed by $\Lcode$ alone.
+The two auxiliary checks stay outside $\Ltot$; their signals are the violation
+count $\Nviol$ of S1 and the abstention review of S2 in \S\ref{subsec:algo}.
 
 \begin{table*}[tb]
 \centering
@@ -403,32 +415,32 @@ S2 (\S\ref{subsec:algo}).
 \caption{The two SAIV objectives and the two auxiliary lintability checks, with
 their signals and repair routing.}
 \label{tab:saiv-objectives}
-\begin{tabular}{@{}llp{4.0cm}p{5.0cm}@{}}
+\begin{tabularx}{\textwidth}{@{}llp{4.0cm}X@{}}
 \toprule
 Item & Signal & Main repair direction & Repair target \\
 \midrule
 \multicolumn{4}{@{}l}{\emph{Iteration objectives --- define $\Ltot$ and
   convergence}}\\
-G1 Recall completeness & $\Lrec$ (Eq.~\eqref{eq:recall-res}) & --- &
+G1 Recall completeness & $\Lrec$, Eq.~\eqref{eq:recall-res} & --- &
   recall logic \\
-G2 Synonymy & $\Lcode$ (Eq.~\eqref{eq:code-res}) &
+G2 Synonymy & $\Lcode$, Eq.~\eqref{eq:code-res} &
   IR-content, DSL-generation, and verification-judgment repairs &
   IR-content correction / DSL-tree re-synthesis / judgment \& summary
   re-check \\
 \midrule
 \multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- police $\phi_C$,
   outside $\Ltot$}}\\
-S1 Reverse executability & $\Nviol$ (\S\ref{subsec:algo}) &
+S1 Reverse executability & $\Nviol$, \S\ref{subsec:algo} &
   verification-judgment consistency repair &
   $\phi_C$ false negatives / spurious coverage matches \\
-S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention (\S\ref{subsec:algo}) &
+S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention, \S\ref{subsec:algo} &
   generation repair then vocabulary expansion &
   $\phi_C$ false positives / $\Tv$ expressiveness gaps \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table*}
 
-The table (Table~\ref{tab:saiv-objectives}) gives only the item-to-repair-direction correspondence; the
+Table~\ref{tab:saiv-objectives} gives only the item-to-repair-direction correspondence; the
 concrete repair operations and their notation are defined in
 \S\ref{subsec:repair}.
 
@@ -442,36 +454,31 @@ the entity-necessary-condition screening result, and the synonymy confidence.
 This routing only decides which kind of repair to attempt next round.
 
 \textbf{Repair operations.} SAIV comprises four kinds of operations---IR-content
-repair, classification repair, generation repair, and verification
-repair---written $\mathcal{P}_R / \mathcal{P}_C / \mathcal{P}_G / \mathcal{P}_V$
-respectively (the subscripts correspond one-to-one to the repaired module
-$\phi_\bullet$; the repair operator $\mathcal{P}$ is a different symbol from the
-rendering function $\rho$ of \S\ref{subsec:mech} and must be distinguished). The
-router selects the next round's operation from the signals above (following
-Eq.~\eqref{eq:route}); a repair is accepted only when the metric decreases.
+repair $\mathcal{P}_R$, classification repair $\mathcal{P}_C$, generation repair
+$\mathcal{P}_G$, and verification repair $\mathcal{P}_V$, the subscripts naming
+the repaired module $\phi_\bullet$. The repair operator $\mathcal{P}$ is distinct
+from the rendering function $\rho$ of \S\ref{subsec:mech}. The operator selects
+the next round's operation from the signals above, and a repair is accepted only
+when the metric decreases.
 
 \begin{itemize}
-\item \textbf{IR-content repair $\mathcal{P}_R$}: when the router selects this
-  operation, it feeds the failure trace---the current IR, the irreducible
-  category, the mechanical summary, the judge's ruling and rationale, the
-  synonymy confidence, and the history of IRs already tried in this
-  session---back to the LLM, requiring it to output REPAIR(ir') or
-  NO\_FIX.
-\item \textbf{Classification repair $\mathcal{P}_C$}: repairs the extraction of
-  the fields corresponding to the four-condition framework, re-extracts the IR,
-  and repairs the lintability decision.
-\item \textbf{Generation repair $\mathcal{P}_G$}: first tries deterministic
-  repair; on failure it injects the failing code fragment and the IR-constraint
-  discrepancy, or the atomic-template signature/closure error from the parsing
-  stage, as feedback into the prompt, triggering the LLM to re-synthesize within
-  $\Tv$; if it keeps abstaining, it enters the offline vocabulary-expansion
-  channel $\mathcal{P}_A$---analyzing the abstention cause, hand-authoring a new
-  atomic-template candidate, and merging it into
-  $\mathcal{A}$ after certification by certificate-level execution verification.
-\item \textbf{Verification repair $\mathcal{P}_V$}: enlarges the semantic
-  neighborhood of the synonymy judgment, e.g., allowing negation/affirmation
-  interchange or one-to-many decomposition, or corrects the inconsistency
-  between the two verdict sources.
+\item \textbf{IR-content repair $\mathcal{P}_R$}: feeds the failure trace---the
+  current IR, the irreducible category, the mechanical summary, the judge ruling
+  and rationale, the synonymy confidence, and the session's IR history---back to
+  the LLM, which returns REPAIR(ir') or NO\_FIX.
+\item \textbf{Classification repair $\mathcal{P}_C$}: re-extracts the
+  four-condition IR fields and re-runs the lintability decision.
+\item \textbf{Generation repair $\mathcal{P}_G$}: tries deterministic repair
+  first; on failure it feeds the failing code fragment and the IR-constraint
+  discrepancy, or the parser's signature/closure error, back into the prompt to
+  re-synthesize within $\Tv$; on persistent abstention it enters the offline
+  vocabulary-expansion channel $\mathcal{P}_A$, which hand-authors a new
+  atomic-template candidate and merges it into $\mathcal{A}$ after
+  certificate-level execution verification.
+\item \textbf{Verification repair $\mathcal{P}_V$}: enlarges the synonymy
+  judgment's semantic neighborhood, e.g., negation/affirmation interchange or
+  one-to-many decomposition, or corrects the inconsistency between the two
+  verdict sources.
 \end{itemize}
 
 \subsection{Iteration Algorithm and Termination Conditions}
@@ -481,84 +488,10 @@ Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
-\textbf{Termination conditions}: $\Ltot < \theta$ (default $0.05$) with the two
+\textbf{Termination conditions}: $\Ltot < \theta$, with default $0.05$, and the two
 lintability checks clear, reaching the maximum iteration $K = 10$, or no residual
 decreasing in a round. If every
-accepted stage-repair operation is monotone (reducing that stage's error, or
-leaving it unchanged), then $\Ltot$ is non-increasing each round; the actual
+accepted stage-repair operation is monotone, reducing that stage's error or
+leaving it unchanged, then $\Ltot$ is non-increasing each round; the actual
 system uses a ``stop when no decrease'' policy, so it guarantees finite-round
-termination but not global optimality (see \S\ref{sec:eval}).
-
-\subsection{Formalization of SAIV Residuals}
-\label{app:saiv}
-
-This subsection collects the exact mathematical forms of the SAIV residuals
-referenced above (\S\ref{subsec:repair}--\S\ref{subsec:algo}), for readers who
-need to check them formally.
-
-\textbf{Exact forms of SAIV's core residuals} (intuition and definitions in
-\S\ref{subsec:repair}--\S\ref{subsec:algo}).
-
-Code-correctness label (Eq.~\eqref{eq:corrlabel}). Let $t_r$ be the DSL tree
-synthesized for rule $r$ and $\mathrm{code}(r) = \rho(t_r)$ its rendered Go code;
-$\ind[\cdot]$ is the indicator function, $\mathrm{compile}(\cdot) \in \{0,1\}$ is
-whether it compiles, $s_{\mathrm{struct}}(\cdot) \in [0,1]$ is the
-structural-completeness score, $\mathrm{syn}(\cdot,\cdot) \in \{0,1\}$ is the
-synonymy-judge output, $\smech(t_r)$ is the code\_summary
-(\S\ref{subsec:mech}), and $\mathrm{spec}(r)$ is rule $r$'s specification text:
-\begin{equation}\label{eq:corrlabel}
-  \begin{split}
-    \lambda_{\mathrm{code}}(r) = {}&\ind[\mathrm{compile}(\mathrm{code}(r))] \cdot
-      s_{\mathrm{struct}}(\mathrm{code}(r)) \\
-    &{}\cdot \mathrm{syn}(\smech(t_r),\, \mathrm{spec}(r))
-  \end{split}
-\end{equation}
-
-In the shipping configuration $s_{\mathrm{struct}} \equiv 1$---the fixed zlint
-shell guarantees structural completeness---and $\mathrm{syn}$ is the thresholded
-$k$-vote synonymy verdict, so $\lambda_{\mathrm{code}}$ reduces to
-$\ind[\mathrm{compile}] \cdot \mathrm{syn}$ in practice.
-
-Recall-conservation residual (Eq.~\eqref{eq:recall-res}):
-\begin{equation}\label{eq:recall-res}
-  \Lrec = 1 - \frac{\min\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
-  {\max\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
-\end{equation}
-
-Code-faithfulness residual (Eq.~\eqref{eq:code-res}):
-\begin{equation}\label{eq:code-res}
-  \Lcode = 1 - \frac{1}{|\RLunc|}\sum_{r\in\RLunc}\lambda_{\mathrm{code}}(r)
-\end{equation}
-
-Total loss (Eq.~\eqref{eq:total}, $w_R + w_C = 1$):
-\begin{equation}\label{eq:total}
-  \Ltot = w_R\cdot\Lrec + w_C\cdot\Lcode
-\end{equation}
-
-\subsection{Stage Attribution Rule}
-\label{subsec:stage-attribution}
-
-The exact stage-routing rule used by Algorithm~\ref{alg:saiv} is:
-\begin{equation}\label{eq:route}
-\mathrm{Stage}^{(t)} = \begin{cases}
-  \phi_R, & \Lrec^{(t)} > \tau_R \\[2pt]
-  \phi_C, & \Lrec^{(t)} \leq \tau_R \,\wedge\, p_{\mathrm{fail}}^{(t)} >
-    \tau_C \\[2pt]
-  \phi_G, & \begin{array}{@{}l@{}}
-    \Lrec^{(t)} \leq \tau_R \,\wedge\, p_{\mathrm{fail}}^{(t)} \leq \tau_C \\
-    \wedge\; \Lcode^{(t)} > \tau_C \,\wedge\, \bar{s}_{\mathrm{struct}}^{(t)} < 1
-    \end{array} \\[10pt]
-  \phi_V, & \text{otherwise}
-\end{cases}
-\end{equation}
-The four branches match top-down by priority, with $\phi_V$ the default. Here
-$p_{\mathrm{fail}}^{(t)} = \frac{1}{|\RLunc|}\sum_{r\in\RLunc}
-\ind[\neg\mathrm{compile}(\phi_G(r))]$ and $\bar{s}_{\mathrm{struct}}^{(t)} =
-\frac{1}{|\RLunc|}\sum_{r\in\RLunc}s_{\mathrm{struct}}(\phi_G(r))$ (here
-$\phi_G(r)$ is the $\mathrm{code}(r)$ above). Note the routing thresholds
-$\tau_R, \tau_C$ decide ``which module to repair next round,'' a different
-quantity from the termination threshold $\theta$ of \S\ref{subsec:algo} (acting
-on the total loss $\Ltot$, default $0.05$). In the shipping configuration
-$\bar{s}_{\mathrm{struct}}^{(t)} \equiv 1$ (the fixed shell guarantees structural
-completeness), so the $\phi_G$-by-structure branch of Eq.~\eqref{eq:route} is a
-safeguard that does not fire on the current corpus.
+termination but not global optimality, as discussed in \S\ref{sec:eval}.

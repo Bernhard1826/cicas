@@ -2,3 +2,12 @@
 \section{Conclusion}
 \label{sec:conclusion}
 %-------------------------------------------------------------------------------
+
+We presented the first end-to-end framework that turns natural-language
+Web PKI normative text into verified static lint code. Using this framework,
+we found that the most widely deployed linter, zlint, leaves a coverage gap
+over the lintable rules, and we filled this gap by generating and shipping
+the missing lints. Injecting these lints and running certificate detection
+then surfaced genuine problems on real certificates that native zlint misses.
+These results show that automating specification compliance is a promising
+path from normative text to enforceable checks.

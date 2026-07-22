@@ -10,19 +10,19 @@
 \refstepcounter{algorithm}
 \label{alg:coverage}
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for zlint
-coverage-alignment determination (rule-indexed).
+coverage-alignment determination for individual rules.
 \par\smallskip
 \small
 \begin{algorithmic}[1]
-\Statex \textbf{Input:} lintable rule set $B=\{b_1,\dots,b_m\}$ (each with IR four-tuple
-  $\langle$subject, obligation, predicate, constraint$\rangle$, source,
-  section); zlint lint set $L=\{\ell_1,\dots,\ell_n\}$ (each with
-  description/citation/severity metadata and Pass/Error tests); offline code
-  summarizer $M_{\mathrm{summ}}$, field-level judge $M_{\mathrm{judge}}$
-  (temperature $=0$)
+\Statex \textbf{Input:} lintable rule set $B=\{b_1,\dots,b_m\}$, where each rule has
+  IR four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$,
+  source, and section; zlint lint set $L=\{\ell_1,\dots,\ell_n\}$, where each lint has
+  description/citation/severity metadata and Pass/Error tests; offline code
+  summarizer $M_{\mathrm{summ}}$, and field-level judge $M_{\mathrm{judge}}$
+  with temperature $=0$
 \Statex \textbf{Output:} per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
   none}\}$, covered set, and codegen domain $\phi_G$
-\Statex // Stage-0 (offline, cached): summarize each lint into a reverse
+\Statex // Offline cached Stage-0: summarize each lint into a reverse
   IR
 \ForAll{$\ell \in L$}
   \State $\ell.\mathit{ir} \gets M_{\mathrm{summ}}(\ell.\mathrm{src},

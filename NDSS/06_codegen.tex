@@ -14,14 +14,15 @@ a rule's code body to a finite, closed DSL-tree space $\Tv$. Each rule's code
 body can only be a tree in that space, which is then rendered into Go code by a
 deterministic function. Figure~\ref{fig:codegen-pipeline} illustrates the whole
 pipeline on a single rule---CA certificates must assert the keyCertSign
-key-usage bit---tracing it from the filled IR fields, through the DSL tree (AST)
-and its JSON serialization, to the deterministically rendered Go checking code.
+key-usage bit---tracing it from the filled IR fields, through the DSL tree,
+represented as an abstract syntax tree, and its JSON serialization, to the
+deterministically rendered Go checking code.
 
 \begin{figure*}[tb]
   \centering
   \paperfig{figures/fig03_codegen_pipeline.png}{Worked example of restricted
     code generation. A single rule flows from its filled IR fields through the
-    DSL tree (AST) and its JSON serialization to deterministically rendered Go
+    DSL tree, represented as an abstract syntax tree, and its JSON serialization to deterministically rendered Go
     checking code.}
   \caption{Worked example of restricted code generation. }
   \label{fig:codegen-pipeline}
@@ -115,7 +116,7 @@ of each class appear in Appendix~\ref{app:tv}.
 
 Each atomic template has a signature table specifying which class, or base type
 integer/Boolean/string, each of its parameters must draw from; a call to an
-atomic template is legal iff every actual argument falls in the class its
+atomic template is legal if and only if every actual argument falls in the class its
 signature prescribes. Writing $\Tv$ for the set of DSL trees all of whose
 parameters are legal, we strictly restrict the range of the code-generation
 module $\phi_G$ to it. Any tree in $\Tv$ contains no field name, OID, or regex
@@ -140,8 +141,8 @@ execution verification of \S\ref{subsec:exec-verify} treat $\rho(t)$ as a fixed
 function of $t$, whose execution behavior does not vary with run count or model.
 $\smech$, by contrast, is invertible. $t$ can be mechanically recovered from
 $\smech(t)$, so $\smech$ preserves the structural information of the
-DSL tree in the verification chain, as Proposition~\ref{prop:invert} shows, with
-proof in Appendix~\ref{app:sigma}.
+DSL tree in the verification chain; the construction is detailed in
+Appendix~\ref{app:sigma}.
 
 Thus $\rho$'s product leads to executable code and the certificate-level execution
 verification of \S\ref{subsec:exec-verify}, while $\smech$'s product leads to
@@ -233,7 +234,7 @@ make the template's predicate true, and one that should make it false. The
 samples are constructed by the atomic template's parameter types and are not
 bound to any concrete rule. The rendered code is executed for real on the two
 certificates and the verdicts are read back; the atomic template is deemed
-certified iff the results on both certificates match expectation.
+certified if and only if the results on both certificates match expectation.
 
 Step 2, generalizing from atomic templates to the whole tree. For a
 generated lint holding a DSL tree $t$, if $t$ is composed only of certified

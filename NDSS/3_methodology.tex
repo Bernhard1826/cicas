@@ -11,18 +11,18 @@ We describe the overall system architecture and the methods used in the key comp
 
 Web PKI normative sources serve as the input to the framework. Through keyword recall and constrained extraction, candidate rules are converted into a structured representation. As shown in Fig.~\ref{fig:architecture}, the framework contains four modules.
 
-(1)~Knowledge graph construction. To handle scattered definitions, inherited requirements, and cross-document references, this module organizes the collected sources into a traceable source context for rule extraction.
+First, the knowledge graph construction module handles scattered definitions, inherited requirements, and cross-document references by organizing the collected sources into a traceable source context for rule extraction.
 
-(2)~Deterministic context retrieval. To prevent the LLM from inventing unsupported context, this module supplies source-grounded context for each target section in a reproducible way.
+Second, the deterministic context retrieval module prevents the LLM from inventing unsupported context by supplying source-grounded context for each target section in a reproducible way.
 
-(3)~DLEP. To balance completeness and precision, this module first recalls candidate normative rules; for precise extraction, the second layer uses an LLM to convert them into a structured representation.
+Third, DLEP balances completeness and precision by first recalling candidate normative rules; for precise extraction, the second layer uses an LLM to convert them into a structured representation.
 
-(4)~Four-condition lintability framework. To determine whether a rule can be implemented as a static lint check, we design a four-condition lintability framework.
+Fourth, the four-condition lintability framework determines whether a rule can be implemented as a static lint check.
 
 \begin{figure*}[tb]
   \centering
   \paperfig{figures/fig01_architecture.png}{Architecture of the Dual-Layer
-    Extraction Pipeline (DLEP), showing knowledge-graph construction, deterministic
+    Extraction Pipeline, abbreviated DLEP, showing knowledge-graph construction, deterministic
     context retrieval, dual-layer rule extraction, and the four-condition
     lintability framework.}
   \caption{Architecture of Dual-Layer Extraction Pipeline.}
@@ -50,7 +50,7 @@ The resulting graph serves as a traceable context index rather than as an oracle
 \label{sec:method-graphrag}
 
 To address cross-document references, DLEP organizes context deterministically rather than relying on the LLM to infer relations.
-We implement a GraphRAG~\cite{edge2024local} retrieval module that treats the knowledge graph of \S\ref{sec:method-kg-builder} as a fixed input and retrieves context through bounded subgraph queries.
+We implement a deterministic retrieval module based on GraphRAG~\cite{edge2024local} that treats the knowledge graph of \S\ref{sec:method-kg-builder} as a fixed input and retrieves context through bounded subgraph queries.
 
 Given a target Section node, the retrieval module performs a BFS expansion over the $k$-hop neighborhood using the source-backed CONTAINS, DEFINES, REFERENCES, and APPLIES\_TO relations.
 It then assembles LLM context by relation-type priority and provides term definitions, field metadata, and referenced sections. The retrieval process uses neither vector similarity nor LLM inference, and produces no independent judgment.
@@ -63,7 +63,7 @@ It then assembles LLM context by relation-type priority and provides term defini
 \caption{RFC~2119 keyword tiers.}
 \label{tab:rfc2119}
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}L{0.27\linewidth} L{0.30\linewidth} L{0.33\linewidth}@{}}
+\begin{tabularx}{\columnwidth}{@{}L{0.27\linewidth} L{0.30\linewidth} X@{}}
 \hline
 Tier & Keywords & Semantics \\
 \hline
@@ -72,7 +72,7 @@ Prohibition    & MUST NOT, SHALL NOT     & Absolute prohibition \\
 Recommendation & SHOULD, SHOULD NOT, RECOMMENDED & Strongly recommended or discouraged; justified deviation permitted \\
 Optional       & MAY, OPTIONAL           & Fully optional \\
 \hline
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \begin{table}[tb]
@@ -81,19 +81,19 @@ Optional       & MAY, OPTIONAL           & Fully optional \\
 \label{tab:ir-core}
 \setlength{\tabcolsep}{4pt}
 \footnotesize
-\begin{tabular}{@{}L{0.18\linewidth} L{0.74\linewidth}@{}}
+\begin{tabularx}{\columnwidth}{@{}L{0.18\linewidth} X@{}}
 \hline
 Field & Meaning \\
 \hline
-subject    & Certificate field path (e.g., extensions.\allowbreak subjectAltName.\allowbreak dNSName), resolved by FieldResolver \\
-obligation & RFC~2119 keyword (MUST/SHALL/SHOULD/\dots) \\
-predicate  & Assertion type (must\_be\_present, conform\_to, equal, \dots) \\
+subject    & Certificate field path, for example extensions.\allowbreak subjectAltName.\allowbreak dNSName, resolved by FieldResolver \\
+obligation & RFC~2119 keyword, such as MUST/SHALL/SHOULD/\dots \\
+predicate  & Assertion type, such as must\_be\_present, conform\_to, equal, \dots \\
 constraint & constraint value or pattern \\
 \hline
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-To address the LLM controllability challenge, we design a dual-layer extraction pipeline (DLEP) that preserves the LLM's semantic understanding while keeping the extraction process auditable.
+To address the LLM controllability challenge, we design DLEP as a dual-layer extraction pipeline that preserves the LLM's semantic understanding while keeping the extraction process auditable.
 
 Layer~1 performs deterministic recall.
 Web PKI specifications commonly express normative requirements using the RFC~2119 keywords listed in Table~\ref{tab:rfc2119}.
@@ -106,7 +106,7 @@ Pass~2 detects nested structures so subordinate rules inherit the parent obligat
 Pass~3 captures normative statements that do not follow the standard RFC~2119 form.
 
 Layer~2 performs controlled semantic parsing using an LLM, but restricts the model to a constrained language-understanding role.
-Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized intermediate representation (IR), while all normative reasoning is deferred to later deterministic stages.
+Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized intermediate representation, abbreviated IR, while all normative reasoning is deferred to later deterministic stages.
 
 The IR decouples semantic extraction from downstream tasks, allowing the same extraction result to support multiple uses, as shown in Fig.~\ref{fig:ir-downstream}.
 Each IR record is serialized as a JSON object with 33 fields.
@@ -143,7 +143,7 @@ Appendix~\ref{app:ir} provides the category definitions, correction rules, and t
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}l l L{0.36\linewidth} L{0.30\linewidth}@{}}
+\begin{tabularx}{\textwidth}{@{}l l L{0.36\linewidth} X@{}}
 \hline
 ID & IR field & Value domain & Condition \\
 \hline
@@ -152,7 +152,7 @@ $C_2$      & assertion\_subject & Certificate, CA, CrossArtifact & assertion\_su
 $C_3$      & enforcement\_phase & Encoding, Validation, Comparison, Processing & enforcement\_phase $=$ Encoding \\
 $\neg C_4$ & rule\_category     & encoding\_constraint, comparison, definition, capability, algorithm\_ref, display, \dots & rule\_category $\notin$ \{definition, capability, algorithm\_ref, display, \dots\} \\
 \hline
-\end{tabular}
+\end{tabularx}
 \end{table*}
 
 Before generating code, we decide the lintability of each normative rule, namely whether it admits such a static lint check. Rather than asking the LLM to make this judgment directly, we compute it from the IR that the LLM has already produced. Three observations motivate this design. First, the same four pieces of information determine the lintability of normative rules in practice, namely the deontic strength of the obligation, who is obligated, when the obligation applies, and what type of rule it is. Second, each of the four can be encoded as a single IR field with a small, closed value set, so the lintability decision becomes a Boolean function of four discrete fields. Third, separating the four conditions makes any wrong label traceable to exactly one IR field rather than to an opaque end-to-end LLM call.

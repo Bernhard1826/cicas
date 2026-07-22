@@ -1,4 +1,4 @@
-% Algorithm 2 -- Stage-Aware Iterative Verification (SAIV).
+% Algorithm 2 -- Stage-Aware Iterative Verification, abbreviated SAIV.
 % Included from the SAIV section of appendix.tex via \input{algorithms/alg_saiv}.
 \begin{figure*}[tb]
 \makeatletter
@@ -10,7 +10,7 @@
 \refstepcounter{algorithm}
 \label{alg:saiv}
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for
-Stage-Aware Iterative Verification (SAIV); an automatic gate handles in-loop
+Stage-Aware Iterative Verification, abbreviated SAIV; an automatic gate handles in-loop
 acceptance.
 \par\smallskip
 \small
@@ -30,7 +30,7 @@ acceptance.
     \State \textbf{break} \Comment{objectives converged, checks clear}
   \EndIf
   \State $\mathit{stage}\gets \textsc{StageAttribution}(\cdots)$
-    \Comment{Eq.~\eqref{eq:route}}
+    \Comment{operator routing, \S\ref{subsec:repair}}
   \If{$\mathit{stage}=\phi_R$} \Comment{IR-content repair}
     \ForAll{$r$ routed to $\mathcal{P}_R$}
       \State $\mathit{rep}\gets \mathcal{P}_R(\textsc{FailTrace}(r))$
@@ -49,7 +49,7 @@ acceptance.
   \EndIf
   \State update $(\RN,\RL,\RU,\RLunc)$ and $C$
   \State $t\gets t+1$
-\Until{$t\ge K$ \textbf{or} no residual decreased (loop-until-dry)}
+\Until{$t\ge K$ \textbf{or} no residual decreased, the loop-until-dry condition}
 \State \textbf{return} $(C,\ \mathit{status}\in\{\textsc{closed},\textsc{dry},
   \textsc{max\_iter}\})$
 \end{algorithmic}
