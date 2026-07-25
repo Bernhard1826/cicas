@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-07-25",
+  "definition": "Table IV strict native-zlint coverage: start from the DB coverage snapshot, then apply the strict native-Go coverage audit deltas. CICAS-generated lints are excluded from native zlint counts.",
+  "inputs": {
+    "db_coverage_snapshot": "/home/bernhard/projects/cicas/cicas_backend/experiments/coverage_analysis/outputs/coverage_table.json",
+    "zlint_reference_catalog": "/home/bernhard/projects/cicas/cicas_backend/experiments/coverage_analysis/inputs/zlint_lint_catalog.json",
+    "strict_domain_rule_ids": "cicas_backend/experiments/codegen_metrics/outputs/strict_audited_uncovered_20260720/domain_rule_ids.json",
+    "strict_audit_machine_full": "/home/bernhard/projects/cicas/cicas_backend/experiments/coverage_analysis/outputs/native_go_covered_audit_seeded_20260718_machine_full_manual_review.jsonl",
+    "strict_audit_machine_nonfull": "/home/bernhard/projects/cicas/cicas_backend/experiments/coverage_analysis/outputs/native_go_covered_audit_seeded_20260718_manual_review.jsonl",
+    "strict_audit_revised_summary": "/home/bernhard/projects/cicas/cicas_backend/experiments/coverage_analysis/outputs/native_go_covered_audit_seeded_20260718_revised_summary.json",
+    "strict_uncovered_rescue_review": "/home/bernhard/projects/cicas/cicas_backend/experiments/coverage_analysis/outputs/strict_uncovered_128_native_go_audit_20260718_manual_review.jsonl"
+  },
+  "by_source": [
+    {
+      "source": "CABF",
+      "lintable": 175,
+      "strict_native_covered": 94,
+      "strict_uncovered": 81,
+      "old_db_native_covered": 116,
+      "old_db_uncovered": 59,
+      "newly_uncovered_from_old_covered": 36,
+      "newly_covered_from_old_uncovered": 14,
+      "zlint_reference": {
+        "total": 170,
+        "cert": 164,
+        "crl": 6
+      }
+    },
+    {
+      "source": "RFC5280",
+      "lintable": 85,
+      "strict_native_covered": 71,
+      "strict_uncovered": 14,
+      "old_db_native_covered": 71,
+      "old_db_uncovered": 14,
+      "newly_uncovered_from_old_covered": 5,
+      "newly_covered_from_old_uncovered": 5,
+      "zlint_reference": {
+        "total": 122,
+        "cert": 115,
+        "crl": 7
+      }
+    }
+  ],
+  "total": {
+    "lintable": 260,
+    "strict_native_covered": 165,
+    "strict_uncovered": 95,
+    "old_db_native_covered": 187,
+    "old_db_uncovered": 73,
+    "newly_uncovered_from_old_covered": 41,
+    "newly_covered_from_old_uncovered": 19,
+    "zlint_reference": {
+      "total": 292,
+      "cert": 279,
+      "crl": 13
+    }
+  },
+  "zlint_reference": {
+    "CABF": {
+      "total": 170,
+      "cert": 164,
+      "crl": 6
+    },
+    "RFC5280": {
+      "total": 122,
+      "cert": 115,
+      "crl": 7
+    }
+  },
+  "conservation": {
+    "lintable_equals_strict_covered_plus_uncovered": true,
+    "strict_covered_formula": "old_db_native_covered - newly_uncovered_from_old_covered + newly_covered_from_old_uncovered",
+    "strict_uncovered_formula": "old_db_uncovered + newly_uncovered_from_old_covered - newly_covered_from_old_uncovered"
+  }
+}
