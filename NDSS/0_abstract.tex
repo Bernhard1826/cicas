@@ -1,3 +1,28 @@
-% Abstract placeholder --- replace with the paper's abstract before submission.
-% The source 0_abstract.tex was empty when the NDSS version was generated.
-Abstract to be added.
+Web PKI trust rests on correctly issued certificates, which the ecosystem
+increasingly enforces with static certificate linters such as zlint. These tools
+rely on compliance checks that PKI experts implement and maintain by hand as
+normative sources evolve, an approach that scales poorly now that the CA/Browser
+Forum mandates pre-issuance linting and is driving TLS certificate validity
+toward 47~days. The ecosystem still lacks a systematic way to turn
+natural-language normative text into enforceable lint code, and even the prior
+question of which rules a single-certificate static lint can check is left
+implicit. We present an end-to-end framework that extracts normative rules from
+Web PKI specifications, determines whether each rule is lintable, and generates
+auditable lint code. A dual-layer extraction pipeline pairs deterministic keyword
+recall with a large language model confined to schema-bounded parsing into an
+intermediate representation, keeping extraction reproducible and traceable. A
+four-condition framework then decides lintability over these attributes rather
+than by keyword heuristics, and restricted code generation confines each rule to
+a finite, closed tree space that a deterministic function renders into Go lint
+code, a path free of hallucination and output instability, with a build-gated LLM
+fallback for the remainder. On RFC~5280 and the
+CA/Browser Forum Baseline Requirements the framework recalls 2,080 candidate
+rules and finds only 260, or 16.6\% of the 1,567 genuine normative rules,
+lintable as single-certificate static checks, showing that accurately determining
+lintability is essential. Existing zlint lints cover 165 of them, and for the 95
+uncovered rules the generator produces 93 compilable lints, 79 of which pass a
+unanimous code--specification synonymy gate and are injected into zlint. Our
+extraction and lintability decisions reach Cohen's $\kappa = 0.823$ against the
+zlint maintainers' manual annotations, and these lints surface 5 confirmed
+problems, including profile faults on real certificates that native zlint misses
+across 111,118 deployed certificates.

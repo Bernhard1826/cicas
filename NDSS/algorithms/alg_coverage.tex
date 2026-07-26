@@ -21,7 +21,7 @@ coverage-alignment determination for individual rules.
   summarizer $M_{\mathrm{summ}}$, and field-level judge $M_{\mathrm{judge}}$
   with temperature $=0$
 \Statex \textbf{Output:} per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
-  none}\}$, covered set, and codegen domain $\phi_G$
+  none}\}$, covered set $\RLcov$, and uncovered code-generation domain $\RLunc$
 \Statex // Offline cached Stage-0: summarize each lint into a reverse
   IR
 \ForAll{$\ell \in L$}
@@ -54,8 +54,8 @@ coverage-alignment determination for individual rules.
   \State $\mathrm{verdict}(b)\gets v$
 \EndFor
 \State // Stage-4: deterministic aggregation, coverage counts full only
-\State $\mathit{covered}\gets\{b\in B:\mathrm{verdict}(b)=\text{full}\}$;\quad
-  $\phi_G\gets B\setminus \mathit{covered}$
-\State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \mathit{covered},\ \phi_G)$
+\State $\RLcov\gets\{b\in B:\mathrm{verdict}(b)=\text{full}\}$;\quad
+  $\RLunc\gets B\setminus \RLcov$
+\State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \RLcov,\ \RLunc)$
 \end{algorithmic}
 \end{figure*}

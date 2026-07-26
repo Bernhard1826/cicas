@@ -5,8 +5,8 @@
 
 This section runs experiments with the methods and framework above and draws
 quantitative conclusions. The internal layered metrics are the lint-coverage
-analysis of \S\ref{subsec:coverage} and the end-to-end result snapshot of
-\S\ref{subsec:snapshot}. Beyond them, two mutually independent external
+analysis of \S\ref{subsec:coverage} and the code-generation results of
+\S\ref{subsec:codegen-results}. Beyond them, two mutually independent external
 validations each check one half of the framework. \S\ref{subsec:lintability-ext}
 externally validates rule extraction and lintability determination against the
 zlint maintainers' manual gold standard, and \S\ref{subsec:certdetect} externally
@@ -71,69 +71,77 @@ $\mathrm{Family}(\cdot)$, and downgrades a full or partial verdict to none whene
 the two resolve to different nonempty families, so a KeyUsage rule is never
 credited to a lint that checks SubjectAltName merely because both mention an
 extension. Stage-4 aggregates deterministically. A rule is covered if and only if its verdict
-is full, and the uncovered remainder forms the code-generation domain $\phi_G$. The LLM is invoked
+is full, and the uncovered remainder forms the code-generation domain $\RLunc$. The LLM is invoked
 only at Stage-0 and Stage-2; candidate retrieval, the family guard, and
 aggregation are fully deterministic.
 
 Of the 260 lintable rules, zlint fully covers 165 and leaves 95 uncovered under
 this procedure, as Table~\ref{tab:coverage} reports. The 95 uncovered rules are
-the domain of code generation $\phi_G$. ``full'' counts ``whether one of our rules is fully implemented by some cognate zlint lint''; it does not form a
-simple ratio with the total zlint lint count, mainly because one lint can hit
-multiple rules.
+the code-generation domain $\RLunc$. The 292 cognate lints and the 165 covered
+rules count different objects and should not be read as a ratio. The 292 is the
+count of cognate zlint lints, whereas 165 is the number of our lintable rules that
+some cognate lint fully implements. Two effects hold the covered-rule count well
+below the cognate-lint count. First, several zlint lints often target the same
+certificate field or obligation, so multiple cognate lints map to a single rule,
+most visibly on RFC~5280 where 122 cognate lints correspond to only 85 lintable
+rules. Second, the criterion credits a rule only when a cognate lint implements it
+fully, so lints that merely partially match, or that the deterministic family
+guard downgrades to none, stay in the pool without adding any covered rule.
 
 \begin{table}[tb]
 \centering
 \small
+\setlength{\tabcolsep}{3pt}
 \caption{zlint cognate lint counts and their coverage of the 260 lintable
 rules, by standard source.}
 \label{tab:coverage}
-\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrr@{}}
+\begin{tabularx}{\columnwidth}{@{}X r r r@{}}
 \toprule
 Item & CABF & RFC~5280 & Total \\
 \midrule
-zlint cognate lints, total reference count & 170 & 122 & 292 \\
+zlint cognate lints & 170 & 122 & 292 \\
 full coverage & 94 & 71 & 165 \\
-uncovered codegen domain & 81 & 14 & 95 \\
+uncovered code-generation domain & 81 & 14 & 95 \\
 lintable total & 175 & 85 & 260 \\
 \bottomrule
-\end{tabular*}
+\end{tabularx}
 \end{table}
 
-\subsection{Result Snapshot}
-\label{subsec:snapshot}
+\subsection{Code-Generation Results}
+\label{subsec:codegen-results}
 
-Table~\ref{tab:snapshot} summarizes the end-to-end result across the full
-pipeline, from keyword recall to final-shipping lints. Two of its rows measure
-code-generation quality on the uncovered codegen domain $\phi_G$. The reported
-generation rate is the fraction of uncovered rules for which the
+Table~\ref{tab:codegen-results} reports the code-generation experiment over the
+audited uncovered domain $\RLunc$. The first rows define that denominator from
+keyword recall, lintability determination, and zlint coverage; the remaining rows
+measure generation, compilation, and final code--specification synonymy. The
+reported generation rate is the fraction of uncovered rules for which the
 restricted generator emits a compilable lint containing at least one GENERIC atom
 under the ``render and pass go build'' gate. We separately report the expansion
 obtained by allowing registered NON\_GENERIC-only atom trees. The strict synonymy
 rate is the fraction of generated lints whose final emitted code is unanimously judged
 synonymous with the specification text, the Layer~B judgment of
-\S\ref{subsec:exec-verify}. In the current snapshot they are $77/95 = 81.1\%$
-and $79/93 = 84.9\%$; allowing NON\_GENERIC-only trees raises the compilable-lint
-count to $93/95 = 97.9\%$.
+\S\ref{subsec:exec-verify}.
 
 \begin{table*}[tb]
 \centering
 \footnotesize
-\caption{Current end-to-end result snapshot over RFC~5280 and CABF BR.}
-\label{tab:snapshot}
+\caption{Code-generation results on the 95 uncovered lintable rules, with
+denominator accounting over RFC~5280 and CABF BR.}
+\label{tab:codegen-results}
 \begin{tabularx}{\textwidth}{@{}p{4.4cm}r X@{}}
 \toprule
 Metric & Count & Scope / notes \\
 \midrule
 Total recalled rules & 2080 & RFC~5280 640 $+$ CABF BR 1440 \\
-lintable, single-cert observable & 260 &
+lintable, single-certificate observable & 260 &
   current re-extraction / re-adjudication: CABF 175 $+$ RFC~5280 85; the negative
   gate excludes process, cross-certificate, runtime, external-semantic, and
   MAY/OPTIONAL classes; CRL document rules are outside this scope \\
 zlint coverage, full by existing cognate lint & 165 &
   the rule is fully implemented by some cognate zlint certificate lint \\
-uncovered lintable, codegen domain & 95 &
-  enters the current codegen domain, computed as $260 - 165$; CABF 81 $+$ RFC~5280 14, the
-  target set of downstream code generation $\phi_G$ \\
+uncovered lintable, code-generation domain & 95 &
+  enters the current code-generation domain, computed as $260 - 165$; CABF 81 $+$ RFC~5280 14, the
+  target set of downstream code generation $\RLunc$ \\
 reported compilable lint, GENERIC-participating & 77 &
   generated trees containing at least one GENERIC atom and passing ``render and
   pass go build''; code-generation rate $= 77/95 = 81.1\%$; this consists of
@@ -146,9 +154,9 @@ additional NON\_GENERIC-only compilable lint & 16 &
   deterministic path 89 $+$ LLM fallback path 4, 77/93, or 82.8\%, contain at
   least one GENERIC atom \\
 cannot generate, no tree / not compiling / abstain & 2 &
-  both are no-template abstentions retained in the codegen denominator; the S2
+  both are no-template abstentions retained in the code-generation denominator; the S2
   lintability check in \S\ref{sec:saiv} reads both as $\Tv$-expressiveness gaps,
-  not $\phi_C$ false positives \\
+  not $\phi_L$ false positives \\
 final-shipping unanimous synonymous under \CodeEqSpec & 79 &
   the final in-tree zlint lint (CheckApplies $+$ Execute $+$
   severity/date metadata) judged against the original rule text and context;
@@ -156,9 +164,6 @@ final-shipping unanimous synonymous under \CodeEqSpec & 79 &
 final-shipping rejected by synonymy gate & 14 &
   generated but not accepted into the shipping manifest: 9 DOES\_NOT\_EXPRESS,
   3 non-unanimous EXPRESS diagnostics, and 2 uncertain \\
-emitted lints' atom templates touched & 52 &
-  37 GENERIC $+$ 15 NON\_GENERIC of the 151 registered atoms; by rule, 60
-  GENERIC-only / 4 mixed / 15 NON\_GENERIC-only \\
 certificate-level execution verification \CodeEqIR, collateral &
   35 &
   model-independent IR-level faithfulness, not a synonymy numerator; the
@@ -168,7 +173,7 @@ certificate-level execution verification \CodeEqIR, collateral &
 \end{tabularx}
 \end{table*}
 
-Under the current codegen domain there are 2 no-template abstentions and, among
+In the audited code-generation domain there are 2 no-template abstentions and, among
 the 93 compilable lints after counting the NON\_GENERIC-only extension, 14
 generated lints not accepted by the final-shipping synonymy gate. The 35 rules
 certified \CodeEqIR{} by certificate-level execution verification are reported
@@ -178,12 +183,12 @@ synonymy rate is taken solely from the final emitted code judged against the
 source rule.
 
 The first-layer quality signal is G1 conservation, stated as
-Theorem~\ref{thm:recall} in \S\ref{subsec:targets}. Under the current snapshot,
+Theorem~\ref{thm:recall} in \S\ref{subsec:targets}. For the denominator accounting above,
 conservation holds strictly, instantiating the two appendix
 identities~\eqref{eq:cons} and~\eqref{eq:split}:
 \[
 \begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
-  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{260} & + & \underset{|\RU|\ \text{not lintable}}{1307} \\[3pt]
+  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{260} & + & \underset{|\RU|\ \text{not-lintable}}{1307} \\[3pt]
   \underset{|\RL|}{260} & = & \underset{|\RLcov|\ \text{covered}}{165} & + & \underset{|\RLunc|\ \text{uncovered}}{95}
 \end{array}
 \]
@@ -192,7 +197,7 @@ conservation layers are closed and deterministically recomputable. The first lay
 is the three-way recall split of Eq.~\eqref{eq:cons}, and the second is the
 covered/uncovered split of the lintable set in Eq.~\eqref{eq:split}. The 260
 lintable rules further split by standard source into 175 CABF and 85 RFC~5280, and
-the 95 uncovered rules $\RLunc$ are the domain of downstream code generation
+the 95 uncovered rules $\RLunc$ are fed to the downstream code-generation module
 $\phi_G$.
 
 \subsection{External Validation of Rule Extraction and Lintability
@@ -219,13 +224,13 @@ reports the version-for-version agreement.
 \setlength{\tabcolsep}{3pt}
 \caption{Version-for-version external validation on BR~1.4.8 / BR~2.0.2.}
 \label{tab:extval}
-\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrrr@{}}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrr@{}}
 \toprule
 Version & Sheet rows, Yes/No & Match cov. & Agreement &
-  Cohen's $\kappa$ & F1 \\
+  Cohen's $\kappa$ \\
 \midrule
-BR~1.4.8 & 122; 75/47 & 86.9\% & 91.5\% & 0.823 & 0.930 \\
-BR~2.0.2 & 250; 17/233 & 86.8\% & 96.8\% & 0.616 & 0.632 \\
+BR~1.4.8 & 122; 75/47 & 86.9\% & 91.5\% & 0.823 \\
+BR~2.0.2 & 250; 17/233 & 86.8\% & 96.8\% & 0.616 \\
 \bottomrule
 \end{tabular*}
 \end{table}
@@ -238,11 +243,9 @@ anchors with no matching backend clause. On BR~2.0.2 the matched positive class 
 very small, just 12 of 217 matched pairs or 5.5\%, so a naive all-No baseline
 already attains 94.5\% agreement. The more meaningful figure is therefore
 $\kappa = 0.616$, a substantial agreement on the Landis--Koch
-scale~\cite{landis1977measurement}, and the positive-class metrics $P = 0.857$,
-$R = 0.50$, and $n = 12$ carry correspondingly wide confidence intervals. BR~1.4.8
-has more balanced classes, with 69 of 106 matched pairs positive or 65\%, and
-yields $\kappa = 0.823$, an almost-perfect agreement, with positive-class
-$F_1 = 0.930$ and zero false positives, a tighter estimate of system quality.
+scale~\cite{landis1977measurement}. BR~1.4.8 has more balanced classes, with 69
+of 106 matched pairs positive or 65\%, and yields $\kappa = 0.823$, an
+almost-perfect agreement and a tighter estimate of system quality.
 
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
@@ -318,7 +321,7 @@ Table~\ref{tab:certfind}. Each escapes native zlint coverage and
 reproduces under an independent audit, so the reading stays conservative and no
 finding rests on the generated lint alone.
 
-This external scan checks the second half of the system. The generated lints
+The generated lints
 generalize beyond hand-built testdata to 111,118 real certificates, where they
 surface 4 genuine profile faults that native zlint misses while every claimed
 finding survives both a source-text re-check and an independent structural audit.

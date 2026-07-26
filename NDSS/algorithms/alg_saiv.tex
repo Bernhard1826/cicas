@@ -10,15 +10,14 @@
 \refstepcounter{algorithm}
 \label{alg:saiv}
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for
-Stage-Aware Iterative Verification, abbreviated SAIV; an automatic gate handles in-loop
-acceptance.
+Stage-Aware Iterative Verification, abbreviated SAIV.
 \par\smallskip
 \small
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} standard documents $D$, threshold $\theta$, max iterations $K$
 \Statex \textbf{Output:} final code set $C^{*}$ and termination status
-\State $\Rkw \gets \phi_R(D)$;\quad $(\RN,\RL,\RU)\gets \psi_C(\Rkw)$
-  \Comment{$\RU=$ not lintable}
+\State $\Rkw \gets \phi_R(D)$;\quad $(\RN,\RL,\RU)\gets \psi_L(\Rkw)$
+  \Comment{$\RU=$ not-lintable}
 \State $(\RLcov,\RLunc)\gets \textsc{Coverage}(\RL)$
   \Comment{Algorithm~\ref{alg:coverage}}
 \State $C \gets \{\phi_G(r): r\in \RLunc\}$
@@ -29,9 +28,9 @@ acceptance.
   \If{$\Ltot<\theta$ \textbf{and} $\Nviol=0$}
     \State \textbf{break} \Comment{objectives converged, checks clear}
   \EndIf
-  \State $\mathit{stage}\gets \textsc{StageAttribution}(\cdots)$
-    \Comment{operator routing, \S\ref{subsec:repair}}
-  \If{$\mathit{stage}=\phi_R$} \Comment{IR-content repair}
+  \State $\mathit{op}\gets \textsc{StageAttribution}(\cdots)$
+    \Comment{stage routing, \S\ref{subsec:repair}}
+  \If{$\mathit{op}=\mathcal{P}_R$} \Comment{IR-content repair}
     \ForAll{$r$ routed to $\mathcal{P}_R$}
       \State $\mathit{rep}\gets \mathcal{P}_R(\textsc{FailTrace}(r))$
         \Comment{REPAIR(ir$'$) or NO\_FIX}
@@ -44,8 +43,7 @@ acceptance.
       \EndIf
     \EndFor
   \Else
-    \State apply $\mathcal{P}_{\mathit{stage}}\in\{\mathcal{P}_C,\mathcal{P}_G,
-      \mathcal{P}_V\}$
+    \State apply $\mathit{op}\in\{\mathcal{P}_L,\mathcal{P}_G,\mathcal{P}_V\}$
   \EndIf
   \State update $(\RN,\RL,\RU,\RLunc)$ and $C$
   \State $t\gets t+1$

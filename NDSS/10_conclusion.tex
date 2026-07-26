@@ -3,11 +3,18 @@
 \label{sec:conclusion}
 %-------------------------------------------------------------------------------
 
-We presented the first end-to-end framework that turns natural-language
-Web PKI normative text into verified static lint code. Using this framework,
-we found that the most widely deployed linter, zlint, leaves a coverage gap
-over the lintable rules, and we filled this gap by generating and shipping
-the missing lints. Injecting these lints and running certificate detection
-then surfaced genuine problems on real certificates that native zlint misses.
-These results show that automating specification compliance is a promising
-path from normative text to enforceable checks.
+We presented an end-to-end framework that turns natural-language Web PKI
+normative text into auditable static lint code. Applied to RFC~5280 and CABF~BR,
+the pipeline recalled 2,080 candidate rules and identified 1,567 genuine
+normative rules. Only 260 of these genuine rules, or 16.6\%, are lintable as
+single-certificate static checks. Of these 260 lintable rules, existing zlint
+lints fully cover only 165, leaving 95 uncovered and revealing a substantial gap
+between deployed linting and the normative specifications.
+For these uncovered rules, our restricted generator produced 77
+compilable lints that contain at least one GENERIC atom and 16 further compilable
+lints from registered NON\_GENERIC-only atom trees, for 93 compilable lints in
+total. Of these, 79 passed the unanimous code--specification synonymy gate and
+were injected into zlint. Certificate detection found 5 confirmed problems, among
+them genuine profile violations on real deployed certificates that zlint does not
+flag. We hope our work can provide a useful reference for research related to
+certificate issuance compliance automation.

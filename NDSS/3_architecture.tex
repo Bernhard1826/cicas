@@ -1,0 +1,24 @@
+%-------------------------------------------------------------------------------
+\section{Architecture Overview}
+\label{sec:methodology}
+\label{sec:method-overview}
+%-------------------------------------------------------------------------------
+
+Web PKI normative sources serve as the input to the framework. Through keyword recall and constrained extraction, candidate rules are converted into a structured representation. As shown in Fig.~\ref{fig:architecture}, the framework contains four modules.
+
+First, the knowledge graph construction module handles scattered definitions, inherited requirements, and cross-document references by organizing the collected sources into a traceable source context for rule extraction.
+
+Second, the deterministic context retrieval module prevents the LLM from inventing unsupported context by supplying source-grounded context for each target section in a reproducible way.
+
+Third, DLEP balances completeness and precision by first recalling candidate normative rules; for precise extraction, the second layer uses an LLM to convert them into a structured representation.
+
+Fourth, the four-condition lintability framework determines whether a rule can be implemented as a static lint check.
+
+\begin{figure*}[tb]
+  \centering
+  \paperfig{figures/fig01_architecture.png}{Overall architecture of the framework, showing knowledge-graph construction, deterministic
+    context retrieval, dual-layer rule extraction, and the four-condition
+    lintability framework.}
+  \caption{Overall Architecture of the Framework.}
+  \label{fig:architecture}
+\end{figure*}

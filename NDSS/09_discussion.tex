@@ -3,36 +3,75 @@
 \label{sec:discussion}
 %-------------------------------------------------------------------------------
 
-\subsection{Applicability Across PKIs}
-\label{subsec:applicability}
-
-The framework's core mechanism is not specific to PKI. Layer~1's RFC~2119
-keyword set can be reconfigured to another ecosystem's deontic keywords such as
-ISO's shall/should/may. The method applies to specification sources that jointly
-satisfy three conditions. First, they express mandatory or recommended levels
-with recognizable formal deontic keywords. Second, the constrained target is a
-structured, machine-parsable artifact such as a certificate, protocol message, or
-configuration file. Third, they have a hierarchical section structure that
-supports a knowledge graph and scope inheritance. This gives the methodology
-value beyond PKI alone.
-
-\subsection{Recommendations for Specification Authors and Tool Maintainers}
-\label{subsec:recommendations}
-
-For specification authors, three drafting principles reduce extraction ambiguity.
-They are one obligation per sentence, referring to fields precisely by ASN.1 path
-rather than pronoun, and normalizing cross-document references with a fixed
-pattern. For lint maintainers, we suggest writing the description directly as a
-code\_summary that explicitly gives the field path, assertion type, value, and
-severity and cites the specification clause. We find that many lint descriptions
-are neither specification citations nor faithful implementation summaries, which
-forces the coverage analysis to first compute a code\_summary before aligning and
-adds overhead and adjudication noise.
-
 \subsection{Limitations}
 \label{subsec:limitations}
 
 No comparable automated baseline exists for our task. To our knowledge no prior
 end-to-end system extracts Web PKI issuance rules from natural-language
-standards, decides their lintability, and synthesizes verified lint checks, so no
-peer method can be run on the same input for a head-to-head comparison.
+standards, decides their lintability, and synthesizes lint checks with explicit
+audit evidence, so no peer method can be run on the same input for a head-to-head
+comparison.
+
+The accuracy of lintability determination, the code-generation rate, and the
+synonymy rate all depend on the accuracy of the IR. Although we use the SAIV
+framework to ensure IR correctness through multiple rounds of iteration, current
+large language models still struggle to produce a fully correct IR in a single
+pass. Therefore, accurate IR generation remains an important direction for
+future research.
+
+The core mechanism of DLEP is not specific to PKI standards. Layer~1 currently
+targets RFC~2119 keywords such as MUST, SHALL, SHOULD, and MAY, but this keyword
+set can be replaced through regex configuration with the deontic keywords of
+other standards ecosystems. Examples include the ISO ``shall''/``should''/``may''
+triple and equivalent strong, weak, and permissive forms in regulatory texts in
+other languages. The method therefore applies to normative sources that satisfy
+three conditions. (1)~The document uses recognizable formal deontic keywords to
+express mandatory or recommended normative rules. (2)~The constraint targets are
+structured, machine-parsable artifacts such as certificates, protocol messages,
+or configuration files. (3)~The document has a hierarchical structure of
+sections and rules that supports knowledge-graph construction and
+scope-inheritance modeling.
+
+Code generation also depends on the regularity of the target lint framework. It
+works for zlint because many checks are small predicates over a parsed
+certificate and can be represented as finite DSL trees. Lints with idiosyncratic
+control flow, global state, multi-artifact reasoning, or semantics outside
+reusable atoms require DSL extensions. The NON\_GENERIC atoms illustrate this
+boundary: they improve coverage but encode hand-curated domain knowledge, so a
+new ecosystem would need its own specialized atoms, renderers, and validation
+tests before similar generation rates could be expected.
+
+\subsection{Recommendations for Specification Authors and Tool Maintainers}
+\label{subsec:recommendations}
+
+Building on the methodology and empirical findings, we offer two sets of
+recommendations for PKI specification authors and linting-tool maintainers.
+
+Based on the obstacles encountered by DLEP, we suggest three drafting principles
+for PKI specification authors. First, each sentence should express at most one
+normative obligation; multiple obligations should be decomposed into separately
+numbered statements rather than aggregated through subordinate clauses. Second, field
+references should identify the constrained certificate field explicitly, where
+possible using ASN.1-derived paths such as
+tbsCertificate.\allowbreak extensions.\allowbreak subjectAltName.\allowbreak
+dNSName rather than vague terms such as ``the SAN extension'' or pronouns such
+as ``it''. Third, cross-document references should use a canonical form such as
+``[verb] [document] Section~[section] (with step or parameter where applicable)''
+rather than vague forms such as ``as described in [RFC~X]'' or ``see
+[RFC~X]''. This makes each reference easier to map onto a typed edge in the
+knowledge graph.
+
+For maintainers of static certificate linting tools, we recommend writing the
+description field in lint metadata as an implementation-faithful code\_summary:
+a single RFC~2119-style sentence that restates the actual check logic and
+explicitly states the field path, assertion type, allowed or forbidden values,
+lint severity, and citation. We observe that many lint checks currently
+provide descriptions that are neither citations to the original specification
+nor faithful summaries of the implementation logic. ZLint's
+w\_ct\_sct\_policy\_count\_unsatisfied, for instance, is described only as
+``Check if certificate has enough embedded SCTs to meet Apple CT Policy''. As a
+consequence, the lint-to-specification coverage analysis must first invoke the
+Stage~0 code summarization step in Algorithm~1 before normative rules can be
+aligned with lint behavior at the IR level. This step introduces unnecessary
+engineering overhead and can add adjudication noise at the partial/none
+boundary.

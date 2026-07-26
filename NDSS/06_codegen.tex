@@ -9,10 +9,13 @@ misspell a field name as another field that happens to exist but is
 semantically unrelated, or introduce a unit error in an OID. The second is
 output instability. The same code-generation prompt often produces
 different outputs across calls, and the result is guaranteed neither to compile
-nor to be logically correct. To eliminate both kinds of uncertainty, we confine
+nor to be logically correct. To contain both kinds of uncertainty, we confine
 a rule's code body to a finite, closed DSL-tree space $\Tv$. Each rule's code
 body can only be a tree in that space, which is then rendered into Go code by a
-deterministic function. Figure~\ref{fig:codegen-pipeline} illustrates the whole
+deterministic function. The deterministic main path incurs neither difficulty,
+and the restricted LLM fallback is bounded to the same closed space and gated by
+``render and pass go build,'' so any non-compiling output is rejected rather than
+shipped. Figure~\ref{fig:codegen-pipeline} illustrates the whole
 pipeline on a single rule---CA certificates must assert the keyCertSign
 key-usage bit---tracing it from the filled IR fields, through the DSL tree,
 represented as an abstract syntax tree, and its JSON serialization, to the

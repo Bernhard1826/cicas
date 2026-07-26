@@ -1,5 +1,5 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% NDSS 2026 submission --- IEEEtran conference format.
+% Anonymous NDSS submission --- IEEEtran conference format.
 %
 % "From PKI Standards to Compliance-Checking Code: An End-to-End Framework
 %  for Rule Extraction, Lintability Determination, and Verifiable Code
@@ -29,6 +29,12 @@
 \extrafloats{64}
 
 \pagestyle{plain}   % show page numbers after the title page (NDSS submission)
+
+% Keep the submission PDF free of author-identifying metadata. The title remains
+% visible in the document body, while the PDF Author field is explicitly blank.
+\ifdefined\pdfinfo
+  \pdfinfo{/Author ()}
+\fi
 
 %-------------------------------------------------------------------------------
 % Theorem-like environments (amsthm is loaded in packages.tex).
@@ -90,20 +96,8 @@
 
 \title{Compiling PKI Standards into Compliance-Checking Code}
 
-% Author block (project file --- fill in the real names/affiliations there).
+% Anonymous author block for double-blind review.
 \input{authors}
-
-% NDSS 2026 pubid banner (from bare_conf_NDSS2026.tex).
-\IEEEoverridecommandlockouts
-\makeatletter\def\@IEEEpubidpullup{6.5\baselineskip}\makeatother
-\IEEEpubid{\parbox{\columnwidth}{
-    Network and Distributed System Security (NDSS) Symposium 2026\\
-    23 - 27 February 2026 , San Diego, CA, USA\\
-    ISBN 979-8-9919276-8-0\\
-    https://dx.doi.org/10.14722/ndss.2026.[23$|$24]xxxx\\
-    www.ndss-symposium.org
-}
-\hspace{\columnsep}\makebox[\columnwidth]{}}
 
 \maketitle
 
@@ -117,7 +111,9 @@
 
 \input{1_introduction}
 \input{2_background}
-\input{3_methodology}
+\input{3_architecture}
+\input{4_rule_extraction}
+\input{5_lintability}
 \input{06_codegen}
 \input{08_evaluation}
 \input{09_discussion}

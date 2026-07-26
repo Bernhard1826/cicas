@@ -132,7 +132,7 @@ $\mathcal{R}_{\mathrm{regex}}$ & Named RE2 regexes & 28 &
 \textbf{Representative atomic templates.} The atomic-template set $\mathcal{A}$
 has $|\mathcal{A}|=151$ and is organized by semantic cluster, each with a typed
 signature $\mathrm{sig}(a)$ described in \S\ref{subsec:tv}. Table~\ref{tab:atoms} excerpts
-key atomic templates by cluster, and all 151 are released with the code and data.
+key atomic templates by cluster.
 
 \begin{table*}[tb]
 \centering
@@ -168,23 +168,16 @@ There are three combinators $\{\neg, \wedge, \vee\}$, with semantics following
 classical propositional logic.
 
 \textbf{Generality grading of atomic templates: GENERIC and NON\_GENERIC.} Atomic
-templates are graded by two orthogonal criteria independently of the number of
-parameters: an atomic template is GENERIC if and only if, first, it expresses a
-general PKI concept---a class of certificate-attribute judgments reusable
-across rules---and, second, it is parameterized over fields/values and bound to no
-specific rule\_id or corpus-specific OID/single clause; otherwise it is
-NON\_GENERIC. In that case, its logic is specialized to the internal structure of
-some extension or a single RFC/CABF clause, and its semantics remain fixed to
-that construct even when parameterized. A zero-parameter atomic template may
-belong to either class. For example, IsCA is GENERIC, while
-NotAfterIsNoExpirySentinel is NON\_GENERIC.
-This grading is fixed in code as the two sets GENERIC\_ATOMS /
+templates are graded by semantic reuse. An atomic template is GENERIC if and only if it expresses a
+general PKI certificate-attribute judgment reusable across multiple rules and is
+not tied to a corpus-specific OID, single clause, or one-off
+extension structure. Otherwise it is NON\_GENERIC. This grading is fixed in code as the two sets GENERIC\_ATOMS /
 NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
 deterministically recomputable.
 
 Of the 151 atomic templates in $\mathcal{A}$, 98 are GENERIC and 53 are
 NON\_GENERIC. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
-examples; the full list is released with the code and data.
+examples.
 
 \begin{table*}[tb]
 \centering
@@ -221,21 +214,6 @@ to real PKI constructs, not padding to inflate the corpus---but are explicitly
 marked. The GENERIC/NON\_GENERIC split of the 93 generated lints is reported in
 \S\ref{sec:eval}; among the 79 final-shipping unanimous lints the split is 60
 GENERIC-only, 4 mixed, and 15 NON\_GENERIC-only.
-
-\textbf{Rendering and metadata binding.} After $\rho$ renders them, all DSL trees
-are embedded into a fixed zlint Go shell, with registration via
-RegisterCertificateLint and the CheckApplies/Execute
-method pair, so inter-rule differences are entirely concentrated in the check
-body and imports; $\Phi_{\mathrm{post}}$ of \S\ref{subsec:synth} deterministically
-binds Description/Citation/Name and each source's
-PACKAGE/SOURCE/EFFECTIVE\_DATE metadata. For example,
-RFC5280 $\mapsto$ RFC5280, CABF-TLS-BR $\mapsto$
-CABFBaselineRequirements. The obligation-to-severity mapping is
-MUST/MUST NOT/SHALL/SHALL NOT/REQUIRED $\mapsto$ lint.Error with lint-name
-prefix e\_, and SHOULD/SHOULD NOT/RECOMMENDED $\mapsto$
-lint.Warn with lint-name prefix w\_; MAY/OPTIONAL is already excluded by $C_1$ of
-\S\ref{sec:lintability}, so the system produces no lint.Notice-level
-output.
 
 \section{Phrase Dictionary of the Mechanical Translation $\smech$}
 \label{app:sigma}
@@ -290,50 +268,56 @@ abbreviated SAIV.
 The basic idea is to predefine two quantifiable optimization
 objectives, measure the gap between the current and ideal states by each
 objective's computable residual, and when a residual has not reached its
-threshold, the operator uses the residual signal to locate the offending module
-and applies the corresponding repair, then re-measures and proceeds to the next
-iteration, until both residuals converge. Alongside the two objectives, two
-auxiliary checks police the lintability decision without entering this loop.
+threshold, the residual signal locates the offending module
+and the corresponding repair is applied; after re-measuring, the loop proceeds
+to the next iteration, until both residuals converge. Alongside the two objectives, two
+auxiliary checks audit the lintability decision without contributing to the
+objective loss; when a lintability label is suspected to be wrong, SAIV updates
+the relevant IR fields and applies the lintability decision again in the next
+iteration.
 
 \subsection{Formal Definition}
 \label{subsec:saiv-formal}
 
-The whole pipeline $\Pi$ chains four modules---extraction $\to$ classification
-$\to$ generation $\to$ verification:
+The whole pipeline $\Pi$ chains four modules---extraction $\to$ lintability
+determination $\to$ generation $\to$ verification:
 \begin{equation}\label{eq:pipeline}
-  \Pi = \phi_V \circ \phi_G \circ \phi_C \circ \phi_R
+  \Pi = \phi_V \circ \phi_G \circ \phi_L \circ \phi_R
 \end{equation}
-where $\phi_R$ is extraction, $\phi_C$ is the four-condition lintability decision
-of \S\ref{sec:lintability}, $\phi_G$ is the DSL code space $\Tv$ of
-\S\ref{sec:codegen}, and $\phi_V$ is the three-layer semantic alignment of
-\S\ref{sec:codegen}. $\phi_C$ is the
-single-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_C$ of
+where $\phi_R$ is extraction, $\phi_L$ is the four-condition lintability decision
+of \S\ref{sec:lintability}, $\phi_G$ is the generation module restricted to the
+DSL code space $\Tv$ of \S\ref{sec:codegen}, and $\phi_V$ is the three-layer semantic alignment of
+\S\ref{sec:codegen}. $\phi_L$ is the
+single-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_L$ of
 Algorithm~\ref{alg:saiv} is its set-level lift, which strips the noise $\RN$ from
 $\Rkw$ and sorts the remaining genuine rules into lintable $\RL$ and not-lintable
-$\RU$, giving the partition $(\RN, \RL, \RU)$. The operator drives the loop from
-the computable signals these modules produce.
+$\RU$, giving the partition $(\RN, \RL, \RU)$. The loop is driven by the
+computable signals these modules produce.
 
 \subsection{Two Iteration Objectives and Two Auxiliary Lintability Checks}
 \label{subsec:targets}
 
 SAIV borrows the idea of backpropagation. It fixes two optimization objectives
-the whole pipeline is trained to approach, and keeps apart from them two
-auxiliary checks that police the lintability decision $\phi_C$ rather than drive
-optimization. The two objectives G1 and G2 each carry a directly computable
-residual, $\Lrec$ and $\Lcode$, whose weighted sum is the total loss $\Ltot$, so
-convergence is defined by $\Ltot$ alone. S1 and S2 are checks, not objectives,
-and add no term to $\Ltot$. They form the two sides of a single consistency test
-on $\phi_C$, S1 auditing the not-lintable verdict and S2 the lintable verdict,
-each firing only to correct a suspected misclassification. The subsequent subsections
-revolve around the two objectives, while the two checks gate the labels those
-objectives consume.
+the whole pipeline is trained to approach, and treats the two auxiliary checks
+on the lintability decision $\phi_L$ as repair-routing signals rather than
+separate objective terms. Because these checks can change which rules enter
+$\RL$ and $\RLunc$, they can affect the synonymy residual in later iterations
+even though they add no term to $\Ltot$. The two objectives G1 and G2 each carry
+a directly computable residual, $\Lrec$ and $\Lcode$, whose weighted sum is the
+total loss $\Ltot$, so convergence is defined by $\Ltot$ alone. S1 and S2 are
+checks, not objectives, and add no term to $\Ltot$. They form the two sides of a
+single consistency test on $\phi_L$, S1 auditing the not-lintable verdict and S2
+the lintable verdict, each firing only to correct a suspected lintability error.
+The subsequent subsections revolve around the two objectives, while the two
+checks gate the labels those objectives consume.
 
 \medskip
 \noindent\textbf{G1: recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
-If the classification $\psi_C$ assigns each keyword-recalled candidate in
+If the lintability partition $\psi_L$ assigns each keyword-recalled candidate in
 $\Rkw(\mathcal{D})$ to exactly one of the three classes---noise, lintable, and
-not-lintable---then recall is conserved from recall to classification:
+not-lintable---then recall is conserved from recall to lintability
+determination:
 \begin{equation}\label{eq:cons}
   |\Rkw(\mathcal{D})| = |\RN| + |\RL| + |\RU|
 \end{equation}
@@ -341,21 +325,21 @@ not-lintable---then recall is conserved from recall to classification:
 \noindent where $\mathcal{D}$ is the standard-document corpus, written D in
 ASCII inside the Algorithm~\ref{alg:saiv} listing, $\RN$ is noise that contains
 RFC~2119 keywords but not genuine rules, $\RL$ the lintable rules, and $\RU$
-the not-lintable rules. The executable class $\RL$ is further split by ``whether
+the not-lintable rules. The lintable class $\RL$ is further split by ``whether
 it is already implemented by an existing external lint tool'':
 \begin{equation}\label{eq:split}
   |\RL| = |\RLcov| + |\RLunc|
 \end{equation}
 where $\RLcov$ are rules covered by some lint tool and $\RLunc$ are
 not-yet-covered rules. The first identity~\eqref{eq:cons} is total conservation
-from recall to classification, and the second~\eqref{eq:split} splits the
-executable set so the later objectives can be pursued separately. The uncovered
+from recall to lintability determination, and the second~\eqref{eq:split} splits the
+lintable set so the later objectives can be pursued separately. The uncovered
 subset $\RLunc$ is the most important observation domain for generation that
 ``fills the ecosystem gap,'' while the covered subset $\RLcov$ provides external
-evidence of reverse executability. The residual is the recall-conservation
+evidence of reverse lintability. The residual is the recall-conservation
 residual $\Lrec$, a symmetric normalization of the gap in
 Theorem~\ref{thm:recall}, computable without manual ground truth and currently
-closed, as shown in Table~\ref{tab:snapshot}:
+closed, as shown in Table~\ref{tab:codegen-results}:
 \begin{equation}\label{eq:recall-res}
   \Lrec = 1 - \frac{\min\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
   {\max\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
@@ -376,13 +360,13 @@ $\equiv 1$ in the fixed zlint shell, so it drops out:
 \end{equation}
 
 \medskip
-\noindent\textbf{S1: reverse executability of covered rules.} The first
+\noindent\textbf{S1: reverse lintability of covered rules.} The first
 auxiliary check, auditing the not-lintable verdict. If a rule has a corresponding
 implementation in a lint tool such as zlint it must be lintable, so the check
-counts the violations $\Nviol$ and is clear when $\Nviol = 0$. The operator
-computes $\Nviol$ by a reverse coverage check---running the coverage judge over
+counts the violations $\Nviol$ and is clear when $\Nviol = 0$. $\Nviol$ is
+computed by a reverse coverage check---running the coverage judge over
 the not-lintable set $\RU$ and counting the rules it rates full or partial; each
-such hit is adjudicated as either a $\phi_C$ false negative and re-extracted to
+such hit is adjudicated as either a $\phi_L$ false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
 \medskip
@@ -390,14 +374,12 @@ lintable, or a spurious coverage match and kept not-lintable.
 auditing the lintable verdict. A rule judged lintable should be synthesizable
 within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
 rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
-$\mathcal{P}_A$ are exhausted is a candidate signal that $\phi_C$ mislabeled it.
+$\mathcal{P}_A$ are exhausted is a candidate signal that $\phi_L$ mislabeled it.
 S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
 marker as a diagnostic, and each persistent abstention is reviewed against the
 four-condition decision of \S\ref{sec:lintability} and adjudicated as either a
-$\phi_C$ false positive and re-derived to not-lintable, or a genuine $\Tv$
-expressiveness gap and kept as a logged abstention. In the shipping corpus both
-no-template abstentions are $\Tv$ gaps, so neither is re-adjudicated as
-not-lintable.
+$\phi_L$ false positive and re-derived to not-lintable, or a genuine $\Tv$
+expressiveness gap and kept as a logged abstention.
 
 \medskip
 The two objective residuals are weighted into the total loss in
@@ -422,20 +404,20 @@ Item & Signal & Main repair direction & Repair target \\
 \multicolumn{4}{@{}l}{\emph{Iteration objectives --- define $\Ltot$ and
   convergence}}\\
 G1 Recall completeness & $\Lrec$, Eq.~\eqref{eq:recall-res} & --- &
-  recall logic \\
+  accounting invariant only \\
 G2 Synonymy & $\Lcode$, Eq.~\eqref{eq:code-res} &
   IR-content, DSL-generation, and verification-judgment repairs &
   IR-content correction / DSL-tree re-synthesis / judgment \& summary
   re-check \\
 \midrule
-\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- police $\phi_C$,
+\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- police $\phi_L$,
   outside $\Ltot$}}\\
-S1 Reverse executability & $\Nviol$, \S\ref{subsec:algo} &
+S1 Reverse lintability & $\Nviol$, \S\ref{subsec:algo} &
   verification-judgment consistency repair &
-  $\phi_C$ false negatives / spurious coverage matches \\
+  $\phi_L$ false negatives / spurious coverage matches \\
 S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention, \S\ref{subsec:algo} &
-  generation repair then vocabulary expansion &
-  $\phi_C$ false positives / $\Tv$ expressiveness gaps \\
+  diagnose lintability vs. generation gap &
+  $\phi_L$ false positives / missing atoms / $\Tv$ expressiveness gaps \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -444,37 +426,37 @@ Table~\ref{tab:saiv-objectives} gives only the item-to-repair-direction correspo
 concrete repair operations and their notation are defined in
 \S\ref{subsec:repair}.
 
-\subsection{Stage Routing and Repair Operations}
+\subsection{Repair Operations}
 \label{subsec:repair}
 
-\textbf{Stage routing.} Each round the operator chooses the next repair operation using
-directly computable quantities, namely the recall-conservation residual, the
-compilation-failure rate over the lintable set, the average structural score,
-the entity-necessary-condition screening result, and the synonymy confidence.
-This routing only decides which kind of repair to attempt next round.
-
-\textbf{Repair operations.} SAIV comprises four kinds of operations---IR-content
-repair $\mathcal{P}_R$, classification repair $\mathcal{P}_C$, generation repair
-$\mathcal{P}_G$, and verification repair $\mathcal{P}_V$, the subscripts naming
-the repaired module $\phi_\bullet$. The repair operator $\mathcal{P}$ is distinct
-from the rendering function $\rho$ of \S\ref{subsec:mech}. The operator selects
-the next round's operation from the signals above, and a repair is accepted only
+SAIV comprises four kinds of operations---IR-content
+repair $\mathcal{P}_R$, lintability repair $\mathcal{P}_L$, generation repair
+$\mathcal{P}_G$, and verification repair $\mathcal{P}_V$. The repair operator
+$\mathcal{P}$ is distinct
+from the rendering function $\rho$ of \S\ref{subsec:mech}. The next round's
+operation is selected from the signals above, and a repair is accepted only
 when the metric decreases.
 
 \begin{itemize}
-\item \textbf{IR-content repair $\mathcal{P}_R$}: feeds the failure trace---the
-  current IR, the irreducible category, the mechanical summary, the judge ruling
-  and rationale, the synonymy confidence, and the session's IR history---back to
-  the LLM, which returns REPAIR(ir') or NO\_FIX.
-\item \textbf{Classification repair $\mathcal{P}_C$}: re-extracts the
-  four-condition IR fields and re-runs the lintability decision.
-\item \textbf{Generation repair $\mathcal{P}_G$}: tries deterministic repair
-  first; on failure it feeds the failing code fragment and the IR-constraint
-  discrepancy, or the parser's signature/closure error, back into the prompt to
-  re-synthesize within $\Tv$; on persistent abstention it enters the offline
-  vocabulary-expansion channel $\mathcal{P}_A$, which hand-authors a new
-  atomic-template candidate and merges it into $\mathcal{A}$ after
-  certificate-level execution verification.
+\item \textbf{IR-content repair $\mathcal{P}_R$}: changes the extraction prompt
+  and re-runs IR extraction when the source-level meaning captured by the IR is
+  wrong. The LLM may return a corrected IR, denoted REPAIR(ir'), or
+  abstain with NO\_FIX.
+\item \textbf{Lintability repair $\mathcal{P}_L$}: is the same re-extraction
+  mechanism restricted to the lintability-gate IR fields---obligation,
+  assertion\_subject, enforcement\_phase, and rule\_category. It is invoked when
+  S1 indicates that a not-lintable rule is actually covered by an existing lint,
+  or when S2 indicates that a supposedly lintable rule may not be expressible as
+  a single-certificate static check. After re-extraction, SAIV re-runs
+  $\phi_L$ and updates the set-level partition $\psi_L$.
+\item \textbf{Generation repair $\mathcal{P}_G$}: A missing template routes to the
+  offline vocabulary-expansion channel $\mathcal{P}_A$, which adds a new atomic
+  template to $\mathcal{A}$ after certificate-level execution verification; a wrong IR field, such as too coarse a granularity,
+  routes to IR-content repair $\mathcal{P}_R$; and a rule that proves not lintable
+  routes to lintability repair $\mathcal{P}_L$. When the template, IR, and
+  lintability label are all correct but the meaning is too complex to express
+  within $\Tv$, the rule is kept as a logged expressiveness gap rather than
+  repaired as code.
 \item \textbf{Verification repair $\mathcal{P}_V$}: enlarges the synonymy
   judgment's semantic neighborhood, e.g., negation/affirmation interchange or
   one-to-many decomposition, or corrects the inconsistency between the two
@@ -488,10 +470,10 @@ Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
-\textbf{Termination conditions}: $\Ltot < \theta$, with default $0.05$, and the two
-lintability checks clear, reaching the maximum iteration $K = 10$, or no residual
+\textbf{Termination conditions}: $\Ltot < \theta$ and the two
+lintability checks clear, reaching the maximum iteration cap $K$, or no residual
 decreasing in a round. If every
 accepted stage-repair operation is monotone, reducing that stage's error or
 leaving it unchanged, then $\Ltot$ is non-increasing each round; the actual
-system uses a ``stop when no decrease'' policy, so it guarantees finite-round
-termination but not global optimality, as discussed in \S\ref{sec:eval}.
+system uses a ``stop when no decrease'' policy together with the hard cap $K$,
+so the loop terminates in finitely many rounds.
