@@ -23,6 +23,35 @@ from app.core.logging_config import app_logger
 from app.services.extraction.rfc_text_cleaner import clean_rfc_text
 
 
+BCP14_KEYWORDS = (
+    'MUST NOT',
+    'SHALL NOT',
+    'SHOULD NOT',
+    'NOT RECOMMENDED',
+    'MUST',
+    'SHALL',
+    'REQUIRED',
+    'SHOULD',
+    'RECOMMENDED',
+    'MAY',
+    'OPTIONAL',
+)
+
+
+def compile_keyword_patterns(case_insensitive_keywords=None):
+    insensitive = set(case_insensitive_keywords or ())
+    return [
+        (
+            keyword,
+            re.compile(
+                rf'\b{re.escape(keyword)}\b',
+                re.IGNORECASE if keyword in insensitive else 0,
+            ),
+        )
+        for keyword in BCP14_KEYWORDS
+    ]
+
+
 @dataclass
 class RuleSkeleton:
     """规则骨架 - assertion 级最小发现单位"""
@@ -67,18 +96,7 @@ class RuleDiscovery:
     """
 
     # RFC2119 规范性关键词（优先级顺序：先匹配多词模式）
-    RFC2119_KEYWORDS = [
-        'MUST NOT',
-        'SHALL NOT',
-        'SHOULD NOT',
-        'MUST',
-        'SHALL',
-        'REQUIRED',
-        'SHOULD',
-        'RECOMMENDED',
-        'MAY',
-        'OPTIONAL',
-    ]
+    RFC2119_KEYWORDS = list(BCP14_KEYWORDS)
 
     def __init__(self):
         """初始化规则发现器"""
@@ -114,12 +132,7 @@ class RuleDiscovery:
             {'MUST NOT', 'SHALL NOT', 'SHOULD NOT', 'MUST', 'SHALL', 'SHOULD', 'MAY'}
             if etsi_mode else set()
         )
-        self.keyword_patterns = []
-        for keyword in self.RFC2119_KEYWORDS:
-            # 使用词边界确保精确匹配
-            flags = re.IGNORECASE if keyword in case_insensitive_keywords else 0
-            pattern = re.compile(rf'\b{re.escape(keyword)}\b', flags)
-            self.keyword_patterns.append((keyword, pattern))
+        self.keyword_patterns = compile_keyword_patterns(case_insensitive_keywords)
         self._etsi_mode = etsi_mode
 
     @property
@@ -352,7 +365,7 @@ class RuleDiscovery:
         sentence_global_index = 0
         # 位置感知去重：记录句子及其最后出现的位置
         # 相同句子如果间隔超过阈值，则认为是不同上下文中的重复，应保留
-        seen_sentences: Dict[str, int] = {}  # normalized -> last_seen_index
+        seen_sentences: Dict[Tuple[str, str], int] = {}  # (section, normalized) -> last index
         DUPLICATE_DISTANCE_THRESHOLD = 10  # 相同句子间隔超过10句则认为是不同上下文
         duplicate_count = 0
 
@@ -373,14 +386,15 @@ class RuleDiscovery:
                 # 规范化句子用于去重检测
                 normalized = re.sub(r'[^\w\s]', '', sentence.lower())
                 normalized = ' '.join(normalized.split())
+                sentence_key = (section_id, normalized)
 
                 # 位置感知去重：
                 # - 如果完全相同的句子在近距离（<10句）内出现，跳过
                 # - 如果相同句子间隔较远（>=10句），认为是不同上下文，保留
                 # 这解决了 RFC 5280 §7.2 中 MUST 和 SHOULD 两个 scope block
                 # 都有相同 step 1 内容的问题
-                if normalized in seen_sentences:
-                    last_idx = seen_sentences[normalized]
+                if sentence_key in seen_sentences:
+                    last_idx = seen_sentences[sentence_key]
                     distance = sentence_global_index - last_idx
 
                     if distance < DUPLICATE_DISTANCE_THRESHOLD:
@@ -424,7 +438,7 @@ class RuleDiscovery:
 
                 # 如果成功提取到规则骨架，更新该句子的最后出现位置
                 if skeletons:
-                    seen_sentences[normalized] = sentence_global_index
+                    seen_sentences[sentence_key] = sentence_global_index
                     all_skeletons.extend(skeletons)
 
                 sentence_global_index += 1

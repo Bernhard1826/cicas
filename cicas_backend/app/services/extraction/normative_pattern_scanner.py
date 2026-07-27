@@ -21,6 +21,24 @@ from dataclasses import dataclass
 from app.core.logging_config import app_logger
 
 
+BCP14_KEYWORDS = (
+    'MUST NOT',
+    'SHALL NOT',
+    'SHOULD NOT',
+    'NOT RECOMMENDED',
+    'MUST',
+    'SHALL',
+    'REQUIRED',
+    'SHOULD',
+    'RECOMMENDED',
+    'MAY',
+    'OPTIONAL',
+)
+BCP14_UPPER_PATTERN = re.compile(
+    r'\b(?:' + '|'.join(re.escape(keyword) for keyword in BCP14_KEYWORDS) + r')\b'
+)
+
+
 @dataclass
 class NormativeMatch:
     """
@@ -113,10 +131,7 @@ class NormativePatternScanner:
     ]
 
     # RFC2119 keywords to exclude (we only want non-keyword sentences)
-    RFC2119_KEYWORDS_PATTERN = re.compile(
-        r'\b(?:MUST(?:\s+NOT)?|SHALL(?:\s+NOT)?|SHOULD(?:\s+NOT)?|'
-        r'MAY|REQUIRED|RECOMMENDED|OPTIONAL)\b'
-    )
+    RFC2119_KEYWORDS_PATTERN = BCP14_UPPER_PATTERN
 
     def __init__(self):
         """Initialize the scanner with compiled patterns."""

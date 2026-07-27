@@ -22,6 +22,35 @@ from dataclasses import dataclass, field
 from app.core.logging_config import app_logger
 
 
+BCP14_KEYWORDS = (
+    'MUST NOT',
+    'SHALL NOT',
+    'SHOULD NOT',
+    'NOT RECOMMENDED',
+    'MUST',
+    'SHALL',
+    'REQUIRED',
+    'SHOULD',
+    'RECOMMENDED',
+    'MAY',
+    'OPTIONAL',
+)
+
+
+def compile_keyword_patterns(case_insensitive_keywords=None):
+    insensitive = set(case_insensitive_keywords or ())
+    return [
+        (
+            keyword,
+            re.compile(
+                rf'\b{re.escape(keyword)}\b',
+                re.IGNORECASE if keyword in insensitive else 0,
+            ),
+        )
+        for keyword in BCP14_KEYWORDS
+    ]
+
+
 @dataclass
 class ScopeBlock:
     """
@@ -77,12 +106,7 @@ class StructuralAnalyzer:
     ]
 
     # RFC2119 keywords for detection
-    RFC2119_KEYWORDS = [
-        'MUST NOT', 'SHALL NOT', 'SHOULD NOT',
-        'MUST', 'SHALL', 'REQUIRED',
-        'SHOULD', 'RECOMMENDED',
-        'MAY', 'OPTIONAL',
-    ]
+    RFC2119_KEYWORDS = list(BCP14_KEYWORDS)
 
     # List item markers
     LIST_MARKERS = [
@@ -111,10 +135,7 @@ class StructuralAnalyzer:
         ]
 
         # Compile RFC2119 keyword patterns
-        self.keyword_patterns = [
-            (kw, re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE))
-            for kw in self.RFC2119_KEYWORDS
-        ]
+        self.keyword_patterns = compile_keyword_patterns(self.RFC2119_KEYWORDS)
 
         app_logger.info("[StructuralAnalyzer] Initialized with scope trigger patterns")
 

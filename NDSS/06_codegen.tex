@@ -8,8 +8,8 @@ inherent difficulties. The first is hallucination. The model may
 misspell a field name as another field that happens to exist but is
 semantically unrelated, or introduce a unit error in an OID. The second is
 output instability. The same code-generation prompt often produces
-different outputs across calls, and the result is guaranteed neither to compile
-nor to be logically correct. To contain both kinds of uncertainty, we confine
+different outputs across calls, with no guarantee that the result will compile or
+be logically correct. To contain both kinds of uncertainty, we confine
 a rule's code body to a finite, closed DSL-tree space $\Tv$. Each rule's code
 body can only be a tree in that space, which is then rendered into Go code by a
 deterministic function. The deterministic main path incurs neither difficulty,
@@ -56,8 +56,8 @@ $q \in \mathcal{T}$ is the main assertion and $p \in \mathcal{T}_\varepsilon =
 the ``no-precondition'' placeholder, a normal value distinct from the $\bot$
 denoting ``synthesis failure'' in the table of \S\ref{subsec:synth}. In the
 equation below, $c$ is a single certificate, and $\lVert u \rVert(c) \in
-\{\mathrm{true}, \mathrm{false}\}$ denotes the Boolean result of evaluating DSL
-tree or precondition $u$ on $c$; atomic templates evaluate by their semantics, and
+\{\mathrm{true}, \mathrm{false}\}$ denotes the Boolean result of evaluating a
+DSL tree or precondition $u$ on $c$; atomic templates evaluate by their semantics, and
 $\neg/\wedge/\vee$ by classical propositional logic. The execution semantics
 is:
 \begin{equation}\label{eq:exec}
@@ -156,10 +156,10 @@ specification text and deciding whether the two are semantically equivalent.
 Fallback}
 \label{subsec:synth}
 
-The above described how the IR filling of \S\ref{subsec:atoms} and the
+The preceding discussion described how the IR filling of \S\ref{subsec:atoms} and the
 parameter closure of \S\ref{subsec:tv} confine a DSL tree to $\Tv$, but ``which
-atomic template carries which IR predicate'' and ``whether all of the IR's
-subject/constraint can be filled into the chosen atomic template'' still require
+atomic template carries which IR predicate'' and ``whether the IR's subject and
+constraint can both be filled into the chosen atomic template'' still require
 synthesis. This subsection gives the implementation of $\phi_G$. The generator
 first attempts deterministic synthesis and triggers LLM synthesis only when it
 returns $\bot$. Here $\bot$ denotes ``synthesis failure / no result,'' distinct
@@ -174,8 +174,8 @@ specification,'' which is the job of the verification chain of
 
 \textbf{Deterministic main path.} When an IR predicate can select an atomic
 template via $\mu$ and its subject and constraint can fill that template's
-parameter slots, the generator deterministically reduces a DSL tree by
-predefined rules. Here ``reduce'' means deriving a DSL tree from the IR step by
+parameter slots, the generator deterministically derives a DSL tree using
+predefined rules. Here ``derive'' means constructing a DSL tree from the IR step by
 step by fixed rules, with no LLM call throughout. Most lintable rules in our
 study are covered by this deterministic path.
 
@@ -183,7 +183,7 @@ study are covered by this deterministic path.
 the generator switches to LLM synthesis. The model receives the rule context,
 the structured IR, the candidate atomic-template set, and a readable enumeration
 and signature table of $\mathcal{V}$ and $\mathcal{A}$. It
-outputs only one of two results, a serialized DSL tree, or an explicit
+outputs only one of two results: a serialized DSL tree or an explicit
 ``no-template'' abstention marker $\bot_{\mathrm{NT}}$. Both $\bot_{\mathrm{NT}}$ and
 synthesis-failure $\bot$ are ``no usable result,'' so they share the $\bot$
 form, whereas $\varepsilon$ denotes the normal ``no precondition.'' The raw LLM

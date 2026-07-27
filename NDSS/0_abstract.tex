@@ -19,10 +19,8 @@ fallback for the remainder. On RFC~5280 and the
 CA/Browser Forum Baseline Requirements the framework recalls 2,080 candidate
 rules and finds only 260, or 16.6\% of the 1,567 genuine normative rules,
 lintable as single-certificate static checks, showing that accurately determining
-lintability is essential. Existing zlint lints cover 165 of them, and for the 95
-uncovered rules the generator produces 93 compilable lints, 79 of which pass a
-unanimous code--specification synonymy gate and are injected into zlint. Our
-extraction and lintability decisions reach Cohen's $\kappa = 0.823$ against the
-zlint maintainers' manual annotations, and these lints surface 5 confirmed
-problems, including profile faults on real certificates that native zlint misses
-across 111,118 deployed certificates.
+lintability is essential. Existing zlint lints cover 165 of them. For the 95
+uncovered rules, the generator produces 93 compilable lints, 79 of which pass a
+unanimous code--specification synonymy gate. Injected into zlint, these lints
+surface 5 confirmed problems, including profile faults on real certificates that
+native zlint misses across 111,118 deployed certificates.

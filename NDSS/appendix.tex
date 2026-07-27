@@ -70,7 +70,7 @@ rule\_category & key ext. & rule's semantic category, such as
   encoding\_constraint, definition, algorithm\_ref, \dots \\
 assertion\_subject & key ext. & assertion subject, such as Certificate / CA /
   RelyingParty / external ecosystem \\
-enforcement\_phase & key ext. & phase the constraint depends on
+enforcement\_phase & key ext. & phase on which the constraint depends,
   such as encoding / runtime / external validation \\
 source\_section & key ext. & specification source and section
   identifier \\
@@ -298,7 +298,7 @@ computable signals these modules produce.
 \label{subsec:targets}
 
 SAIV borrows the idea of backpropagation. It fixes two optimization objectives
-the whole pipeline is trained to approach, and treats the two auxiliary checks
+for the whole pipeline to approach, and treats the two auxiliary checks
 on the lintability decision $\phi_L$ as repair-routing signals rather than
 separate objective terms. Because these checks can change which rules enter
 $\RL$ and $\RLunc$, they can affect the synonymy residual in later iterations
@@ -361,20 +361,20 @@ $\equiv 1$ in the fixed zlint shell, so it drops out:
 
 \medskip
 \noindent\textbf{S1: reverse lintability of covered rules.} The first
-auxiliary check, auditing the not-lintable verdict. If a rule has a corresponding
-implementation in a lint tool such as zlint it must be lintable, so the check
-counts the violations $\Nviol$ and is clear when $\Nviol = 0$. $\Nviol$ is
+auxiliary check audits the not-lintable verdict. If a rule has a corresponding
+implementation in a lint tool such as zlint, it must be lintable, so the check
+counts the violations $\Nviol$ and is cleared when $\Nviol = 0$. $\Nviol$ is
 computed by a reverse coverage check---running the coverage judge over
 the not-lintable set $\RU$ and counting the rules it rates full or partial; each
 such hit is adjudicated as either a $\phi_L$ false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
 \medskip
-\noindent\textbf{S2: synthesizability of lintable rules.} The dual check,
-auditing the lintable verdict. A rule judged lintable should be synthesizable
+\noindent\textbf{S2: synthesizability of lintable rules.} The dual check
+audits the lintable verdict. A rule judged lintable should be synthesizable
 within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
 rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
-$\mathcal{P}_A$ are exhausted is a candidate signal that $\phi_L$ mislabeled it.
+$\mathcal{P}_A$ have both been exhausted is a candidate signal that $\phi_L$ mislabeled it.
 S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
 marker as a diagnostic, and each persistent abstention is reviewed against the
 four-condition decision of \S\ref{sec:lintability} and adjudicated as either a
@@ -425,6 +425,9 @@ S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention, \S\ref{subsec:algo} &
 Table~\ref{tab:saiv-objectives} gives only the item-to-repair-direction correspondence; the
 concrete repair operations and their notation are defined in
 \S\ref{subsec:repair}.
+\textsc{RouteRepair} in Algorithm~\ref{alg:saiv} is this deterministic routing
+step: it maps the residual and lintability-check signals to one repair operation
+in $\{\mathcal{P}_R,\mathcal{P}_L,\mathcal{P}_G,\mathcal{P}_V\}$.
 
 \subsection{Repair Operations}
 \label{subsec:repair}
@@ -452,7 +455,7 @@ when the metric decreases.
 \item \textbf{Generation repair $\mathcal{P}_G$}: A missing template routes to the
   offline vocabulary-expansion channel $\mathcal{P}_A$, which adds a new atomic
   template to $\mathcal{A}$ after certificate-level execution verification; a wrong IR field, such as too coarse a granularity,
-  routes to IR-content repair $\mathcal{P}_R$; and a rule that proves not lintable
+  routes to IR-content repair $\mathcal{P}_R$; and a rule that proves not to be lintable
   routes to lintability repair $\mathcal{P}_L$. When the template, IR, and
   lintability label are all correct but the meaning is too complex to express
   within $\Tv$, the rule is kept as a logged expressiveness gap rather than
@@ -470,9 +473,9 @@ Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
-\textbf{Termination conditions}: $\Ltot < \theta$ and the two
-lintability checks clear, reaching the maximum iteration cap $K$, or no residual
-decreasing in a round. If every
+\textbf{Termination conditions}: the loop terminates when $\Ltot < \theta$ and the two
+lintability checks clear, when it reaches the maximum iteration cap $K$, or when no residual
+decreases in a round. If every
 accepted stage-repair operation is monotone, reducing that stage's error or
 leaving it unchanged, then $\Ltot$ is non-increasing each round; the actual
 system uses a ``stop when no decrease'' policy together with the hard cap $K$,

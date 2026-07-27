@@ -24,12 +24,12 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
 \State $t\gets 0$
 \Repeat
   \State compute objective residuals $\Lrec$~\eqref{eq:recall-res},
-    $\Lcode$~\eqref{eq:code-res}; lintability check $\Nviol$
+    $\Lcode$~\eqref{eq:code-res}; lintability-check signals $\Nviol$ and $\bot_{\mathrm{NT}}$
   \If{$\Ltot<\theta$ \textbf{and} $\Nviol=0$}
     \State \textbf{break} \Comment{objectives converged, checks clear}
   \EndIf
-  \State $\mathit{op}\gets \textsc{StageAttribution}(\cdots)$
-    \Comment{stage routing, \S\ref{subsec:repair}}
+  \State $\mathit{op}\gets \textsc{RouteRepair}(\Lrec,\Lcode,\Nviol,\bot_{\mathrm{NT}},\cdots)$
+    \Comment{repair routing, \S\ref{subsec:repair}}
   \If{$\mathit{op}=\mathcal{P}_R$} \Comment{IR-content repair}
     \ForAll{$r$ routed to $\mathcal{P}_R$}
       \State $\mathit{rep}\gets \mathcal{P}_R(\textsc{FailTrace}(r))$
