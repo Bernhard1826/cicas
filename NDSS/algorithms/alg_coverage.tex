@@ -9,8 +9,12 @@
 \makeatother
 \refstepcounter{algorithm}
 \label{alg:coverage}
+\noindent\rule{\linewidth}{0.6pt}
+\par\smallskip
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for zlint
 coverage-alignment determination for individual rules.
+\par\smallskip
+\noindent\rule{\linewidth}{0.4pt}
 \par\smallskip
 \small
 \begin{algorithmic}[1]
@@ -58,4 +62,6 @@ coverage-alignment determination for individual rules.
   $\RLunc\gets B\setminus \RLcov$
 \State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \RLcov,\ \RLunc)$
 \end{algorithmic}
+\par\smallskip
+\noindent\rule{\linewidth}{0.6pt}
 \end{figure*}
