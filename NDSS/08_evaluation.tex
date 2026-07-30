@@ -268,8 +268,11 @@ yields a non-pass result. Third, an independent structural audit re-derives the
 same defect from the DER or openssl. On external corpora we additionally require
 that no native zlint lint flags the same certificate, so that existing coverage is
 not miscredited to a generated lint. The unit reported in Table~\ref{tab:certfind}
-is a certificate-problem instance; duplicated source rows for the same defect are
-collapsed.
+is a certificate-problem instance: one certificate and one merged defect class.
+This differs from a finding type, which is the table's governing-obligation row,
+and from a row-level violation, which is a single non-pass generated-lint row.
+For external corpora, ``ext.\ merged'' is the Tranco/CT union after
+cross-corpus de-duplication by certificate and defect class.
 
 \begin{table*}[tb]
 \centering
@@ -307,9 +310,9 @@ confirmed row-level fixture violations because some defects are represented by
 two source rows. Tranco contributes 4 problem instances and CT contributes 1; the
 CT instance duplicates one Tranco Root CA, so the external merged total is 4
 problem instances, namely 1 Error and 3 Warn. We read severity conservatively.
-The AKI and anyPolicy violations are Error-level profile faults whose direct
-cryptographic consequence is indirect, while the Root CA CRLDP finding is a
-lower, Warn-level advisory.
+The external AKI finding and the fixture-only anyPolicy findings are Error-level
+profile faults whose direct cryptographic consequence is indirect, while the Root
+CA CRLDP finding is a lower, Warn-level advisory.
 
 The corpus first uses zlint's own testdata as a gate rather than an ecosystem
 estimate. On 1128 parsable certificates the 79 lints raise 2962 raw
@@ -318,7 +321,11 @@ while 2825 are NOCHECK and hence not claimed. To test whether these findings exi
 in hand-constructed testdata, we scan two external corpora. The first is the
 TLS-handshake certificate chains of the Tranco Top~1M domains, 47,791 deduplicated
 PEMs, and the second is a recent sample of CT logs, 63,327 deduplicated PEMs. The
-raw generated-lint hit counts are large, 57,583 on Tranco and 80,021 on CT.
+raw generated-lint hit counts are large, 57,583 on Tranco and 80,021 on CT. The
+figures of record for this subsection are the 79-lint shipping manifest from
+\texttt{strict\_audited\_uncovered\_20260720} and the external scan run
+\texttt{current\_79\_20260720}; superseded or scratch output directories are not
+used for the paper counts.
 
 The three confirmation conditions collapse these raw counts sharply. Discarding
 every hit on a certificate that some native zlint lint already flags removes the
@@ -333,7 +340,8 @@ finding rests on the generated lint alone.
 
 The generated lints
 generalize beyond hand-built testdata to 111,118 real certificates, where they
-surface 4 genuine profile faults that native zlint misses while every claimed
+surface four independently confirmed, cross-corpus de-duplicated external
+certificate-problem instances that native zlint misses while every claimed
 finding survives both a source-text re-check and an independent structural audit.
 This indicates that our code generation and synonymy judgment produce checks
 that pass the code--specification synonymy gate and are useful on deployed
