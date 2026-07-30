@@ -14,7 +14,7 @@ comparison.
 
 The accuracy of lintability determination, the code-generation rate, and the
 synonymy rate all depend on the accuracy of the IR. Although we use the SAIV
-framework to ensure IR correctness through multiple rounds of iteration, current
+framework to audit and repair IR outputs through multiple rounds of iteration, current
 large language models still struggle to produce a fully correct IR in a single
 pass. Therefore, accurate IR generation remains an important direction for
 future research.
@@ -62,12 +62,12 @@ rather than vague forms such as ``as described in [RFC~X]'' or ``see
 knowledge graph.
 
 For maintainers of static certificate linting tools, we recommend writing the
-description field in lint metadata as an implementation-faithful code\_summary:
+description field in lint metadata as an implementation-aligned code\_summary:
 a single RFC~2119-style sentence that restates the actual check logic and
 explicitly states the field path, assertion type, allowed or forbidden values,
 lint severity, and citation. We observe that many lint checks currently
 provide descriptions that are neither citations to the original specification
-nor faithful summaries of the implementation logic. ZLint's
+nor precise summaries of the implementation logic. ZLint's
 w\_ct\_sct\_policy\_count\_unsatisfied, for instance, is described only as
 ``Check if certificate has enough embedded SCTs to meet Apple CT Policy''. As a
 consequence, the lint-to-specification coverage analysis must first invoke the

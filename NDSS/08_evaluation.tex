@@ -176,7 +176,7 @@ final-shipping rejected by synonymy gate & 14 &
   3 non-unanimous EXPRESS diagnostics, and 2 uncertain \\
 certificate-level execution verification \CodeEqIR, collateral &
   35 &
-  model-independent IR-level faithfulness, not a synonymy numerator; the
+  model-independent IR-level execution evidence, not a synonymy numerator; the
   paper-facing synonymy rate uses only the final emitted code versus the source
   rule \\
 \bottomrule
@@ -186,8 +186,8 @@ certificate-level execution verification \CodeEqIR, collateral &
 In the audited code-generation domain there are 2 no-template abstentions and, among
 the 93 compilable lints after counting the NON\_GENERIC-only extension, 14
 generated lints not accepted by the final-shipping synonymy gate. The 35 rules
-certified \CodeEqIR{} by certificate-level execution verification are reported
-only as collateral IR-level evidence. \CodeEqIR{} is model-independent and
+checked under \CodeEqIR{} by certificate-level execution verification are
+reported only as collateral IR-level evidence. \CodeEqIR{} is model-independent and
 deterministic, yet it does not by itself imply \CodeEqSpec, so the paper-facing
 synonymy rate is taken solely from the final emitted code judged against the
 source rule.
@@ -336,4 +336,5 @@ generalize beyond hand-built testdata to 111,118 real certificates, where they
 surface 4 genuine profile faults that native zlint misses while every claimed
 finding survives both a source-text re-check and an independent structural audit.
 This indicates that our code generation and synonymy judgment produce checks
-faithful to the specification and useful on deployed certificates.
+that pass the code--specification synonymy gate and are useful on deployed
+certificates.

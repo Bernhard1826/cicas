@@ -37,7 +37,7 @@ To address the first challenge, we build the Dual Layer Extraction Pipeline, abb
 
 To address the second challenge, we formalize lintability as a four-condition framework in \S\ref{sec:method-lintability}, evaluated over IR attributes, turning the lintability decision into a traceable and reproducible check rather than a keyword heuristic.
 
-To address the third challenge, we restrict code generation to a finite, closed DSL-tree space. Each rule's checking logic is a tree in this space that a deterministic function renders into Go lint code, with an LLM fallback only when the deterministic path yields nothing, and every candidate gated by ``render and pass go build.'' The deterministic path is free of hallucination and output instability by construction, and the build gate rejects any fallback candidate that fails to compile, so neither reaches the shipped lints.
+To address the third challenge, we restrict code generation to a finite, closed DSL-tree space. Each rule's checking logic is a tree in this space that a deterministic function renders into Go lint code, with an LLM fallback only when the deterministic path yields nothing, and every candidate gated by ``render and pass go build.'' The deterministic path avoids unconstrained code emission, and the build gate rejects any fallback candidate that fails to compile, so neither reaches the shipped lints.
 
 \noindent \textbf{Evaluation and Analysis.}
 We evaluate the full pipeline on the two standard sources RFC~5280 and CABF~BR, using GPT-5.4 as the LLM.
@@ -59,5 +59,5 @@ This paper makes three contributions.
 \begin{itemize}
     \item We design DLEP, a dual-layer pipeline that automatically extracts normative rules from natural-language Web PKI sources while confining the LLM to schema-bounded semantic parsing, making the extraction reproducible and auditable.
     \item We propose a four-condition framework that formalizes lintability and determines whether an extracted normative rule can be enforced as a static certificate lint check.
-    \item We develop a restricted code-generation method that confines each rule's checking logic to a finite, closed DSL-tree space, yielding deterministic lint code with explicit audit evidence whose deterministic path is free of LLM hallucination and output instability, with a build-gated LLM fallback for the remainder.
+    \item We develop a restricted code-generation method that confines each rule's checking logic to a finite, closed DSL-tree space, yielding deterministic lint-code rendering with explicit audit evidence and a build-gated LLM fallback.
 \end{itemize}

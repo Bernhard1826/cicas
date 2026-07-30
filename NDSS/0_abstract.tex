@@ -14,8 +14,7 @@ intermediate representation, keeping extraction reproducible and traceable. A
 four-condition framework then decides lintability over these attributes rather
 than by keyword heuristics, and restricted code generation confines each rule to
 a finite, closed tree space that a deterministic function renders into Go lint
-code, a path free of hallucination and output instability, with a build-gated LLM
-fallback for the remainder. On RFC~5280 and the
+code, with a build-gated LLM fallback for the remainder. On RFC~5280 and the
 CA/Browser Forum Baseline Requirements the framework recalls 2,080 candidate
 rules and finds only 260, or 16.6\% of the 1,567 genuine normative rules,
 lintable as single-certificate static checks, showing that accurately determining

@@ -9,13 +9,14 @@ misspell a field name as another field that happens to exist but is
 semantically unrelated, or introduce a unit error in an OID. The second is
 output instability. The same code-generation prompt often produces
 different outputs across calls, with no guarantee that the result will compile or
-be logically correct. To contain both kinds of uncertainty, we confine
-a rule's code body to a finite, closed DSL-tree space $\Tv$. Each rule's code
-body can only be a tree in that space, which is then rendered into Go code by a
-deterministic function. The deterministic main path incurs neither difficulty,
-and the restricted LLM fallback is bounded to the same closed space and gated by
-``render and pass go build,'' so any non-compiling output is rejected rather than
-shipped. Figure~\ref{fig:codegen-pipeline} illustrates the whole
+be logically correct. To contain this uncertainty, we confine a rule's code body
+to a finite, closed DSL-tree space $\Tv$. Each rule's code body can only be a
+tree in that space, which is then rendered into Go code by a deterministic
+function. The deterministic main path avoids unconstrained code emission, and
+the restricted LLM fallback is bounded to the same closed space and gated by
+``render and pass go build,'' so any out-of-space or non-compiling output is
+rejected rather than shipped.
+Figure~\ref{fig:codegen-pipeline} illustrates the whole
 pipeline on a single rule---CA certificates must assert the keyCertSign
 key-usage bit---tracing it from the filled IR fields, through the DSL tree,
 represented as an abstract syntax tree, and its JSON serialization, to the
@@ -168,8 +169,8 @@ from the normal value $\varepsilon$ denoting ``no precondition'' in
 the acceptance gate---even if deterministic synthesis returns a tree, that is
 not enough; it must actually compile, otherwise it is treated as unresolved and
 passed to LLM synthesis. Both paths are constrained by the same set of
-structural checks, and neither decides ``whether the code is faithful to the
-specification,'' which is the job of the verification chain of
+structural checks, and neither decides whether the code expresses the
+specification, which is the job of the verification chain of
 \S\ref{subsec:exec-verify}; they only confine the output to a traceable space.
 
 \textbf{Deterministic main path.} When an IR predicate can select an atomic
@@ -197,9 +198,9 @@ each specification source, with details in Appendix~\ref{app:tv}.
 \subsection{Three-Layer Semantic Alignment Verification}
 \label{subsec:exec-verify}
 
-Whether the generated code faithfully expresses the specification is the hardest
-judgment in the whole pipeline. This subsection answers it at three levels from
-coarse to fine.
+Whether the generated code expresses the specification is the hardest judgment
+in the whole pipeline. This subsection checks it at three levels from coarse to
+fine.
 
 \textbf{Layer~A, description provenance.} Check whether the Description
 can be traced back to the source document.
@@ -226,32 +227,32 @@ prefilter; failing any layer triggers the repair loop of Appendix~\ref{sec:saiv}
 \textbf{Certificate-level execution verification, execution-level evidence for
 \CodeEqIR.} Layer~B's synonymy judgment is given by an LLM and cannot be fully
 determinized; as a complement, we introduce a model-independent
-deterministic verification to check ``whether the generated code faithfully
-executes the DSL tree it corresponds to,'' written \CodeEqIR. Its idea borrows
+deterministic verification to check whether the generated code executes the DSL
+tree it corresponds to, written \CodeEqIR. Its idea borrows
 from the test oracle in software testing, using a set of samples with
 known-correct answers to check the code under test. It proceeds in two steps.
 
-Step 1, certifying a single atomic template. For each atomic template we
+Step 1, checking a single atomic template. For each atomic template we
 construct a pair of controlled certificate samples, one that should
 make the template's predicate true, and one that should make it false. The
 samples are constructed by the atomic template's parameter types and are not
 bound to any concrete rule. The rendered code is executed for real on the two
-certificates and the verdicts are read back; the atomic template is deemed
-certified if and only if the results on both certificates match expectation.
+certificates and the verdicts are read back; the atomic template is accepted by
+this check if and only if the results on both certificates match expectation.
 
 Step 2, generalizing from atomic templates to the whole tree. For a
-generated lint holding a DSL tree $t$, if $t$ is composed only of certified
+generated lint holding a DSL tree $t$, if $t$ is composed only of accepted
 atomic templates and compiles as a whole, we can induct over the tree
-structure. The faithfulness of the leaves, the atomic templates, is guaranteed by
-Step~1, and the combinators $\neg/\wedge/\vee$ evaluate by classical
-propositional logic and preserve faithfulness level by level, so the rendered
-code $\rho(t)$ faithfully executes the whole tree, i.e., $\mathrm{Code}\equiv
-t$; and because $t$ is deterministically reduced from the IR, \CodeEqIR.
+structure. The behavior of the leaves is checked in Step~1, and the combinators
+$\neg/\wedge/\vee$ evaluate by classical propositional logic and preserve that
+behavior level by level, so the rendered code $\rho(t)$ executes the whole tree,
+i.e., $\mathrm{Code}\equiv t$; and because $t$ is deterministically reduced from
+the IR, \CodeEqIR.
 
 This verification is performed on controlled certificate samples; the result is
 deterministic and does not vary with run count or model. Its boundary
-must be stressed. \CodeEqIR{} only shows that the code is faithful to the
-intermediate representation IR, which is not the same as the code being
-faithful to the specification text; if the IR itself has already drifted from
-the specification, this verification cannot detect it. The final word therefore
-still rests with \CodeEqSpec{}, the Layer~B synonymy judgment.
+must be stressed. \CodeEqIR{} only shows that the code follows the intermediate
+representation IR, which is not the same as code--specification
+alignment; if the IR itself has already drifted from the specification, this
+verification cannot detect it. The code--specification decision therefore still
+rests with \CodeEqSpec{}, the Layer~B synonymy judgment.
