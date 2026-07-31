@@ -267,20 +267,17 @@ semantics have been checked back to the source text. Second, the certificate
 yields a non-pass result. Third, an independent structural audit re-derives the
 same defect from the DER or openssl. On external corpora we additionally require
 that no native zlint lint flags the same certificate, so that existing coverage is
-not miscredited to a generated lint. The unit reported in Table~\ref{tab:certfind}
-is a certificate-problem instance: one certificate and one merged defect class.
-This differs from a finding type, which is the table's governing-obligation row,
-and from a row-level violation, which is a single non-pass generated-lint row.
-For external corpora, ``ext.\ merged'' is the Tranco/CT union after
-cross-corpus de-duplication by certificate and defect class.
+not miscredited to a generated lint. In Table~\ref{tab:certfind}, rows are
+finding types, and numeric cells are certificate-problem instances, where one
+instance is one certificate and one merged defect class. For external corpora,
+``ext.\ merged'' is the Tranco/CT union after cross-corpus de-duplication by
+certificate and defect class.
 
 \begin{table*}[tb]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{4pt}
-\caption{Strictly confirmed findings across the three certificate corpora,
-ordered by highest severity first, for the 79 shipped lints. ``ext.\ merged'' is
-the Tranco/CT union after cross-corpus de-duplication.}
+\caption{Five confirmed finding types across certificate corpora.}
 \label{tab:certfind}
 \begin{tabularx}{\textwidth}{@{}l X r r r r p{3.3cm}@{}}
 \toprule
@@ -304,12 +301,14 @@ Warn & Root CA Certificate SHOULD NOT contain CRL Distribution Points
 \end{tabularx}
 \end{table*}
 
-The testdata column of Table~\ref{tab:certfind} sums to 101 independently
-confirmed fixture problem instances. The underlying audit file contains 137
-confirmed row-level fixture violations because some defects are represented by
-two source rows. Tranco contributes 4 problem instances and CT contributes 1; the
-CT instance duplicates one Tranco Root CA, so the external merged total is 4
-problem instances, namely 1 Error and 3 Warn. We read severity conservatively.
+The five rows of Table~\ref{tab:certfind} are the five confirmed finding types
+observed across all evaluated corpora. The testdata column sums to 101
+independently confirmed fixture problem instances. The underlying audit file
+contains 137 confirmed row-level fixture violations because some defects are
+represented by two source rows. In the deployed-certificate corpora, Tranco
+contributes 4 problem instances and CT contributes 1; the CT instance duplicates
+one Tranco Root CA, so the external merged total is 4 problem instances, namely
+1 Error and 3 Warn. We read severity conservatively.
 The external AKI finding and the fixture-only anyPolicy findings are Error-level
 profile faults whose direct cryptographic consequence is indirect, while the Root
 CA CRLDP finding is a lower, Warn-level advisory.
@@ -321,11 +320,7 @@ while 2825 are NOCHECK and hence not claimed. To test whether these findings exi
 in hand-constructed testdata, we scan two external corpora. The first is the
 TLS-handshake certificate chains of the Tranco Top~1M domains, 47,791 deduplicated
 PEMs, and the second is a recent sample of CT logs, 63,327 deduplicated PEMs. The
-raw generated-lint hit counts are large, 57,583 on Tranco and 80,021 on CT. The
-figures of record for this subsection are the 79-lint shipping manifest from
-\texttt{strict\_audited\_uncovered\_20260720} and the external scan run
-\texttt{current\_79\_20260720}; superseded or scratch output directories are not
-used for the paper counts.
+raw generated-lint hit counts are large, 57,583 on Tranco and 80,021 on CT.
 
 The three confirmation conditions collapse these raw counts sharply. Discarding
 every hit on a certificate that some native zlint lint already flags removes the
@@ -338,11 +333,11 @@ Table~\ref{tab:certfind}. Each escapes native zlint coverage and
 reproduces under an independent audit, so the reading stays conservative and no
 finding rests on the generated lint alone.
 
-The generated lints
-generalize beyond hand-built testdata to 111,118 real certificates, where they
-surface four independently confirmed, cross-corpus de-duplicated external
-certificate-problem instances that native zlint misses while every claimed
-finding survives both a source-text re-check and an independent structural audit.
+Overall, the shipped lints confirm five finding types across the evaluated
+corpora. Beyond hand-built testdata, the deployed-certificate scans confirm four
+cross-corpus de-duplicated external certificate-problem instances that native
+zlint misses while every claimed finding survives both a source-text re-check and
+an independent structural audit.
 This indicates that our code generation and synonymy judgment produce checks
 that pass the code--specification synonymy gate and are useful on deployed
 certificates.

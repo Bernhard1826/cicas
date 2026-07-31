@@ -20,8 +20,6 @@ rules and finds only 260, or 16.6\% of the 1,567 genuine normative rules,
 lintable as single-certificate static checks, showing that accurately determining
 lintability is essential. Existing zlint lints cover 165 of them. For the 95
 uncovered rules, the generator produces 93 compilable lints, 79 of which pass a
-unanimous code--specification synonymy gate. Injected into zlint and run across
-111,118 deployed certificates, these lints surface four independently confirmed,
-cross-corpus de-duplicated external certificate-problem instances missed by
-native zlint: one Error-level AKI violation and three Warning-level Root CA
-CRLDP violations.
+unanimous code--specification synonymy gate. Injected into zlint, these shipped
+lints confirm five certificate-problem types across zlint testdata and 111,118
+deployed certificates.

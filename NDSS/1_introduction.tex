@@ -52,11 +52,9 @@ Seventy-nine generated lints pass the final-shipping unanimous synonymy gate aga
 
 We further run two independent external validations, one for each half of the framework.
 Against the zlint maintainers' manually annotated CABF~BR mapping sheet, our rule extraction and lintability determination reach Cohen's $\kappa = 0.823$ on BR~1.4.8.
-Injecting the synonymy-passing lints into zlint then surfaces four independently
-confirmed, cross-corpus de-duplicated external certificate-problem instances
-missed by native zlint across 111,118 real certificates from the Tranco Top~1M
-and Certificate Transparency logs: one Error-level AKI issuer/serial violation
-and three Warning-level Root CA CRLDP violations.
+Injecting the synonymy-passing lints into zlint then surfaces five confirmed
+finding types across the evaluated corpora, including deployed-certificate
+findings missed by native zlint.
 
 \noindent\textbf{Contributions.}
 This paper makes three contributions.
