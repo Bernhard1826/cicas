@@ -3,18 +3,16 @@
 \label{sec:conclusion}
 %-------------------------------------------------------------------------------
 
-We presented an end-to-end framework that turns natural-language Web PKI
-normative text into auditable static lint code. Applied to RFC~5280 and CABF~BR,
-the pipeline recalled 2,080 candidate rules and identified 1,567 genuine
-normative rules. Only 260 of these genuine rules, or 16.6\%, are lintable as
-single-certificate static checks. Of these 260 lintable rules, existing zlint
-lints fully cover only 165, leaving 95 uncovered and revealing a substantial gap
-between deployed linting and the normative specifications.
-For these uncovered rules, our restricted generator produced 77
-compilable lints that contain at least one GENERIC atom and 16 further compilable
-lints from registered NON\_GENERIC-only atom trees, for 93 compilable lints in
-total. Of these, 79 passed the unanimous code--specification synonymy gate and
-were injected into zlint. Certificate detection confirmed five finding types
-across the evaluated corpora, including deployed-certificate findings not flagged
-by native zlint. We hope our work can provide a useful reference for research
-related to certificate issuance compliance automation.
+We presented an end-to-end framework that transforms natural-language Web PKI
+normative text into auditable static lint code. On RFC~5280 and CABF~BR, the
+pipeline recalled 2,080 candidates and identified 1,567 genuine normative rules.
+Under our single-certificate static-check criterion, 260 (16.6\%) are lintable.
+Existing zlint lints fully cover 165, leaving 95 uncovered rules for generation.
+The restricted generator produced 93 compilable lints, including 77 with at
+least one GENERIC atom. Of these, 79 passed the unanimous code--specification
+synonymy gate and were added to zlint. Certificate detection confirmed five
+finding types, including four de-duplicated external instances not flagged by
+native zlint. Within the evaluated standards and confirmation protocol, these
+results show that source-linked rule extraction, explicit lintability
+classification, and restricted generation can expose actionable gaps in static
+certificate-lint coverage.

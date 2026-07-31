@@ -1,25 +1,23 @@
-Web PKI trust rests on correctly issued certificates, which the ecosystem
-increasingly enforces with static certificate linters such as zlint. These tools
-rely on compliance checks that PKI experts implement and maintain by hand as
-normative sources evolve, an approach that scales poorly now that the CA/Browser
-Forum mandates pre-issuance linting and is driving TLS certificate validity
-toward 47~days. The ecosystem still lacks a systematic way to turn
-natural-language normative text into enforceable lint code, and even the prior
-question of which rules a single-certificate static lint can check is left
-implicit. We present an end-to-end framework that extracts normative rules from
-Web PKI specifications, determines whether each rule is lintable, and generates
-auditable lint code. A dual-layer extraction pipeline pairs deterministic keyword
-recall with a large language model confined to schema-bounded parsing into an
-intermediate representation, keeping extraction reproducible and traceable. A
-four-condition framework then decides lintability over these attributes rather
-than by keyword heuristics, and restricted code generation confines each rule to
-a finite, closed tree space that a deterministic function renders into Go lint
-code, with a build-gated LLM fallback for the remainder. On RFC~5280 and the
-CA/Browser Forum Baseline Requirements the framework recalls 2,080 candidate
-rules and finds only 260, or 16.6\% of the 1,567 genuine normative rules,
-lintable as single-certificate static checks, showing that accurately determining
-lintability is essential. Existing zlint lints cover 165 of them. For the 95
-uncovered rules, the generator produces 93 compilable lints, 79 of which pass a
-unanimous code--specification synonymy gate. Injected into zlint, these shipped
-lints confirm five certificate-problem types across zlint testdata and 111,118
+Web PKI trust depends on correctly issued certificates. Static certificate
+linters such as zlint enforce this trust, but PKI experts must still implement
+and maintain compliance checks as normative sources evolve. This manual process
+is increasingly difficult to scale as pre-issuance linting becomes mandatory and
+certificate lifetimes shorten. The ecosystem lacks a systematic way to translate
+natural-language normative text into lint code, including a principled method to
+decide which rules are observable from one certificate alone. We present an
+end-to-end framework that extracts normative rules from Web PKI specifications,
+classifies their lintability, and generates auditable lint code. A dual-layer
+extraction pipeline combines deterministic candidate recall with
+schema-constrained large-language-model parsing into an intermediate
+representation. A four-condition decision rule then classifies lintability from
+the representation rather than from keyword heuristics. Restricted code
+generation maps supported rules to a closed, typed DSL tree that a deterministic
+renderer converts to Go lint code, with a build-gated LLM fallback for unresolved
+cases. On RFC~5280 and the CA/Browser Forum Baseline Requirements, the framework
+recalls 2,080 candidate rules, of which 1,567 are genuine normative rules. Only
+260 (16.6\%) are lintable as single-certificate static checks; existing zlint
+lints fully cover 165. For the remaining 95 rules, the generator produces 93
+compilable lints, 79 of which pass a unanimous code--specification synonymy gate.
+When added to zlint, these lints confirm five certificate-problem types in zlint
+testdata and four de-duplicated external problem instances across 111,118
 deployed certificates.

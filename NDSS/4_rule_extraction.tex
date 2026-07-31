@@ -96,7 +96,7 @@ Third, once a rule is determined to be lintable, generating static lint checks f
 
 To constrain LLM behavior, Layer~2 enforces a predefined schema and category set.
 Every extracted rule must map to explicit source text, and certificate field hierarchies must follow the ASN.1 path definitions in RFC~5280.
-The IR generation process is also staged. The model first determines the rule category and then fills in the remaining fields, which reduces errors compared with generating all fields in a single step.
+The IR generation process is also staged. The model first determines the rule category and then fills in the remaining fields.
 Appendix~\ref{app:ir} provides the category definitions, correction rules, and tuning details.
 
 \begin{figure}[tb]
