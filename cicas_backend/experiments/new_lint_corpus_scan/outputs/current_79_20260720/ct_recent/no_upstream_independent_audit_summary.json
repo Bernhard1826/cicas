@@ -1,0 +1,8 @@
+{
+  "scope": "no-upstream",
+  "findings_audited": 167,
+  "verdicts": {
+    "NOCHECK": 165,
+    "CONFIRMED": 2
+  }
+}

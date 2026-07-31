@@ -1,0 +1,100 @@
+{
+  "run_id": "current_79_20260720",
+  "repository_commit_at_manifest_creation": "4411d776087b4c7767fa89e56a030a984a3c222a",
+  "zlint_tree": {
+    "path": "cicas_backend/zlint",
+    "git_toplevel": ".",
+    "repository_commit_at_manifest_creation": "4411d776087b4c7767fa89e56a030a984a3c222a",
+    "note": "The bundled zlint tree is part of this repository; the original scan outputs did not record an independent upstream zlint commit."
+  },
+  "paper_result": {
+    "external_certificates": 111118,
+    "tranco_certificates": 47791,
+    "ct_certificates": 63327,
+    "tranco_raw_generated_lint_rows": 57583,
+    "ct_raw_generated_lint_rows": 80021,
+    "tranco_no_upstream_candidate_rows": 1042,
+    "ct_no_upstream_candidate_rows": 167,
+    "tranco_confirmed_row_level_violations": 8,
+    "ct_confirmed_row_level_violations": 2,
+    "external_merged_certificate_problem_instances": 4,
+    "external_merged_breakdown": {
+      "error_aki_issuer_serial": 1,
+      "warning_root_ca_crldp": 3
+    }
+  },
+  "count_units": {
+    "finding_type": "A governing-obligation row in the paper table.",
+    "row_level_violation": "One non-pass generated-lint row on one certificate.",
+    "certificate_problem_instance": "Rows for the same certificate defect collapsed.",
+    "external_merged": "Tranco and CT certificate-problem instances de-duplicated across corpora by certificate and defect class."
+  },
+  "shipping_manifest": {
+    "path": "cicas_backend/experiments/codegen_metrics/outputs/strict_audited_uncovered_20260720/shipping_lints_manifest.json",
+    "lint_count": 79,
+    "sha256": "44e1930b7d74ff979e424f4dff03b87bfaa6196db8a40046eb04251058fbc0bb"
+  },
+  "codegen_outputs": {
+    "codegen_synonymy_summary": {
+      "path": "cicas_backend/experiments/codegen_metrics/outputs/strict_audited_uncovered_20260720/codegen_synonymy_summary.json",
+      "sha256": "845c42309d663801805adb24c042e43d6d1a7f46090e553b092390eee3472432"
+    },
+    "shipping_compile": {
+      "path": "cicas_backend/experiments/codegen_metrics/outputs/strict_audited_uncovered_20260720/shipping_compile.json",
+      "sha256": "eef852216ce3df665d1ad0e71ceb836f1325c94ef03344c725b516037220efd5"
+    }
+  },
+  "corpus_snapshots": {
+    "tranco_run_meta": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/inputs/tranco_1m/run_meta.json",
+      "sha256": "aab79dcb9f1068e2a29f27694cdb7f3409aa61aa0bfdab9ef9d65a08500abc42"
+    },
+    "tranco_manifest": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/inputs/tranco_1m/manifest.jsonl",
+      "sha256": "2b3caa908c03c7fd8a2e7ffc830a17ada4aeb009ff55910e8802e8882becfaba"
+    },
+    "ct_run_meta": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/inputs/ct_recent/run_meta.json",
+      "sha256": "82fedbc85fcc8cccd8907bf2a2f529cc460e2b91ac2fdd7bffdcf0acd04a6b27"
+    },
+    "ct_manifest": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/inputs/ct_recent/manifest.jsonl",
+      "sha256": "0ab6b64fb72ffbc34a788c56e65386bbd371f8566021886ff366d06df950b47c"
+    }
+  },
+  "scan_outputs": {
+    "tranco_detection_summary": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/tranco_1m/detection_summary.json",
+      "sha256": "1e201dff23689df307f2cb896db2d796893fd4c3adc8ccd6bb23931e512c1078"
+    },
+    "tranco_independent_audit": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/tranco_1m/no_upstream_independent_audit.jsonl",
+      "sha256": "34cc784d54c5a341424496d71cb66e87259afa0d5b977c347a8bf52e2fd255ac"
+    },
+    "tranco_independent_audit_summary": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/tranco_1m/no_upstream_independent_audit_summary.json",
+      "sha256": "87895655d1419dca83039aaa4afae2731cb7c753b77cded193b937e9f64d64db"
+    },
+    "tranco_strict_reportable_findings": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/tranco_1m/strict_reportable_findings.jsonl",
+      "sha256": "6a3badcbe84cd298e56ea23ec8e903bd8aa5f4dd9c8ee37832c86c702b417cc3"
+    },
+    "ct_detection_summary": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/ct_recent/detection_summary.json",
+      "sha256": "7bc0adc1d0e12ab5a60d4213dc4b47b98c2b73ee9d91286f2f2d881f86164813"
+    },
+    "ct_independent_audit": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/ct_recent/no_upstream_independent_audit.jsonl",
+      "sha256": "4def1b5765800c52ed744508af53623776c193a46769df9187b55d540f98a902"
+    },
+    "ct_independent_audit_summary": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/ct_recent/no_upstream_independent_audit_summary.json",
+      "sha256": "295e7f58f30d1afc1fb9483ba967c88802764f2bc79609c79bdfd2c5f451023b"
+    },
+    "ct_strict_reportable_findings": {
+      "path": "cicas_backend/experiments/new_lint_corpus_scan/outputs/current_79_20260720/ct_recent/strict_reportable_findings.jsonl",
+      "sha256": "4decc48274f50c79418c5a53d21a6a212ebdab69146c3b3f611ac60f104cb4c4"
+    }
+  },
+  "note": "Only outputs/current_79_20260720 is authoritative for manuscript reproduction. Older scratch outputs are kept outside the outputs tree under superseded_outputs/ and should be excluded from reviewer-facing artifact packages."
+}

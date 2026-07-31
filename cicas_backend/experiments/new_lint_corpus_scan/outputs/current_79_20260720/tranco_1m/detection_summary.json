@@ -1,0 +1,17 @@
+{
+  "mode": "external_corpus_report",
+  "corpus": "/home/bernhard/projects/cicas/cicas_backend/experiments/new_lint_corpus_scan/inputs/tranco_1m/certs",
+  "total_certs": 47791,
+  "independent_audit_scope": "no-upstream",
+  "independent_audit_findings": 1042,
+  "new_lint_findings": 57583,
+  "strict_reportable_findings": 8,
+  "upstream_findings": 96826,
+  "new_lints_fired": 34,
+  "new_lint_certs": 29898,
+  "new_lint_no_upstream_findings": 1042,
+  "new_lint_independent_audit": {
+    "NOCHECK": 1034,
+    "CONFIRMED": 8
+  }
+}

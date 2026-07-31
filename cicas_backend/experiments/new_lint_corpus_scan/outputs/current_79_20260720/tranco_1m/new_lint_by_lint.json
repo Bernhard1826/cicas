@@ -1,0 +1,378 @@
+[
+  {
+    "lint": "cicasgen_when_oid_eq_oid_sha256_with_rsaencryption_or_oid_eq_oid_29766",
+    "rule_id": 29766,
+    "standard": "CABF-BR",
+    "section": "7.1.3.2.1",
+    "rule_text": "When encoded, the AlgorithmIdentifier MUST be byte-for-byte identical with the specified hex-encoded bytes. - RSASSA-PKCS1-v1_5 with SHA-256: Encoding: 300d06092a864886f70d01010b0500. - RSASSA-PKCS1-v1_5 with SHA-384: Encoding: 300d06092a864886f70d01010c0500. - RSASSA-PKCS1-v1_5 with SHA-512: Encoding: 300d06092a864886f70d01010d0500. - RSASSA-PSS with SHA-256, MGF-1 with SHA-256, and a salt length of 32 bytes: Encoding: hexdump 304106092a864886f70d01010a3034a00f300d0609608648016503040201 0500a11c301a06092a864886f70d010108300d0609608648016503040201 0500a203020120 - RSASSA-PSS with SHA-384, MGF-1 with SHA-384, and a salt length of 48 bytes: Encoding: hexdump 304106092a864886f70d01010a3034a00f300d0609608648016503040202 0500a11c301a06092a864886f70d010108300d0609608648016503040202 0500a203020130 - RSASSA-PSS with SHA-512, MGF-1 with SHA-512, and a salt length of 64 bytes: Encoding: hexdump 304106092a864886f70d01010a3034a00f300d0609608648016503040203 0500a11c301a06092a864886f70d010108300d0609608648016503040203 0500a203020140",
+    "fires": 28748,
+    "certs_without_upstream": 473,
+    "independent": {
+      "NOCHECK": 473
+    }
+  },
+  {
+    "lint": "cicasgen_when_subscriber_cert_validity_period_value_at_most_28763",
+    "rule_id": 28763,
+    "standard": "CABF-BR",
+    "section": "6.3.2",
+    "rule_text": "MUST NOT have a Validity Period greater than 398 days.",
+    "fires": 14158,
+    "certs_without_upstream": 123,
+    "independent": {
+      "NOCHECK": 123
+    }
+  },
+  {
+    "lint": "cicasgen_when_subscriber_cert_certificate_policies_has_no_policy_29757",
+    "rule_id": 29757,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.9",
+    "rule_text": "`policyQualifiers` are NOT RECOMMENDED to be present",
+    "fires": 13836,
+    "certs_without_upstream": 117,
+    "independent": {
+      "NOCHECK": 117
+    }
+  },
+  {
+    "lint": "cicasgen_certificate_policies_has_no_policy_qualifiers_29246",
+    "rule_id": 29246,
+    "standard": "CABF-BR",
+    "section": "7.1.2.10.5",
+    "rule_text": "`policyQualifiers` are NOT RECOMMENDED to be present",
+    "fires": 175,
+    "certs_without_upstream": 95,
+    "independent": {
+      "NOCHECK": 95
+    }
+  },
+  {
+    "lint": "cicasgen_certificate_policies_has_no_policy_qualifiers_29733",
+    "rule_id": 29733,
+    "standard": "CABF-BR",
+    "section": "7.1.2.10.5",
+    "rule_text": "`policyQualifiers` are NOT RECOMMENDED to be present",
+    "fires": 175,
+    "certs_without_upstream": 95,
+    "independent": {
+      "NOCHECK": 95
+    }
+  },
+  {
+    "lint": "cicasgen_when_subscriber_cert_dnsnames_fqdnor_wildcard_portion_29420",
+    "rule_id": 29420,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.12",
+    "rule_text": "The Fully-Qualified Domain Name or the FQDN portion of the Wildcard Domain Name contained in the entry MUST be composed entirely of P-Labels or Non-Reserved LDH Labels joined together by a U+002E FULL STOP (\".",
+    "fires": 146,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_oid_list_count_in_set_policy_identifiers_29244",
+    "rule_id": 29244,
+    "standard": "CABF-BR",
+    "section": "7.1.2.10.5",
+    "rule_text": "Regardless of the order of `PolicyInformation` values, the Certificate Policies extension MUST contain exactly one Reserved Certificate Policy Identifier",
+    "fires": 60,
+    "certs_without_upstream": 40,
+    "independent": {
+      "NOCHECK": 40
+    }
+  },
+  {
+    "lint": "cicasgen_oid_list_count_in_set_policy_identifiers_29247",
+    "rule_id": 29247,
+    "standard": "CABF-BR",
+    "section": "7.1.2.10.5",
+    "rule_text": "MUST include exactly one Reserved Certificate Policy Identifier (see [Section 7.",
+    "fires": 60,
+    "certs_without_upstream": 40,
+    "independent": {
+      "NOCHECK": 40
+    }
+  },
+  {
+    "lint": "cicasgen_when_root_ca_authority_key_id_present_29220",
+    "rule_id": 29220,
+    "standard": "CABF-BR",
+    "section": "7.1.2.1.3",
+    "rule_text": "`keyIdentifier` | MUST be present.",
+    "fires": 58,
+    "certs_without_upstream": 37,
+    "independent": {
+      "NOCHECK": 37
+    }
+  },
+  {
+    "lint": "cicasgen_subject_organization_present_29230",
+    "rule_id": 29230,
+    "standard": "CABF-BR",
+    "section": "7.1.2.10.2",
+    "rule_text": "`organizationName` | MUST | The CA's name or DBA.",
+    "fires": 30,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_not_ext_subfield_present_authority_key_id_28730",
+    "rule_id": 28730,
+    "standard": "CABF-BR",
+    "section": "7.1.2.11.1",
+    "rule_text": "`authorityCertSerialNumber` | MUST NOT be present",
+    "fires": 17,
+    "certs_without_upstream": 1,
+    "independent": {
+      "CONFIRMED": 1
+    }
+  },
+  {
+    "lint": "cicasgen_not_ext_subfield_present_authority_key_id_29274",
+    "rule_id": 29274,
+    "standard": "CABF-BR",
+    "section": "7.1.2.11.1",
+    "rule_text": "`authorityCertIssuer` | MUST NOT be present",
+    "fires": 17,
+    "certs_without_upstream": 1,
+    "independent": {
+      "CONFIRMED": 1
+    }
+  },
+  {
+    "lint": "cicasgen_crldpfull_name_general_names_all_tags_in_set_and_29282",
+    "rule_id": 29282,
+    "standard": "CABF-BR",
+    "section": "7.1.2.11.2",
+    "rule_text": "the scheme of each MUST be \"http\"",
+    "fires": 13,
+    "certs_without_upstream": 7,
+    "independent": {
+      "NOCHECK": 7
+    }
+  },
+  {
+    "lint": "cicasgen_when_pubkey_alg_rsa_ku_has_digital_signature_29409",
+    "rule_id": 29409,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.11",
+    "rule_text": "`digitalSignature` | Y | SHOULD",
+    "fires": 11,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_subscriber_cert_dnsnames_present_or_ipaddresses_29414",
+    "rule_id": 29414,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.12",
+    "rule_text": "MUST contain at least one `dNSName` or `iPAddress` `GeneralName`",
+    "fires": 9,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_root_ca_not_ext_subfield_present_authority_key_id_28729",
+    "rule_id": 28729,
+    "standard": "CABF-BR",
+    "section": "7.1.2.1.3",
+    "rule_text": "`authorityCertSerialNumber` | MUST NOT be present",
+    "fires": 8,
+    "certs_without_upstream": 1,
+    "independent": {
+      "NOCHECK": 1
+    }
+  },
+  {
+    "lint": "cicasgen_when_root_ca_not_ext_subfield_present_authority_key_id_29221",
+    "rule_id": 29221,
+    "standard": "CABF-BR",
+    "section": "7.1.2.1.3",
+    "rule_text": "`authorityCertIssuer` | MUST NOT be present",
+    "fires": 8,
+    "certs_without_upstream": 1,
+    "independent": {
+      "NOCHECK": 1
+    }
+  },
+  {
+    "lint": "cicasgen_dn_component_order_dns_reverse_29455",
+    "rule_id": 29455,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.4",
+    "rule_text": "The Domain Labels MUST be encoded in the reverse order to the on-wire representation of domain names in the DNS protocol, so that the Domain Label closest to the root is encoded first.",
+    "fires": 6,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29454",
+    "rule_id": 29454,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.4",
+    "rule_text": "The `domainComponent` fields for the Domain Name MUST be in a single ordered sequence containing all Domain Labels from the Domain Name.",
+    "fires": 6,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_pubkey_alg_rsa_not_ku_has_data_encipherment_29411",
+    "rule_id": 29411,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.11",
+    "rule_text": "`dataEncipherment` | Y | NOT RECOMMENDED",
+    "fires": 6,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_not_has_any_extension_and_issuer_unique_id_absent_31153",
+    "rule_id": 31153,
+    "standard": "RFC5280",
+    "section": "4.1.2.1",
+    "rule_text": "If only basic fields are present, the version SHOULD be 1 (the value is omitted from the certificate as the default value)",
+    "fires": 5,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_root_ca_not_crl_dist_present_29276",
+    "rule_id": 29276,
+    "standard": "CABF-BR",
+    "section": "7.1.2.11.2",
+    "rule_text": "extension SHOULD NOT be present in:",
+    "fires": 5,
+    "certs_without_upstream": 3,
+    "independent": {
+      "CONFIRMED": 3
+    }
+  },
+  {
+    "lint": "cicasgen_when_root_ca_not_crl_dist_present_29288",
+    "rule_id": 29288,
+    "standard": "CABF-BR",
+    "section": "7.1.2.11.2",
+    "rule_text": "Root CA Certificates.",
+    "fires": 5,
+    "certs_without_upstream": 3,
+    "independent": {
+      "CONFIRMED": 3
+    }
+  },
+  {
+    "lint": "cicasgen_name_const_critical_29260",
+    "rule_id": 29260,
+    "standard": "CABF-BR",
+    "section": "7.1.2.10.8",
+    "rule_text": "this extension SHOULD be marked critical",
+    "fires": 4,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_oid_policy_organization_validated_list_contains_29468",
+    "rule_id": 29468,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.4",
+    "rule_text": "`postalCode` | NOT RECOMMENDED | If present",
+    "fires": 4,
+    "certs_without_upstream": 3,
+    "independent": {
+      "NOCHECK": 3
+    }
+  },
+  {
+    "lint": "cicasgen_not_cert_policy_explicit_text_has_encoding_tag_in_set_30984",
+    "rule_id": 30984,
+    "standard": "RFC5280",
+    "section": "4.2.1.4",
+    "rule_text": "Conforming CAs MUST NOT encode explicitText as VisibleString or BMPString",
+    "fires": 3,
+    "certs_without_upstream": 1,
+    "independent": {
+      "NOCHECK": 1
+    }
+  },
+  {
+    "lint": "cicasgen_oid_list_count_in_set_policy_identifiers_29492",
+    "rule_id": 29492,
+    "standard": "CABF-BR",
+    "section": "7.1.2.7.9",
+    "rule_text": "Regardless of the order of `PolicyInformation` values, the Certificate Policies extension MUST contain exactly one Reserved Certificate Policy Identifier",
+    "fires": 3,
+    "certs_without_upstream": 1,
+    "independent": {
+      "NOCHECK": 1
+    }
+  },
+  {
+    "lint": "cicasgen_basic_constraints_cafalse_or_absent_29507",
+    "rule_id": 29507,
+    "standard": "CABF-BR",
+    "section": "7.1.2.8.4",
+    "rule_text": "certificates MUST NOT be CA certificates",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_basic_constraints_cafalse_or_absent_29508",
+    "rule_id": 29508,
+    "standard": "CABF-BR",
+    "section": "7.1.2.8.4",
+    "rule_text": "`cA` | MUST be FALSE",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_ext_key_usage_only_has_usages_in_set_29510",
+    "rule_id": 29510,
+    "standard": "CABF-BR",
+    "section": "7.1.2.8.5",
+    "rule_text": "`Any other value` | Presence | MUST NOT",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_not_crldphas_distribution_point_field_c_rlissuer_29285",
+    "rule_id": 29285,
+    "standard": "CABF-BR",
+    "section": "7.1.2.11.2",
+    "rule_text": "`cRLIssuer` | MUST NOT |",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_subject_common_name_fqdnor_wildcard_portion_matches_29566",
+    "rule_id": 29566,
+    "standard": "CABF-BR",
+    "section": "7.1.4.3",
+    "rule_text": "Specifically, all Domain Labels of the Fully-Qualified Domain Name or FQDN portion of the Wildcard Domain Name must be encoded as LDH Labels, and P-Labels MUST NOT be converted to their Unicode representation",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_access_description_method_present_aiamethod_31377",
+    "rule_id": 31377,
+    "standard": "RFC5280",
+    "section": "4.2.2.1",
+    "rule_text": "When the id-ad-caIssuers accessMethod is used, at least one instance SHOULD specify an accessLocation that is an HTTP [RFC2616] or LDAP [RFC4516] URI",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  },
+  {
+    "lint": "cicasgen_when_has_any_extension_and_has_any_extension_version_eq_31403",
+    "rule_id": 31403,
+    "standard": "RFC5280",
+    "section": "4.1.2.1",
+    "rule_text": "When extensions are used, as expected in this profile, version MUST be 3 (value is 2)",
+    "fires": 1,
+    "certs_without_upstream": 0,
+    "independent": {}
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "mode": "external_corpus_report",
+  "corpus": "/home/bernhard/projects/cicas/cicas_backend/experiments/new_lint_corpus_scan/inputs/ct_recent/certs",
+  "total_certs": 63327,
+  "independent_audit_scope": "no-upstream",
+  "independent_audit_findings": 167,
+  "new_lint_findings": 80021,
+  "strict_reportable_findings": 2,
+  "upstream_findings": 120838,
+  "new_lints_fired": 16,
+  "new_lint_certs": 48847,
+  "new_lint_no_upstream_findings": 167,
+  "new_lint_independent_audit": {
+    "NOCHECK": 165,
+    "CONFIRMED": 2
+  }
+}
