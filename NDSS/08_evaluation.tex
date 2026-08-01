@@ -16,7 +16,7 @@ certificates.
 \subsection{Experimental Setup}
 \label{subsec:setup}
 
-All experiments use GPT-5.4 as the only LLM, and the judges run at temperature~$0$ for reproducibility. We target
+All experiments use GPT-5.4 as the only LLM. The LLM judges are configured at temperature~$0$. We target
 RFC~5280 and the CA/Browser Forum Baseline Requirements because they are
 the two most authoritative and foundational Web PKI specifications for publicly
 trusted TLS certificates. RFC~5280 defines the base X.509 certificate profile that
@@ -37,16 +37,16 @@ mentions the same field. We accordingly label each rule full, partial, or none b
 whether such a lint implements it fully, partially, or not at all, and count only
 full as covered.
 
-In many lints, the description field in metadata is too terse for reliable
-semantic matching. We therefore first summarize each lint into a reverse IR in
-Stage-0. For every lint we pass three inputs to an offline summarizer
+Our matching criterion requires information beyond a metadata description
+alone. We therefore first summarize each lint into a reverse IR in Stage-0. For
+every lint we pass three inputs to an offline summarizer
 $M_{\mathrm{summ}}$ under a constrained prompt, namely the lint's Go source code,
 its Pass/Error test certificates, and its metadata fields description, citation,
 and severity. From these we recover the same IR schema our rules use, the core
 four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$ plus a
 one-sentence code\_summary. Three considerations motivate these inputs. First, the
 CheckApplies and Execute branches expose the concrete field and threshold the lint
-actually tests, which the metadata description usually omits. Second, the
+actually tests. Second, the
 Pass/Error samples fix the direction of the check, that is, which values it
 accepts and which it rejects, together with its applicable scope. Third, casting
 the lint into our four-tuple lets rule and lint be compared field by field.

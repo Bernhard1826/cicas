@@ -13,9 +13,12 @@ and synthesizes lint checks with explicit audit evidence on the same input.
 
 The accuracy of lintability classification, code-generation rate, and synonymy
 rate all depend on IR accuracy. SAIV audits and repairs IR outputs over multiple
-rounds, but current LLMs can still produce an incorrect IR in a single pass.
-Improving IR extraction and independently measuring its error therefore remain
-important future work.
+rounds, but the present evaluation does not separately quantify Layer~2
+extraction error. Improving IR extraction and measuring this error therefore
+remain important future work. We also do not measure run-to-run agreement of Layer~2 extraction
+or compare the pipeline with direct end-to-end LLM baselines. Accordingly, the
+study does not establish a comparative stability claim or the reproducibility of
+LLM-based extraction.
 
 DLEP's core mechanism is not inherently specific to PKI standards, but this
 study does not evaluate transfer to another standards ecosystem. Layer~1
@@ -57,11 +60,12 @@ rather than vague forms such as ``as described in [RFC~X]'' or ``see
 For maintainers of static certificate linters, we recommend an
 implementation-aligned code\_summary in the metadata description: one
 RFC~2119-style sentence that states the field path, assertion type, allowed or
-forbidden values, lint severity, and citation. Many existing lint descriptions
-are neither citations to the source specification nor precise summaries of the
-implementation. zlint's w\_ct\_sct\_policy\_count\_unsatisfied, for instance,
-is described only as ``Check if certificate has enough embedded SCTs to meet
-Apple CT Policy''. Consequently, coverage analysis requires the Stage~0
-code-summarization step in Algorithm~1 before a normative rule can be aligned
-with lint behavior at the IR level. This step adds engineering overhead and can
-introduce adjudication noise at the partial/none boundary.
+forbidden values, lint severity, and citation. zlint's
+w\_ct\_sct\_policy\_count\_unsatisfied, for instance, illustrates why a metadata
+description alone can be insufficient: it is described only as ``Check if
+certificate has enough embedded SCTs to meet Apple CT Policy'' and does not
+itself provide a source citation or a precise implementation summary. For this
+reason, our coverage analysis uses the Stage~0 code-summarization step in
+Algorithm~1 before a normative rule can be aligned with lint behavior at the IR
+level. This step adds engineering overhead and can introduce adjudication noise
+at the partial/none boundary.

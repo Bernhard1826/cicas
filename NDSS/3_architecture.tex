@@ -8,7 +8,7 @@ Web PKI normative sources serve as the input to the framework. Through keyword r
 
 First, the knowledge graph construction module handles scattered definitions, inherited requirements, and cross-document references by organizing the collected sources into a traceable source context for rule extraction.
 
-Second, the deterministic context retrieval module prevents the LLM from inventing unsupported context by supplying source-grounded context for each target section in a reproducible way.
+Second, the deterministic context retrieval module supplies source-grounded context for each target section through bounded traversal over explicit graph relations.
 
 Third, DLEP balances completeness and precision by first recalling candidate normative rules; for precise extraction, the second layer uses an LLM to convert them into a structured representation.
 

@@ -69,7 +69,7 @@ constraint & constraint value or pattern \\
 \end{tabularx}
 \end{table}
 
-To address the LLM controllability challenge, we design DLEP as a dual-layer extraction pipeline that preserves the LLM's semantic understanding while keeping the extraction process auditable.
+To limit the role of the LLM in extraction, we design DLEP as a dual-layer pipeline that separates deterministic candidate recall from schema-constrained semantic parsing.
 
 Layer~1 performs deterministic recall.
 Web PKI specifications commonly express normative requirements using the RFC~2119 keywords listed in Table~\ref{tab:rfc2119}.
@@ -89,10 +89,10 @@ Its core component, shown in Table~\ref{tab:ir-core}, is the four-tuple
 $\mathrm{IR} = \langle\text{subject}, \text{obligation}, \text{predicate}, \text{constraint}\rangle$,
 together with 29 extension fields summarized in Appendix~\ref{app:ir}.
 
-This IR-based design has three advantages over direct end-to-end generation of lint checks from raw text.
-First, citation, constraint, and obligation information are stored separately, improving traceability and conflict handling.
-Second, the IR serves as deterministic input to the four-condition lintability analysis in \S\ref{sec:method-lintability}, making lintability decisions reproducible rather than model-dependent.
-Third, once a rule is determined to be lintable, generating static lint checks from the IR is more stable and interpretable because key elements such as field paths, assertion types, and constraint values are already explicitly structured.
+The IR design provides three properties used by downstream stages.
+First, citation, constraint, and obligation information are stored separately, supporting traceability and conflict handling.
+Second, the IR serves as the fixed input to the four-condition lintability analysis in \S\ref{sec:method-lintability}, making that analysis deterministic for a given IR.
+Third, once a rule is determined to be lintable, field paths, assertion types, and constraint values are explicit inputs to DSL-tree synthesis and inspection.
 
 To constrain LLM behavior, Layer~2 enforces a predefined schema and category set.
 Every extracted rule must map to explicit source text, and certificate field hierarchies must follow the ASN.1 path definitions in RFC~5280.

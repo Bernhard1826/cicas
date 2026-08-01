@@ -3,19 +3,13 @@
 \label{sec:codegen}
 %-------------------------------------------------------------------------------
 
-Generating checking code directly with a large language model faces two
-inherent difficulties. The first is hallucination. The model may
-misspell a field name as another field that happens to exist but is
-semantically unrelated, or introduce a unit error in an OID. The second is
-output instability. The same code-generation prompt often produces
-different outputs across calls, with no guarantee that the result will compile or
-be logically correct. To contain this uncertainty, we confine a rule's code body
-to a finite, closed DSL-tree space $\Tv$. Each rule's code body can only be a
-tree in that space, which is then rendered into Go code by a deterministic
-function. The deterministic main path avoids unconstrained code emission, and
-the restricted LLM fallback is bounded to the same closed space and gated by
-``render and pass go build,'' so any out-of-space or non-compiling output is
-rejected rather than shipped.
+Our code-generation design does not emit Go code directly from an unrestricted
+LLM response. Instead, it confines a rule's code body to a finite, closed
+DSL-tree space $\Tv$. Each accepted code body is a tree in that space, which a
+deterministic function renders into Go code. The generator first attempts
+deterministic synthesis. When that path yields no tree, the LLM fallback may
+propose a tree from the same closed space. Its output must parse as an in-space
+tree and pass ``render and go build'' before it can be shipped.
 Figure~\ref{fig:codegen-pipeline} illustrates the whole
 pipeline on a single rule---CA certificates must assert the keyCertSign
 key-usage bit---tracing it from the filled IR fields, through the DSL tree,
