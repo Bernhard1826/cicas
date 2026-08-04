@@ -14,7 +14,8 @@ the representation rather than from keyword heuristics. Restricted code
 generation maps supported rules to a closed, typed DSL tree that a deterministic
 renderer converts to Go lint code, with a build-gated LLM fallback for unresolved
 cases. On RFC~5280 and the CA/Browser Forum Baseline Requirements, the framework
-recalls 2,080 candidate rules, of which 1,567 are genuine normative rules. Only
+recalls 2,080 candidate rules and retains 1,567 as normative rules through its
+adjudication procedure. Only
 260 (16.6\%) are lintable as single-certificate static checks; existing zlint
 lints fully cover 165. For the remaining 95 rules, the generator produces 93
 compilable lints, 79 of which pass a unanimous code--specification synonymy gate.

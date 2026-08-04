@@ -35,13 +35,13 @@ We design a pipeline that automatically extracts lintable normative rules from W
 
 To address the first challenge, we build the Dual Layer Extraction Pipeline, abbreviated DLEP. We first construct a knowledge graph over Web PKI normative sources---representing sections, definitions, certificate fields, and cross-document inheritance relations---and design a deterministic retrieval mechanism that assembles context via bounded traversal over explicit reference edges, giving traceable context for extraction. DLEP then extracts rules in two layers. Layer~1 uses deterministic rule recall, namely RFC~2119 keyword filtering and regex matching, to surface candidate rules, and Layer~2 uses an LLM for constrained semantic parsing into a JSON-serialized Intermediate Representation, abbreviated IR. This confines the LLM to schema-bounded interpretation of source-grounded context. The resulting IR includes fields for source spans, evidence text, and retrieved context nodes.
 
-To address the second challenge, we formalize lintability as a four-condition framework in \S\ref{sec:method-lintability}, evaluated over IR attributes, turning the lintability decision, given a fixed IR, into a traceable deterministic computation rather than a keyword heuristic.
+To address the second challenge, we operationalize lintability through a four-condition framework in \S\ref{sec:method-lintability}, evaluated over IR attributes, turning the lintability decision, given a fixed IR, into a traceable deterministic computation rather than a keyword heuristic.
 
 To address the third challenge, we restrict code generation to a finite, closed DSL-tree space. Each rule's checking logic is a tree in this space that a deterministic function renders into Go lint code. The generator first attempts deterministic synthesis; when that path yields no tree, an LLM fallback may propose a tree from the same closed space. Every candidate is gated by ``render and pass go build,'' so out-of-space and non-compiling candidates are rejected before shipping.
 
 \noindent \textbf{Evaluation and Analysis.}
 We evaluate the full pipeline on the two standard sources RFC~5280 and CABF~BR, using GPT-5.4 as the LLM.
-Of 2,080 keyword-recalled candidates, 1,567 are genuine normative rules, of which 260, or 16.6\%, are lintable as single-certificate static checks; existing zlint lints fully cover 165 of them, leaving 95, or 36.5\%, uncovered and revealing a substantial gap between deployed tooling and the normative specifications.
+Of 2,080 keyword-recalled candidates, 1,567 are retained as normative rules by the pipeline's adjudication procedure, of which 260, or 16.6\%, are lintable as single-certificate static checks; existing zlint lints fully cover 165 of them, leaving 95, or 36.5\%, uncovered and revealing a substantial gap between deployed tooling and the normative specifications.
 Over these 95 uncovered rules, we report the code-generation rate using the
 GENERIC-participating count: 77/95, or 81.1\%, consisting of 73/95, or 76.8\%,
 GENERIC-only generated lints and 4/95, or 4.2\%, lints that mix GENERIC and
@@ -58,6 +58,6 @@ findings missed by native zlint.
 This paper makes three contributions.
 \begin{itemize}
     \item We design DLEP, a dual-layer pipeline that automatically extracts normative rules from natural-language Web PKI sources, confines the LLM to schema-bounded semantic parsing, and produces source-linked IR records for inspection.
-    \item We propose a four-condition framework that formalizes lintability and determines whether an extracted normative rule can be enforced as a static certificate lint check.
+    \item We propose a four-condition operational criterion for determining whether an extracted normative rule can be enforced as a static certificate lint check.
     \item We develop a restricted code-generation method that confines each rule's checking logic to a finite, closed DSL-tree space, yielding deterministic lint-code rendering with explicit audit evidence and a build-gated LLM fallback.
 \end{itemize}

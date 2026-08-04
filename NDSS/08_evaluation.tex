@@ -187,7 +187,25 @@ checked under \CodeEqIR{} by certificate-level execution verification are
 reported only as collateral IR-level evidence. \CodeEqIR{} is model-independent and
 deterministic, yet it does not by itself imply \CodeEqSpec, so the paper-facing
 synonymy rate is taken solely from the final emitted code judged against the
-source rule.
+source rule. The primary causes of the 14 rejected generated lints are
+summarized in Table~\ref{tab:codegen-causes}.
+
+\begin{table}[tb]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\caption{Primary causes of the 14 generated lints rejected by the synonymy gate.}
+\label{tab:codegen-causes}
+\begin{tabularx}{\columnwidth}{@{}X r X@{}}
+\toprule
+Cause & Count & Main issue \\
+\midrule
+IR/context loss & 6 & Missing table, profile, obligation, or field context. \\
+DSL/atom gap & 2 & No sound reserved-IP or non-vacuous onion-name atom. \\
+Semantic-gate ambiguity & 6 & Conservative or table-context judgments. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 The first-layer quality signal is G1 conservation, stated as
 Theorem~\ref{thm:recall} in \S\ref{subsec:targets}. For the denominator accounting above,

@@ -290,7 +290,7 @@ DSL code space $\Tv$ of \S\ref{sec:codegen}, and $\phi_V$ is the three-layer sem
 \S\ref{sec:codegen}. $\phi_L$ is the
 single-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_L$ of
 Algorithm~\ref{alg:saiv} is its set-level lift, which strips the noise $\RN$ from
-$\Rkw$ and sorts the remaining genuine rules into lintable $\RL$ and not-lintable
+$\Rkw$ and sorts the remaining candidates retained as normative rules into lintable $\RL$ and not-lintable
 $\RU$, giving the partition $(\RN, \RL, \RU)$. The loop is driven by the
 computable signals these modules produce.
 
@@ -324,7 +324,8 @@ determination:
 \end{theorem}
 \noindent where $\mathcal{D}$ is the standard-document corpus, written D in
 ASCII inside the Algorithm~\ref{alg:saiv} listing, $\RN$ is noise that contains
-RFC~2119 keywords but not genuine rules, $\RL$ the lintable rules, and $\RU$
+RFC~2119 keyword matches rejected as non-rules by the adjudication procedure,
+$\RL$ the lintable rules, and $\RU$
 the not-lintable rules. The lintable class $\RL$ is further split by ``whether
 it is already implemented by an existing external lint tool'':
 \begin{equation}\label{eq:split}
@@ -425,9 +426,10 @@ S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention, \S\ref{subsec:algo} &
 Table~\ref{tab:saiv-objectives} gives only the item-to-repair-direction correspondence; the
 concrete repair operations and their notation are defined in
 \S\ref{subsec:repair}.
-\textsc{RouteRepair} in Algorithm~\ref{alg:saiv} is this deterministic routing
-step: it maps the residual and lintability-check signals to one repair operation
-in $\{\mathcal{P}_R,\mathcal{P}_L,\mathcal{P}_G,\mathcal{P}_V\}$.
+\textsc{RouteRepair} in Algorithm~\ref{alg:saiv} denotes the operator-guided
+routing step that uses the residuals, lintability-check signals, and failure
+traces to select the next applicable repair direction from
+$\{\mathcal{P}_R,\mathcal{P}_L,\mathcal{P}_G,\mathcal{P}_V\}$.
 
 \subsection{Repair Operations}
 \label{subsec:repair}
