@@ -22,9 +22,10 @@ study does not evaluate transfer to another normative-source ecosystem. Layer~1
 currently targets RFC~2119 keywords such as MUST, SHALL, SHOULD, and MAY. Its
 regular expressions could be adapted to other formal deontic vocabularies, such
 as the ISO ``shall''/``should''/``may'' triple and equivalent forms in other
-languages. Such transfer would require three properties: (1) recognizable formal
-deontic keywords; (2) structured, machine-parsable constraint targets, such as
-certificates, protocol messages, or configuration files; and (3) a document
+languages. Such transfer would require three properties. First, the vocabulary
+must supply recognizable formal deontic keywords. Second, the constraint targets
+must be structured and machine-parsable, such as certificates, protocol
+messages, or configuration files. Third, the document must have a
 hierarchy that supports graph construction and scope-inheritance modeling.
 
 Code generation also depends on the regularity of the target lint framework.
@@ -32,7 +33,7 @@ It works for zlint because many checks are small predicates over a parsed
 certificate and can be represented as typed DSL trees. Lints with idiosyncratic
 control flow, global state, multi-artifact reasoning, or semantics outside
 reusable atoms require DSL extensions. NON\_GENERIC atoms make this boundary
-concrete: they improve coverage but encode hand-curated domain knowledge. A new
+concrete, since they improve coverage but encode hand-curated domain knowledge. A new
 ecosystem would need specialized atoms, renderers, and validation tests before
 similar generation rates could be expected.
 
@@ -50,12 +51,13 @@ certificate field explicitly, where possible using ASN.1-derived paths such as
 tbsCertificate.\allowbreak extensions.\allowbreak subjectAltName.\allowbreak
 dNSName rather than vague terms such as ``the SAN extension'' or pronouns such
 as ``it''. Third, cross-document references should use a canonical form such as
-``[verb] [document] Section~[section] (with step or parameter where applicable)''
+``[verb] [document] Section~[section]'', extended with the step or parameter
+where applicable,
 rather than vague forms such as ``as described in [RFC~X]'' or ``see
 [RFC~X]''. This form makes each reference easier to map to a typed graph edge.
 
 For maintainers of certificate linters, we recommend an
-implementation-aligned code\_summary in the metadata description: one
+implementation-aligned code\_summary in the metadata description, namely one
 RFC~2119-style sentence that states the field path, assertion type, allowed or
 forbidden values, lint severity, and citation. Many existing lint descriptions
 are neither citations to the normative source nor precise summaries of the

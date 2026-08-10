@@ -9,7 +9,7 @@ DSL-tree space $\Tv$. Each accepted code body is a tree in that space, which a
 deterministic function renders into Go code. The generator first attempts
 deterministic synthesis. When that path yields no tree, the LLM fallback may
 propose a tree from the same closed space. Its output must parse as an in-space
-tree and pass ``render and go build'' before it enters semantic verification.
+tree, render, and pass go build before it enters semantic verification.
 Figure~\ref{fig:codegen-pipeline} illustrates the whole
 pipeline on a single normative rule---CA certificates must assert the keyCertSign
 key-usage bit---tracing it from the filled IR fields, through the DSL tree,
@@ -31,9 +31,10 @@ deterministically rendered Go checking code.
 
 An atomic template is the smallest unit of a certificate lint.
 Most certificate lints in PKI are logical combinations of a
-few atomic templates---``whether an extension is present,'' ``whether a
-field equals a constant,'' ``whether every element of a list matches a
-pattern''---and combining such atomic templates with ``and/or/not'' can
+few atomic templates that test whether an extension is present, whether a
+field equals a constant, or whether every element of a list matches a
+pattern, and combining such atomic templates with conjunction, disjunction, and
+negation can
 characterize most static constraints. The abstract syntax of the code DSL is:
 \begin{equation}\label{eq:grammar}
   \mathcal{T} \;::=\; a(\bar{v}) \;\mid\; \neg\, \mathcal{T} \;\mid\;
@@ -48,8 +49,8 @@ the propositional-logic combinators. The code body of a lint rule is modeled as
 an ordered pair $(p, q) \in \mathcal{T}_\varepsilon \times \mathcal{T}$, where
 $q \in \mathcal{T}$ is the main assertion and $p \in \mathcal{T}_\varepsilon =
 \mathcal{T} \cup \{\varepsilon\}$ is an optional precondition. Here $\varepsilon$ is
-the ``no-precondition'' placeholder, a normal value distinct from the $\bot$
-denoting ``synthesis failure'' in the table of \S\ref{subsec:synth}. In the
+the placeholder for an absent precondition, a normal value distinct from the $\bot$
+that denotes synthesis failure in the table of \S\ref{subsec:synth}. In the
 equation below, $c$ is a single certificate, and $\lVert u \rVert(c) \in
 \{\mathrm{true}, \mathrm{false}\}$ denotes the Boolean result of evaluating a
 DSL tree or precondition $u$ on $c$; atomic templates evaluate by their semantics, and
@@ -74,8 +75,8 @@ MUST-class or SHOULD-class, so $\mathrm{Severity}(r) \in \{\mathrm{Error},
 \mathrm{Warn}\}$.
 
 \textbf{The IR fills the atomic template's parameter slots.} Selecting an atomic
-template fixes only ``which check to use''; one still needs ``whom to check and
-against what''---and these parameter values come precisely from the current
+template fixes only which check to use; one still needs to know what to check and
+against what value, and these parameter values come precisely from the current
 normative rule's IR. The IR's subject, the certificate field path given by the
 field resolver such as subjectAltName.dNSName, fills the atomic
 template's field slot, and the IR's constraint, a constraint value or
@@ -101,7 +102,8 @@ of the constrained field.
 
 \S\ref{subsec:atoms} described how atomic templates and IR filling place the
 IR's subject and constraint into an atomic template's parameter slots---but the
-IR provides only ``which field this normative rule actually constrains, and what value,''
+IR provides only the field that a normative rule restricts and the value it
+restricts that field to,
 without constraining the legal type of those values. If the subject path
 in the IR points to a nonexistent field, or a string is placed into a slot that
 requires an integer, a structurally legal but semantically misaligned tree can
@@ -152,14 +154,16 @@ Fallback}
 \label{subsec:synth}
 
 The preceding discussion described how the IR filling of \S\ref{subsec:atoms} and the
-parameter closure of \S\ref{subsec:tv} confine a DSL tree to $\Tv$, but ``which
-atomic template carries which IR predicate'' and ``whether the IR's subject and
-constraint can both be filled into the chosen atomic template'' still require
-synthesis. This subsection gives the implementation of $\phi_G$. The generator
+parameter closure of \S\ref{subsec:tv} confine a DSL tree to $\Tv$, but two
+decisions still require synthesis. The first is which atomic template carries
+which IR predicate. The second is whether the IR's subject and
+constraint can both be filled into the chosen atomic template.
+This subsection gives the implementation of $\phi_G$. The generator
 first attempts deterministic synthesis and triggers LLM synthesis only when it
-returns $\bot$. Here $\bot$ denotes ``synthesis failure / no result,'' distinct
-from the normal value $\varepsilon$ denoting ``no precondition'' in
-\S\ref{subsec:atoms}. Both paths use ``render and pass go build'' as
+returns $\bot$. Here $\bot$ denotes synthesis failure, meaning no result at all,
+and is distinct
+from the normal value $\varepsilon$, which denotes an absent precondition in
+\S\ref{subsec:atoms}. Both paths use rendering and passing go build as
 the acceptance gate---even if deterministic synthesis returns a tree, that is
 not enough; it must actually compile, otherwise it is treated as unresolved and
 passed to LLM synthesis. Both paths are constrained by the same set of
@@ -170,7 +174,7 @@ normative rule, which is the job of the verification chain of
 \textbf{Deterministic main path.} When an IR predicate can select an atomic
 template via $\mu$ and its subject and constraint can fill that template's
 parameter slots, the generator deterministically derives a DSL tree using
-predefined rules. Here ``derive'' means constructing a DSL tree from the IR step by
+predefined rules. Here, deriving means constructing a DSL tree from the IR step by
 step by fixed rules, with no LLM call throughout. Most lintable normative rules in our
 study are covered by this deterministic path.
 
@@ -178,10 +182,10 @@ study are covered by this deterministic path.
 the generator switches to LLM synthesis. The model receives the normative-rule context,
 the structured IR, the candidate atomic-template set, and a readable enumeration
 and signature table of $\mathcal{V}$ and $\mathcal{A}$. It
-outputs only one of two results: a serialized DSL tree or an explicit
-``no-template'' abstention marker $\bot_{\mathrm{NT}}$. Both $\bot_{\mathrm{NT}}$ and
-synthesis-failure $\bot$ are ``no usable result,'' so they share the $\bot$
-form, whereas $\varepsilon$ denotes the normal ``no precondition.'' The raw LLM
+outputs only one of two results, either a serialized DSL tree or an explicit
+no-template abstention marker $\bot_{\mathrm{NT}}$. Both $\bot_{\mathrm{NT}}$ and
+synthesis-failure $\bot$ report that no usable result was produced, so they share the $\bot$
+form, whereas $\varepsilon$ denotes the normal case of an absent precondition. The raw LLM
 output is first validated by the parsing function $\eta$, which parses it into
 a legal DSL tree $t \in \Tv$, a type error, or $\bot_{\mathrm{NT}}$, and any
 identifier outside $\mathcal{V}/\mathcal{A}$ is rejected here; a passing tree is
@@ -200,9 +204,9 @@ fine.
 can be traced back to the normative source.
 
 \textbf{Layer~B, semantic equivalence of the code-behavior summary.} It turns
-the cross-modal judgment ``does the code implement the
-normative rule'' into the same-modal judgment ``are two natural-language
-sentences semantically equivalent.'' Following $\smech$ of \S\ref{subsec:mech}, with the
+the cross-modal judgment of whether the code implements the
+normative rule into the same-modal judgment of whether two natural-language
+sentences are semantically equivalent. Following $\smech$ of \S\ref{subsec:mech}, with the
 phrase dictionary in Appendix~\ref{app:sigma}, the code is translated into a
 code\_summary, which is then judged against the Description.
 

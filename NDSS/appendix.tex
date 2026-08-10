@@ -6,10 +6,10 @@
 \label{app:kg}
 
 The Deterministic Context Retrieval procedure of \S\ref{sec:method-graphrag} builds context around a set of
-core relations and explicitly distinguishes ``relations admissible into
-retrieval'' from ``relations used only in post-processing''
+core relations and explicitly distinguishes the relations admissible into
+retrieval from the relations used only in post-processing,
 as shown in Table~\ref{tab:kgrel}. The retrieval stage
-obeys four constraints, GR-1 through GR-4: no inferred normative rule may enter
+obeys four constraints, GR-1 through GR-4. No inferred normative rule may enter
 retrieval; only raw normative-source nodes may enter retrieval; no inferential
 relation may enter retrieval; and all context must be traceable to a
 normative source.
@@ -34,10 +34,10 @@ aux & AFFECTS & link from a normative rule to the concrete certificate field it 
   used by the field resolver & No \\
 aux & DERIVED FROM & provenance link from a derived normative rule to its source section
   & No \\
-inferred & OVERRIDES & a more specific normative rule overrides a general one (produced by
-  the rule engine) & No \\
-inferred & CONFLICTS WITH & potential conflict between normative rules (produced by the
-  rule engine) & No \\
+inferred & OVERRIDES & a more specific normative rule overrides a general one, produced by
+  the rule engine & No \\
+inferred & CONFLICTS WITH & potential conflict between normative rules, produced by the
+  rule engine & No \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -87,7 +87,7 @@ context\_nodes & key ext. & definition, field metadata, or cited
 
 \textbf{The seven components of the vocabulary $\mathcal{V}$.} $\mathcal{V}$ is
 the disjoint union of seven finite sets
-shown in Table~\ref{tab:vocab}: certificate fields $\mathcal{F}_{\mathrm{cert}}$,
+shown in Table~\ref{tab:vocab}, namely certificate fields $\mathcal{F}_{\mathrm{cert}}$,
 DN fields $\mathcal{F}_{\mathrm{dn}}$ over the Subject and Issuer names, OID
 constants $\mathcal{O}$, including zlint util.* extension and algorithm OIDs
 together with well-known CABF and RFC OIDs, KeyUsage bits $\mathcal{B}_{\mathrm{KU}}$,
@@ -167,7 +167,7 @@ VI Special structure & DomainComponentOrdered & $()$ &
 There are three combinators $\{\neg, \wedge, \vee\}$, with semantics following
 classical propositional logic.
 
-\textbf{Generality grading of atomic templates: GENERIC and NON\_GENERIC.} Atomic
+\textbf{Generality grading of atomic templates, GENERIC and NON\_GENERIC.} Atomic
 templates are graded by semantic reuse. An atomic template is GENERIC if and only if it expresses a
 general PKI certificate-attribute judgment reusable across multiple normative rules and is
 not tied to a corpus-specific OID, single clause, or one-off
@@ -248,24 +248,23 @@ SubtreeIPListAny\-HasOctetCount\-AndNotAllZero(F, n) & ``the
 \end{tabularx}
 \end{table}
 
-Combinator reduction: $\smech(\neg t) = $ ``NOT ($\smech(t)$)'';
+The combinator reduction gives $\smech(\neg t) = $ ``NOT ($\smech(t)$)'';
 $\smech(t_1 \wedge t_2) = $ ``($\smech(t_1)$) AND ($\smech(t_2)$)''; $\vee$
 likewise; the atomic-template base case $\smech(a) = \mathcal{M}(a)$. For a
-conditional pair $(p,q)$: when $p = \neg(p')$, it outputs ``WHEN NOT
+conditional pair $(p,q)$, when $p = \neg(p')$, it outputs ``WHEN NOT
 ($\smech(p')$), THEN $\smech(q)$'', the NEG-PRE template for a negated
 precondition; otherwise it outputs ``WHEN ($\smech(p)$), THEN $\smech(q)$''; and
 when $p = \varepsilon$ it outputs the single sentence $\smech(q)$.
 
 %-------------------------------------------------------------------------------
-% Stage-Aware Iterative Verification, abbreviated SAIV --- moved out of the main body and
+% Stage-Aware Iterative Verification (SAIV) --- moved out of the main body and
 % merged inline here; previously the separate file 07_saiv.tex, now deleted.
 %-------------------------------------------------------------------------------
-\section{Stage-Aware Iterative Verification: SAIV}
+\section{Stage-Aware Iterative Verification (SAIV)}
 \label{sec:saiv}
 
 To coordinate the modules and safeguard their output quality without manual
-ground truth, we propose the Stage-Aware Iterative Verification framework,
-abbreviated SAIV.
+ground truth, we propose the Stage-Aware Iterative Verification (SAIV) framework.
 The basic idea is to predefine two quantifiable optimization
 objectives, measure the gap between the current and ideal states by each
 objective's computable residual, and when a residual has not reached its
@@ -313,7 +312,7 @@ The subsequent subsections revolve around the two objectives, while the two
 checks gate the labels those objectives consume.
 
 \medskip
-\noindent\textbf{G1: recall completeness.}
+\noindent\textbf{G1, recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
 If the lintability partition $\psi_L$ assigns each keyword-recalled candidate in
 $\Rkw(\mathcal{D})$ to exactly one of the three classes---noise, lintable, and
@@ -327,8 +326,8 @@ determination:
 ASCII inside the Algorithm~\ref{alg:saiv} listing, $\RN$ is noise that contains
 RFC~2119 keyword matches rejected as noise by the adjudication procedure,
 $\RL$ the lintable normative rules, and $\RU$
-the not-lintable normative rules. The lintable class $\RL$ is further split by ``whether
-it is already implemented by an existing external lint tool'':
+the not-lintable normative rules. The lintable class $\RL$ is further split by whether
+a normative rule is already implemented by an existing external lint tool,
 \begin{equation}\label{eq:split}
   |\RL| = |\RLcov| + |\RLunc|
 \end{equation}
@@ -337,7 +336,7 @@ not-yet-covered normative rules. The first identity~\eqref{eq:cons} is total con
 from recall to lintability determination, and the second~\eqref{eq:split} splits the
 lintable set so the later objectives can be pursued separately. The uncovered
 subset $\RLunc$ is the most important observation domain for generation that
-``fills the ecosystem gap,'' while the covered subset $\RLcov$ provides external
+fills the ecosystem gap, while the covered subset $\RLcov$ provides external
 evidence of reverse lintability. The residual is the recall-conservation
 residual $\Lrec$, a symmetric normalization of the gap in
 Theorem~\ref{thm:recall}, computable without manual ground truth and currently
@@ -348,7 +347,7 @@ closed, as shown in Table~\ref{tab:codegen-results}:
 \end{equation}
 
 \medskip
-\noindent\textbf{G2: code--normative-rule semantic equivalence for uncovered normative rules.} For the
+\noindent\textbf{G2, code--normative-rule semantic equivalence for uncovered normative rules.} For the
 uncovered subset $\RLunc$, the code summary $\smech(t_r)$, the code\_summary of
 normative rule $r$'s DSL tree $t_r$ computed by $\smech$ of \S\ref{subsec:mech}, is
 required to be semantically equivalent to the normative rule text.
@@ -362,7 +361,7 @@ $\equiv 1$ in the fixed zlint shell, so it drops out:
 \end{equation}
 
 \medskip
-\noindent\textbf{S1: reverse lintability of covered normative rules.} The first
+\noindent\textbf{S1, reverse lintability of covered normative rules.} The first
 auxiliary check audits the not-lintable verdict. If a normative rule has a corresponding
 implementation in a lint tool such as zlint, it must be lintable, so the check
 counts the violations $\Nviol$ and is cleared when $\Nviol = 0$. $\Nviol$ is
@@ -372,7 +371,7 @@ such hit is adjudicated as either a $\phi_L$ false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
 \medskip
-\noindent\textbf{S2: synthesizability of lintable normative rules.} The dual check
+\noindent\textbf{S2, synthesizability of lintable normative rules.} The dual check
 audits the lintable verdict. A normative rule judged lintable should be synthesizable
 within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
 normative rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
@@ -444,18 +443,18 @@ operation is selected from the signals above, and a repair is accepted only
 when the metric decreases.
 
 \begin{itemize}
-\item \textbf{IR-content repair $\mathcal{P}_R$}: changes the extraction prompt
+\item \textbf{IR-content repair $\mathcal{P}_R$} changes the extraction prompt
   and re-runs IR extraction when the source-level meaning captured by the IR is
   wrong. The LLM may return a corrected IR, denoted REPAIR(ir'), or
   abstain with NO\_FIX.
-\item \textbf{Lintability repair $\mathcal{P}_L$}: is the same re-extraction
+\item \textbf{Lintability repair $\mathcal{P}_L$} is the same re-extraction
   mechanism restricted to the lintability-gate IR fields---obligation,
   assertion\_subject, enforcement\_phase, and rule\_category. It is invoked when
   S1 indicates that a not-lintable normative rule is actually covered by an existing lint,
   or when S2 indicates that a supposedly lintable normative rule may not be expressible as
   a certificate lint. After re-extraction, SAIV re-runs
   $\phi_L$ and updates the set-level partition $\psi_L$.
-\item \textbf{Generation repair $\mathcal{P}_G$}: A missing template routes to the
+\item \textbf{Generation repair $\mathcal{P}_G$} routes by cause. A missing template routes to the
   offline vocabulary-expansion channel $\mathcal{P}_A$, which adds a new atomic
   template to $\mathcal{A}$ after certificate-level execution verification; a wrong IR field, such as too coarse a granularity,
   routes to IR-content repair $\mathcal{P}_R$; and a normative rule that proves not to be lintable
@@ -463,7 +462,7 @@ when the metric decreases.
   lintability label are all correct but the meaning is too complex to express
   within $\Tv$, the normative rule is kept as a logged expressiveness gap rather than
   repaired as code.
-\item \textbf{Verification repair $\mathcal{P}_V$}: enlarges the semantic-equivalence
+\item \textbf{Verification repair $\mathcal{P}_V$} enlarges the semantic-equivalence
   judgment's semantic neighborhood, such as negation/affirmation interchange or
   one-to-many decomposition, or corrects the inconsistency between the two
   verdict sources.
@@ -476,10 +475,10 @@ Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
-\textbf{Termination conditions}: the loop terminates when $\Ltot < \theta$ and the two
+\textbf{Termination conditions.} The loop terminates when $\Ltot < \theta$ and the two
 lintability checks clear, when it reaches the maximum iteration cap $K$, or when no residual
 decreases in a round. If every
 accepted stage-repair operation is monotone, reducing that stage's error or
 leaving it unchanged, then $\Ltot$ is non-increasing each round; the actual
-system uses a ``stop when no decrease'' policy together with the hard cap $K$,
+system stops as soon as no residual decreases, together with the hard cap $K$,
 so the loop terminates in finitely many rounds.

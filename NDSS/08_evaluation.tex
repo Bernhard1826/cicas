@@ -121,7 +121,7 @@ repeating the keyword locally. The remaining rows measure generation,
 compilation, and final code--normative-rule semantic equivalence. The
 reported generation rate is the fraction of uncovered normative rules for which the
 restricted generator emits a compilable lint containing at least one GENERIC atom
-under the ``render and pass go build'' gate. NON\_GENERIC-only trees are excluded
+under a gate that requires the lint to render and pass go build. NON\_GENERIC-only trees are excluded
 from this rate. The semantic-equivalence
 rate is the fraction of those GENERIC-participating lints whose final emitted code is
 unanimously judged semantically equivalent to the normative rule text, the Layer~B judgment of
@@ -138,13 +138,13 @@ keyword-occurrence counts and denominator accounting over RFC~5280 and CABF BR.}
 Metric & Count & Scope / notes \\
 \midrule
 Total keyword occurrences in normative sources & 1804 &
-  raw capitalized RFC~2119 keyword occurrences in normative sources:
+  raw capitalized RFC~2119 keyword occurrences in normative sources, made up of
   RFC~5280 542 $+$ CABF~BR~v2.2.6 1262; not itself a normative-rule count \\
 Total recalled candidate records & 2080 &
   Layer-1 candidate records after direct keyword matching, inherited-obligation
   expansion, and pattern matching; RFC~5280 640 $+$ CABF BR 1440 \\
 lintable, single-certificate observable & 260 &
-  current re-extraction / re-adjudication: CABF 175 $+$ RFC~5280 85; the negative
+  current re-extraction and re-adjudication give CABF 175 $+$ RFC~5280 85; the negative
   gate excludes process, cross-certificate, runtime, external-semantic, and
   MAY/OPTIONAL classes; normative rules for CRL documents are outside this scope \\
 zlint coverage, full by existing cognate lint & 165 &
@@ -153,8 +153,8 @@ uncovered lintable, code-generation domain & 95 &
   enters the current code-generation domain, computed as $260 - 165$; CABF 81 $+$ RFC~5280 14, the
   target set of downstream code generation $\RLunc$ \\
 reported compilable lint, GENERIC-participating & 76 &
-  generated trees containing at least one GENERIC atom and passing ``render and
-  pass go build''; code-generation rate $= 76/95 = 80.0\%$; this consists of
+  generated trees containing at least one GENERIC atom and rendering and
+  passing go build; code-generation rate $= 76/95 = 80.0\%$; this consists of
   72/95, or 75.8\%, GENERIC-only and 4/95, or 4.2\%, GENERIC $+$ NON\_GENERIC
   generated trees \\
 NON\_GENERIC-only compilable lints & 17 &
@@ -165,13 +165,13 @@ cannot generate, no tree / not compiling / abstain & 2 &
   lintability check in \S\ref{sec:saiv} reads both as $\Tv$-expressiveness gaps,
   not $\phi_L$ false positives \\
 final accepted lint, GENERIC-participating under \CodeEqRule & 64 &
-  the final registered zlint lint (CheckApplies $+$ Execute $+$
-  severity/date metadata) judged against the original normative rule text and context;
+  the final registered zlint lint, comprising CheckApplies, Execute, and
+  severity/date metadata, judged against the original normative rule text and context;
   64 of the 76 GENERIC-participating lints pass the unanimous semantic-equivalence gate,
   giving $64/76 = 84.2\%$; together with 15 NON\_GENERIC-only lints, the final accepted
   lint set contains 79 lints \\
 rejected by the final semantic-equivalence gate & 14 &
-  generated but not included in the final accepted lint set: 9 DOES\_NOT\_EXPRESS,
+  generated but not included in the final accepted lint set, comprising 9 DOES\_NOT\_EXPRESS,
   3 non-unanimous EXPRESS diagnostics, and 2 uncertain \\
 certificate-level execution verification \CodeEqIR, supporting &
   35 &
@@ -238,7 +238,7 @@ maintainers~\cite{zlint-mapping-sheet}. This table is manually annotated for eac
 normative rule by zlint experts as to whether it can be expressed by a certificate lint,
 and the annotators are unaware of our extractor, IR, and lintability determination
 module. Each Yes/No label in the table corresponds exactly to our joint output
-``extract this normative rule $+$ determine whether it is lintable'' for the same normative rule, and
+of extracting that normative rule and determining whether it is lintable, and
 agreement indicates that our normative-rule extraction and lintability determination match
 human experts. The table covers two versions, BR~1.4.8~\cite{cabf-br148-md} and
 BR~2.0.2~\cite{cabf-br202-md}, compared version-for-version against our

@@ -81,7 +81,7 @@ Pass~2 detects nested structures so subordinate normative rules inherit the pare
 Pass~3 performs Non-Canonical Recovery.
 
 Layer~2 performs controlled semantic parsing using an LLM, but restricts the model to a constrained language-understanding role.
-Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized intermediate representation, abbreviated IR, while all normative reasoning is deferred to later deterministic stages.
+Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized intermediate representation (IR), while all normative reasoning is deferred to later deterministic stages.
 
 The IR decouples semantic extraction from downstream tasks, allowing the same extraction result to support multiple uses, as shown in Fig.~\ref{fig:ir-downstream}.
 Each IR record is serialized as a JSON object with 33 fields.
@@ -101,8 +101,9 @@ Appendix~\ref{app:ir} provides the category definitions, correction rules, and t
 
 \begin{figure}[tb]
   \centering
-  \paperfig{figures/fig02_ir_downstream.png}{IR-driven ``extract once, apply
-    many'' architecture.}
-  \caption{IR-driven ``extract once, apply many'' architecture.}
+  \paperfig{figures/fig02_ir_downstream.png}{IR-driven architecture in which a
+    single extraction pass feeds every downstream stage.}
+  \caption{IR-driven architecture in which a single extraction pass feeds every
+    downstream stage.}
   \label{fig:ir-downstream}
 \end{figure}

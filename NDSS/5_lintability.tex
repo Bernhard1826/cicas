@@ -27,7 +27,7 @@ Before generating code, we determine the lintability of each normative rule, nam
 whether it admits such a certificate lint. Rather than asking the LLM to make
 this judgment directly, we compute it from the IR that the LLM has already
 produced. Three observations motivate this design. First, our operational
-criterion uses four pieces of information: the deontic strength of the
+criterion uses four pieces of information, namely the deontic strength of the
 obligation, who is obligated, when the obligation applies, and what type of normative rule
 it is. Second, each of the four can be encoded as
 a single IR field with a small, closed value set, so the LLM performs a
