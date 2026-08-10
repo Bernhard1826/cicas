@@ -18,7 +18,7 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
 \par\smallskip
 \small
 \begin{algorithmic}[1]
-\Statex \textbf{Input:} standard documents $D$, threshold $\theta$, max iterations $K$
+\Statex \textbf{Input:} Web PKI normative-source corpus $D$, threshold $\theta$, max iterations $K$
 \Statex \textbf{Output:} final code set $C^{*}$ and termination status
 \State $\Rkw \gets \phi_R(D)$;\quad $(\RN,\RL,\RU)\gets \psi_L(\Rkw)$
   \Comment{$\RU=$ not-lintable}
@@ -51,7 +51,7 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
   \EndIf
   \State update $(\RN,\RL,\RU,\RLunc)$ and $C$
   \State $t\gets t+1$
-\Until{$t\ge K$ \textbf{or} no residual decreased, the loop-until-dry condition}
+\Until{$t\ge K$ \textbf{or} no residual decreased, the no-progress condition}
 \State \textbf{return} $(C,\ \mathit{status}\in\{\textsc{closed},\textsc{dry},
   \textsc{max\_iter}\})$
 \end{algorithmic}

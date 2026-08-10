@@ -4,14 +4,14 @@
 %-------------------------------------------------------------------------------
 
 Our code-generation design does not emit Go code directly from an unrestricted
-LLM response. Instead, it confines a rule's code body to a finite, closed
+LLM response. Instead, it confines a normative rule's code body to a finite, closed
 DSL-tree space $\Tv$. Each accepted code body is a tree in that space, which a
 deterministic function renders into Go code. The generator first attempts
 deterministic synthesis. When that path yields no tree, the LLM fallback may
 propose a tree from the same closed space. Its output must parse as an in-space
-tree and pass ``render and go build'' before it can be shipped.
+tree and pass ``render and go build'' before it enters semantic verification.
 Figure~\ref{fig:codegen-pipeline} illustrates the whole
-pipeline on a single rule---CA certificates must assert the keyCertSign
+pipeline on a single normative rule---CA certificates must assert the keyCertSign
 key-usage bit---tracing it from the filled IR fields, through the DSL tree,
 represented as an abstract syntax tree, and its JSON serialization, to the
 deterministically rendered Go checking code.
@@ -19,7 +19,7 @@ deterministically rendered Go checking code.
 \begin{figure*}[tb]
   \centering
   \paperfig{figures/fig03_codegen_pipeline.png}{Worked example of restricted
-    code generation. A single rule flows from its filled IR fields through the
+    code generation. A single normative rule flows from its filled IR fields through the
     DSL tree, represented as an abstract syntax tree, and its JSON serialization to deterministically rendered Go
     checking code.}
   \caption{Worked example of restricted code generation. }
@@ -29,8 +29,8 @@ deterministically rendered Go checking code.
 \subsection{Atomic Templates and IR Filling}
 \label{subsec:atoms}
 
-An atomic template is the smallest unit of a single-certificate static check.
-Most single-certificate compliance checks in PKI are logical combinations of a
+An atomic template is the smallest unit of a certificate lint.
+Most certificate lints in PKI are logical combinations of a
 few atomic templates---``whether an extension is present,'' ``whether a
 field equals a constant,'' ``whether every element of a list matches a
 pattern''---and combining such atomic templates with ``and/or/not'' can
@@ -64,28 +64,28 @@ is:
     \mathrm{Severity}(r), & \text{otherwise}
   \end{cases}
 \end{equation}
-The precondition $p$ is the rule precondition. When it exists and is
+The precondition $p$ is the normative rule's precondition. When it exists and is
 false on $c$, the result is $\mathrm{NA}$, not applicable; when the
 precondition is absent or holds and $q$ holds, the result is $\mathrm{Pass}$;
 when the precondition holds but $q$ does not, it is a violation, returning
 $\mathrm{Severity}(r)$ by obligation. Because $C_1$ of \S\ref{sec:lintability}
 already excludes MAY/OPTIONAL, an obligation entering generation must be
-MUST-class or SHOULD-class, i.e., $\mathrm{Severity}(r) \in \{\mathrm{Error},
+MUST-class or SHOULD-class, so $\mathrm{Severity}(r) \in \{\mathrm{Error},
 \mathrm{Warn}\}$.
 
 \textbf{The IR fills the atomic template's parameter slots.} Selecting an atomic
 template fixes only ``which check to use''; one still needs ``whom to check and
 against what''---and these parameter values come precisely from the current
-rule's IR. The IR's subject, the certificate field path given by the
+normative rule's IR. The IR's subject, the certificate field path given by the
 field resolver such as subjectAltName.dNSName, fills the atomic
 template's field slot, and the IR's constraint, a constraint value or
 pattern such as a value set, a length interval, or a regex name, fills the value
-slot. For example, the rule ``the dNSName of subjectAltName must be non-empty''
+slot. For example, the normative rule ``the dNSName of subjectAltName must be non-empty''
 is, after mapping and filling, instantiated as
 $\mathrm{FieldNonEmpty}(\mathrm{DNSNames})$.
 
 \textbf{The mapping $\mu$ from IR predicates to atomic templates.} The upstream
-IR and the downstream DSL use two vocabularies. The IR describes requirements
+IR and the downstream DSL use two vocabularies. The IR describes normative rules
 with extraction-stage predicates such as must\_be\_present,
 encode\_as, and in\_range, while the DSL expresses checks with
 atomic templates, and the two are not in one-to-one correspondence. To
@@ -101,7 +101,7 @@ of the constrained field.
 
 \S\ref{subsec:atoms} described how atomic templates and IR filling place the
 IR's subject and constraint into an atomic template's parameter slots---but the
-IR provides only ``which field this rule actually constrains, and what value,''
+IR provides only ``which field this normative rule actually constrains, and what value,''
 without constraining the legal type of those values. If the subject path
 in the IR points to a nonexistent field, or a string is placed into a slot that
 requires an integer, a structurally legal but semantically misaligned tree can
@@ -121,7 +121,7 @@ module $\phi_G$ to it. Any tree in $\Tv$ contains no field name, OID, or regex
 outside $\mathcal{V}$; an out-of-bounds tree necessarily errors at the parsing
 stage, triggering repair, and never enters code generation.
 
-\subsection{Code Generation and Invertible Mechanical Translation}
+\subsection{Code Generation and Mechanical Translation}
 \label{subsec:mech}
 
 A legal DSL tree $t$ must be turned into two products. One is executable Go
@@ -137,15 +137,15 @@ parameter type, so closure is preserved from the DSL-tree layer down to the
 Go-code layer. Together with determinism, this lets the certificate-level
 execution verification of \S\ref{subsec:exec-verify} treat $\rho(t)$ as a fixed
 function of $t$, whose execution behavior does not vary with run count or model.
-$\smech$, by contrast, is invertible. $t$ can be mechanically recovered from
-$\smech(t)$, so $\smech$ preserves the structural information of the
-DSL tree in the verification chain; the construction is detailed in
-Appendix~\ref{app:sigma}.
+$\smech$, by contrast, is structure-preserving. Each atomic template and
+combinator maps to a distinct phrase, so $\smech(t)$ retains the structural
+information of the DSL tree in the verification chain; the construction is
+detailed in Appendix~\ref{app:sigma}.
 
 Thus $\rho$'s product leads to executable code and the certificate-level execution
 verification of \S\ref{subsec:exec-verify}, while $\smech$'s product leads to
-synonymy verification---comparing the code\_summary with the
-specification text and deciding whether the two are semantically equivalent.
+semantic-equivalence verification---comparing the code\_summary with the
+normative rule text and determining whether the two are semantically equivalent.
 
 \subsection{Tree Synthesis with a Deterministic Main Path and Restricted LLM
 Fallback}
@@ -163,19 +163,19 @@ from the normal value $\varepsilon$ denoting ``no precondition'' in
 the acceptance gate---even if deterministic synthesis returns a tree, that is
 not enough; it must actually compile, otherwise it is treated as unresolved and
 passed to LLM synthesis. Both paths are constrained by the same set of
-structural checks, and neither decides whether the code expresses the
-specification, which is the job of the verification chain of
+structural checks, and neither determines whether the code expresses the
+normative rule, which is the job of the verification chain of
 \S\ref{subsec:exec-verify}; they only confine the output to a traceable space.
 
 \textbf{Deterministic main path.} When an IR predicate can select an atomic
 template via $\mu$ and its subject and constraint can fill that template's
 parameter slots, the generator deterministically derives a DSL tree using
 predefined rules. Here ``derive'' means constructing a DSL tree from the IR step by
-step by fixed rules, with no LLM call throughout. Most lintable rules in our
+step by fixed rules, with no LLM call throughout. Most lintable normative rules in our
 study are covered by this deterministic path.
 
 \textbf{Restricted LLM synthesis.} When deterministic synthesis returns failure,
-the generator switches to LLM synthesis. The model receives the rule context,
+the generator switches to LLM synthesis. The model receives the normative-rule context,
 the structured IR, the candidate atomic-template set, and a readable enumeration
 and signature table of $\mathcal{V}$ and $\mathcal{A}$. It
 outputs only one of two results: a serialized DSL tree or an explicit
@@ -187,39 +187,38 @@ a legal DSL tree $t \in \Tv$, a type error, or $\bot_{\mathrm{NT}}$, and any
 identifier outside $\mathcal{V}/\mathcal{A}$ is rejected here; a passing tree is
 rendered by $\rho$, and then a deterministic post-processor $\Phi_{\mathrm{post}}$
 binds Description/Citation/Name and the metadata of
-each specification source, with details in Appendix~\ref{app:tv}.
+each normative source, with details in Appendix~\ref{app:tv}.
 
 \subsection{Three-Layer Semantic Alignment Verification}
 \label{subsec:exec-verify}
 
-Whether the generated code expresses the specification is the hardest judgment
+Whether the generated code expresses the normative rule is the hardest judgment
 in the whole pipeline. This subsection checks it at three levels from coarse to
 fine.
 
 \textbf{Layer~A, description provenance.} Check whether the Description
-can be traced back to the source document.
+can be traced back to the normative source.
 
-\textbf{Layer~B, semantic alignment of the code-behavior summary.} This is the
-core layer; it turns the cross-modal judgment ``does the code implement the
-specification'' into the same-modal judgment ``are two natural-language
-sentences synonymous.'' First, following $\smech$ of \S\ref{subsec:mech}, with the
+\textbf{Layer~B, semantic equivalence of the code-behavior summary.} It turns
+the cross-modal judgment ``does the code implement the
+normative rule'' into the same-modal judgment ``are two natural-language
+sentences semantically equivalent.'' Following $\smech$ of \S\ref{subsec:mech}, with the
 phrase dictionary in Appendix~\ref{app:sigma}, the code is translated into a
-code\_summary sentence stating ``what constraint this code checks,''
-and then it is judged whether that sentence is synonymous with the
-Description.
+code\_summary, which is then judged against the Description.
 
 \textbf{Layer~C, compilation and structure.} Verify that the code can be parsed
 syntactically, that the function and metadata fields are complete, that
-dependencies are correctly imported, and that the rule is registered, ensuring
-the product is structurally legal and executable within the target framework.
+dependencies are correctly imported, and that the lint is registered.
 
-The three layers form a Boolean acceptance gate by conjunction, namely compilation
-$\wedge$ structural completeness $\wedge$ synonymy-judgment pass. Layer~B's
-synonymy judgment is the core signal, and Layer~A's provenance serves as a
+The three layers form a Boolean acceptance gate by conjunction. Layer~B's
+judgment is the core signal, and Layer~A's provenance serves as a
 prefilter; failing any layer triggers the repair loop of Appendix~\ref{sec:saiv}.
+Since $\rho$ and $\smech$ are deterministic and Layer~A anchors the Description
+to source text, the LLM contributes only this one same-modal comparison, and an
+IR error surfaces here as a mismatch.
 
 \textbf{Certificate-level execution verification, execution-level evidence for
-\CodeEqIR.} Layer~B's synonymy judgment is given by an LLM and cannot be fully
+\CodeEqIR.} Layer~B's semantic-equivalence judgment is given by an LLM and cannot be fully
 determinized; as a complement, we introduce a model-independent
 deterministic verification to check whether the generated code executes the DSL
 tree it corresponds to, written \CodeEqIR. Its idea borrows
@@ -230,7 +229,7 @@ Step 1, checking a single atomic template. For each atomic template we
 construct a pair of controlled certificate samples, one that should
 make the template's predicate true, and one that should make it false. The
 samples are constructed by the atomic template's parameter types and are not
-bound to any concrete rule. The rendered code is executed for real on the two
+bound to any concrete normative rule. The rendered code is executed for real on the two
 certificates and the verdicts are read back; the atomic template is accepted by
 this check if and only if the results on both certificates match expectation.
 
@@ -240,13 +239,13 @@ atomic templates and compiles as a whole, we can induct over the tree
 structure. The behavior of the leaves is checked in Step~1, and the combinators
 $\neg/\wedge/\vee$ evaluate by classical propositional logic and preserve that
 behavior level by level, so the rendered code $\rho(t)$ executes the whole tree,
-i.e., $\mathrm{Code}\equiv t$; and because $t$ is deterministically reduced from
+written $\mathrm{Code}\equiv t$; and because $t$ is deterministically reduced from
 the IR, \CodeEqIR.
 
 This verification is performed on controlled certificate samples; the result is
 deterministic and does not vary with run count or model. Its boundary
 must be stressed. \CodeEqIR{} only shows that the code follows the intermediate
-representation IR, which is not the same as code--specification
-alignment; if the IR itself has already drifted from the specification, this
-verification cannot detect it. The code--specification decision therefore still
-rests with \CodeEqSpec{}, the Layer~B synonymy judgment.
+representation IR, which is not the same as code--normative-rule
+alignment; if the IR itself has already drifted from the normative rule, this
+verification cannot detect it. The code--normative-rule judgment therefore still
+rests with \CodeEqRule{}, the Layer~B semantic-equivalence judgment.

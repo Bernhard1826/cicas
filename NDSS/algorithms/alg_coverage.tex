@@ -1,4 +1,4 @@
-% Algorithm 1 -- zlint coverage-alignment determination for lintable rules.
+% Algorithm 1 -- zlint coverage-alignment determination for lintable normative rules.
 % Included from sections/08_evaluation.tex via \input{algorithms/alg_coverage}.
 \begin{figure*}[tb]
 \makeatletter
@@ -12,19 +12,19 @@
 \noindent\rule{\linewidth}{0.6pt}
 \par\smallskip
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for zlint
-coverage-alignment determination for individual rules.
+coverage-alignment determination for individual normative rules.
 \par\smallskip
 \noindent\rule{\linewidth}{0.4pt}
 \par\smallskip
 \small
 \begin{algorithmic}[1]
-\Statex \textbf{Input:} lintable rule set $B=\{b_1,\dots,b_m\}$, where each rule has
+\Statex \textbf{Input:} lintable normative-rule set $B=\{b_1,\dots,b_m\}$, where each normative rule has
   IR four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$,
   source, and section; zlint lint set $L=\{\ell_1,\dots,\ell_n\}$, where each lint has
   description/citation/severity metadata and Pass/Error tests; offline code
   summarizer $M_{\mathrm{summ}}$, and field-level judge $M_{\mathrm{judge}}$
   with temperature $=0$
-\Statex \textbf{Output:} per-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
+\Statex \textbf{Output:} per-normative-rule coverage verdict $\mathrm{verdict}(b)\in\{\text{full, partial,
   none}\}$, covered set $\RLcov$, and uncovered code-generation domain $\RLunc$
 \Statex // Offline cached Stage-0: summarize each lint into a reverse
   IR

@@ -1,8 +1,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Anonymous NDSS submission --- IEEEtran conference format.
 %
-% "From PKI Standards to Compliance-Checking Code: An End-to-End Framework
-%  for Rule Extraction, Lintability Determination, and Verifiable Code
+% "From Web PKI Normative Sources to Compliance-Checking Code: An End-to-End Framework
+%  for Normative-Rule Extraction, Lintability Determination, and Verifiable Code
 %  Generation."
 %
 % Packages and the author block live in the project's own packages.tex and
@@ -49,9 +49,9 @@
 \newcommand{\ind}{\mathds{1}}                 % indicator function
 \newcommand{\code}{\mathrm{Code}}
 \newcommand{\ir}{\mathrm{IR}}
-\newcommand{\spec}{\mathrm{Spec}}
+\newcommand{\normrule}{\mathrm{NormRule}}
 \newcommand{\CodeEqIR}{\ensuremath{\code\equiv\ir}}
-\newcommand{\CodeEqSpec}{\ensuremath{\code\equiv\spec}}
+\newcommand{\CodeEqRule}{\ensuremath{\code\equiv\normrule}}
 \newcommand{\Rkw}{\mathcal{R}_{\mathrm{kw}}}
 \newcommand{\smech}{\sigma_{\mathrm{mech}}}
 \newcommand{\Tv}{\mathcal{T}_{\mathcal{V}}}
@@ -94,11 +94,37 @@
 \begin{document}
 %-------------------------------------------------------------------------------
 
-% \title{Compiling PKI Standards into Compliance-Checking Code}
-\title{From PKI Standards to Compliance-Checking Code: An End-to-End Framework for Verifiable Lint Generation}
+% \title{Compiling Web PKI Normative Sources into Compliance-Checking Code}
+\title{From Web PKI Normative Sources to Compliance-Checking Code: An End-to-End Framework for Verifiable Lint Generation}
 
 % Anonymous author block for double-blind review.
 \input{authors}
+
+%-------------------------------------------------------------------------------
+% NDSS conference notice block, copied verbatim from the official template
+% (bare_conf_NDSS2027.tex, lines 373--383). It renders at the bottom of the
+% first column on page 1.
+%   - \IEEEoverridecommandlockouts unlocks \IEEEpubid, which IEEEtran's
+%     "conference" mode disables by default.
+%   - \@IEEEpubidpullup reserves vertical space so the notice does not collide
+%     with the last lines of column 1.
+% IF RETARGETING ANOTHER YEAR: keep these three commands, and replace only the
+% \parbox contents (year, dates, ISBN, DOI) with the values from that year's
+% official template.
+% DOI: 24xxxx is the NDSS Fall Review Cycle prefix (23xxxx = Summer cycle and
+% workshops). Replace xxxx with the assigned paper number, zero-padded, once it
+% is known for the camera-ready version.
+%-------------------------------------------------------------------------------
+\IEEEoverridecommandlockouts
+\makeatletter\def\@IEEEpubidpullup{6.5\baselineskip}\makeatother
+\IEEEpubid{\parbox{\columnwidth}{
+    Network and Distributed System Security (NDSS) Symposium 2027\\
+    22--26 March 2027, Seoul, Republic of Korea\\
+    ISBN 978-1-970672-09-1\\
+    https://dx.doi.org/10.14722/ndss.2027.24xxxx\\
+    www.ndss-symposium.org
+}
+\hspace{\columnsep}\makebox[\columnwidth]{}}
 
 \maketitle
 
@@ -120,11 +146,17 @@
 \input{09_discussion}
 \input{10_conclusion}
 
-\appendices
-\input{appendix}
-
+% References precede the appendices. The bundled NDSS template inherits the
+% IEEE journal ordering (appendix, then bibliography) from Michael Shell's
+% generic bare_conf.tex, but published NDSS papers place REFERENCES before the
+% APPENDIX, and the CFP puts the optional "Ethics Considerations" section
+% immediately before the reference section. An Ethics Considerations section,
+% if added, goes here --- directly above \bibliography.
 \bibliographystyle{IEEEtran}
 \bibliography{references}
+
+\appendices
+\input{appendix}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \end{document}

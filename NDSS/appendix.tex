@@ -10,9 +10,9 @@ core relations and explicitly distinguishes ``relations admissible into
 retrieval'' from ``relations used only in post-processing''
 as shown in Table~\ref{tab:kgrel}. The retrieval stage
 obeys four constraints, GR-1 through GR-4: no inferred normative rule may enter
-retrieval; only raw specification nodes may enter retrieval; no inferential
+retrieval; only raw normative-source nodes may enter retrieval; no inferential
 relation may enter retrieval; and all context must be traceable to a
-specification source.
+normative source.
 
 \begin{table}[tb]
 \centering
@@ -24,19 +24,19 @@ specification source.
 \toprule
 Type & Relation & Role & In retrieval \\
 \midrule
-core & CONTAINS & containment hierarchy among specs, sections, rules & Yes \\
+core & CONTAINS & containment hierarchy among normative sources, sections, normative rules & Yes \\
 core & DEFINES & link from a term/field/definition passage to its defined
   object & Yes \\
-core & REFERENCES & explicit reference to another spec/section/algorithm & Yes \\
-core & APPLIES TO & link from a rule to the abstract concept it constrains
+core & REFERENCES & explicit reference to another normative source/section/algorithm & Yes \\
+core & APPLIES TO & link from a normative rule to the abstract concept it constrains
   & Yes \\
-aux & AFFECTS & link from a rule to the concrete certificate field it affects;
+aux & AFFECTS & link from a normative rule to the concrete certificate field it affects;
   used by the field resolver & No \\
-aux & DERIVED FROM & provenance link from a derived rule to its source section
+aux & DERIVED FROM & provenance link from a derived normative rule to its source section
   & No \\
-inferred & OVERRIDES & a more specific rule overrides a general one (produced by
+inferred & OVERRIDES & a more specific normative rule overrides a general one (produced by
   the rule engine) & No \\
-inferred & CONFLICTS WITH & potential conflict between rules (produced by the
+inferred & CONFLICTS WITH & potential conflict between normative rules (produced by the
   rule engine) & No \\
 \bottomrule
 \end{tabularx}
@@ -48,7 +48,7 @@ inferred & CONFLICTS WITH & potential conflict between rules (produced by the
 The system internally uses a JSON-serialized, machine-readable IR object.
 Beyond the core four-tuple of \S\ref{sec:method-dual-layer}, its key fields are listed in Table~\ref{tab:irfields};
 the remaining fields support provenance, normalization, matching, and downstream
-product generation. The lintability decision in \S\ref{sec:lintability} directly
+product generation. The lintability determination in \S\ref{sec:lintability} directly
 uses only the four fields obligation, assertion\_subject, enforcement\_phase, and
 rule\_category.
 
@@ -66,13 +66,13 @@ obligation & core & RFC~2119 deontic level, such as MUST/SHOULD/\dots \\
 predicate & core & constraint relation, such as presence, equality,
   containment, or range \\
 constraint & core & constraint value, pattern, or condition \\
-rule\_category & key ext. & rule's semantic category, such as
+rule\_category & key ext. & normative rule's semantic category, such as
   encoding\_constraint, definition, algorithm\_ref, \dots \\
 assertion\_subject & key ext. & assertion subject, such as Certificate / CA /
   RelyingParty / external ecosystem \\
 enforcement\_phase & key ext. & phase on which the constraint depends,
   such as encoding / runtime / external validation \\
-source\_section & key ext. & specification source and section
+source\_section & key ext. & normative source and section
   identifier \\
 source\_span & key ext. & character/sentence span in the source text \\
 evidence\_text & key ext. & source fragment supporting this IR record \\
@@ -169,7 +169,7 @@ classical propositional logic.
 
 \textbf{Generality grading of atomic templates: GENERIC and NON\_GENERIC.} Atomic
 templates are graded by semantic reuse. An atomic template is GENERIC if and only if it expresses a
-general PKI certificate-attribute judgment reusable across multiple rules and is
+general PKI certificate-attribute judgment reusable across multiple normative rules and is
 not tied to a corpus-specific OID, single clause, or one-off
 extension structure. Otherwise it is NON\_GENERIC. This grading is fixed in code as the two sets GENERIC\_ATOMS /
 NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
@@ -209,10 +209,11 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 \end{tabularx}
 \end{table*}
 
-NON\_GENERIC atomic templates are allowed into code generation---they correspond
-to real PKI constructs, not padding to inflate the corpus---but are explicitly
-marked. The GENERIC/NON\_GENERIC split of the 93 generated lints is reported in
-\S\ref{sec:eval}; among the 79 final-shipping unanimous lints the split is 60
+NON\_GENERIC atomic templates are allowed into code generation and correspond
+to real PKI constructs, but are explicitly
+marked and excluded from the rates reported in
+\S\ref{sec:eval}. The 93 generated lints split 72 GENERIC-only, 4 mixed, and 17
+NON\_GENERIC-only; among the 79 lints accepted by the unanimous semantic-equivalence gate the split is 60
 GENERIC-only, 4 mixed, and 15 NON\_GENERIC-only.
 
 \section{Phrase Dictionary of the Mechanical Translation $\smech$}
@@ -251,8 +252,8 @@ Combinator reduction: $\smech(\neg t) = $ ``NOT ($\smech(t)$)'';
 $\smech(t_1 \wedge t_2) = $ ``($\smech(t_1)$) AND ($\smech(t_2)$)''; $\vee$
 likewise; the atomic-template base case $\smech(a) = \mathcal{M}(a)$. For a
 conditional pair $(p,q)$: when $p = \neg(p')$, it outputs ``WHEN NOT
-($\smech(p')$), THEN $\smech(q)$'', the NEG-PRE template that eliminates double
-negation; otherwise it outputs ``WHEN ($\smech(p)$), THEN $\smech(q)$''; and
+($\smech(p')$), THEN $\smech(q)$'', the NEG-PRE template for a negated
+precondition; otherwise it outputs ``WHEN ($\smech(p)$), THEN $\smech(q)$''; and
 when $p = \varepsilon$ it outputs the single sentence $\smech(q)$.
 
 %-------------------------------------------------------------------------------
@@ -271,9 +272,9 @@ objective's computable residual, and when a residual has not reached its
 threshold, the residual signal locates the offending module
 and the corresponding repair is applied; after re-measuring, the loop proceeds
 to the next iteration, until both residuals converge. Alongside the two objectives, two
-auxiliary checks audit the lintability decision without contributing to the
+auxiliary checks audit the lintability determination without contributing to the
 objective loss; when a lintability label is suspected to be wrong, SAIV updates
-the relevant IR fields and applies the lintability decision again in the next
+the relevant IR fields and applies the lintability determination again in the next
 iteration.
 
 \subsection{Formal Definition}
@@ -284,11 +285,11 @@ determination $\to$ generation $\to$ verification:
 \begin{equation}\label{eq:pipeline}
   \Pi = \phi_V \circ \phi_G \circ \phi_L \circ \phi_R
 \end{equation}
-where $\phi_R$ is extraction, $\phi_L$ is the four-condition lintability decision
+where $\phi_R$ is extraction, $\phi_L$ is the four-condition lintability determination
 of \S\ref{sec:lintability}, $\phi_G$ is the generation module restricted to the
 DSL code space $\Tv$ of \S\ref{sec:codegen}, and $\phi_V$ is the three-layer semantic alignment of
 \S\ref{sec:codegen}. $\phi_L$ is the
-single-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_L$ of
+single-normative-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_L$ of
 Algorithm~\ref{alg:saiv} is its set-level lift, which strips the noise $\RN$ from
 $\Rkw$ and sorts the remaining candidates retained as normative rules into lintable $\RL$ and not-lintable
 $\RU$, giving the partition $(\RN, \RL, \RU)$. The loop is driven by the
@@ -297,11 +298,11 @@ computable signals these modules produce.
 \subsection{Two Iteration Objectives and Two Auxiliary Lintability Checks}
 \label{subsec:targets}
 
-SAIV borrows the idea of backpropagation. It fixes two optimization objectives
+SAIV fixes two optimization objectives
 for the whole pipeline to approach, and treats the two auxiliary checks
-on the lintability decision $\phi_L$ as repair-routing signals rather than
-separate objective terms. Because these checks can change which rules enter
-$\RL$ and $\RLunc$, they can affect the synonymy residual in later iterations
+on the lintability determination $\phi_L$ as repair-routing signals rather than
+separate objective terms. Because these checks can change which normative rules enter
+$\RL$ and $\RLunc$, they can affect the semantic-equivalence residual in later iterations
 even though they add no term to $\Ltot$. The two objectives G1 and G2 each carry
 a directly computable residual, $\Lrec$ and $\Lcode$, whose weighted sum is the
 total loss $\Ltot$, so convergence is defined by $\Ltot$ alone. S1 and S2 are
@@ -322,17 +323,17 @@ determination:
   |\Rkw(\mathcal{D})| = |\RN| + |\RL| + |\RU|
 \end{equation}
 \end{theorem}
-\noindent where $\mathcal{D}$ is the standard-document corpus, written D in
+\noindent where $\mathcal{D}$ is the normative-source corpus, written D in
 ASCII inside the Algorithm~\ref{alg:saiv} listing, $\RN$ is noise that contains
-RFC~2119 keyword matches rejected as non-rules by the adjudication procedure,
-$\RL$ the lintable rules, and $\RU$
-the not-lintable rules. The lintable class $\RL$ is further split by ``whether
+RFC~2119 keyword matches rejected as noise by the adjudication procedure,
+$\RL$ the lintable normative rules, and $\RU$
+the not-lintable normative rules. The lintable class $\RL$ is further split by ``whether
 it is already implemented by an existing external lint tool'':
 \begin{equation}\label{eq:split}
   |\RL| = |\RLcov| + |\RLunc|
 \end{equation}
-where $\RLcov$ are rules covered by some lint tool and $\RLunc$ are
-not-yet-covered rules. The first identity~\eqref{eq:cons} is total conservation
+where $\RLcov$ are normative rules covered by some lint tool and $\RLunc$ are
+not-yet-covered normative rules. The first identity~\eqref{eq:cons} is total conservation
 from recall to lintability determination, and the second~\eqref{eq:split} splits the
 lintable set so the later objectives can be pursued separately. The uncovered
 subset $\RLunc$ is the most important observation domain for generation that
@@ -347,38 +348,38 @@ closed, as shown in Table~\ref{tab:codegen-results}:
 \end{equation}
 
 \medskip
-\noindent\textbf{G2: code--specification synonymy for uncovered rules.} For the
+\noindent\textbf{G2: code--normative-rule semantic equivalence for uncovered normative rules.} For the
 uncovered subset $\RLunc$, the code summary $\smech(t_r)$, the code\_summary of
-rule $r$'s DSL tree $t_r$ computed by $\smech$ of \S\ref{subsec:mech}, is
-required to be synonymous with the specification text.
-The residual $\Lcode$ is the average, over $\RLunc$, of the per-rule correctness
+normative rule $r$'s DSL tree $t_r$ computed by $\smech$ of \S\ref{subsec:mech}, is
+required to be semantically equivalent to the normative rule text.
+The residual $\Lcode$ is the average, over $\RLunc$, of the per-normative-rule correctness
 label $\lambda_{\mathrm{code}}(r) = \ind[\mathrm{compile}(\rho(t_r))] \cdot
-\mathrm{syn}(\smech(t_r), \mathrm{spec}(r))$, where $\rho(t_r)$ is the rendered Go
-code and $\mathrm{spec}(r)$ the rule text. The structural-completeness score is
+\mathrm{syn}(\smech(t_r), \normrule(r))$, where $\rho(t_r)$ is the rendered Go
+code and $\normrule(r)$ the normative rule text. The structural-completeness score is
 $\equiv 1$ in the fixed zlint shell, so it drops out:
 \begin{equation}\label{eq:code-res}
   \Lcode = 1 - \frac{1}{|\RLunc|}\sum_{r\in\RLunc}\lambda_{\mathrm{code}}(r)
 \end{equation}
 
 \medskip
-\noindent\textbf{S1: reverse lintability of covered rules.} The first
-auxiliary check audits the not-lintable verdict. If a rule has a corresponding
+\noindent\textbf{S1: reverse lintability of covered normative rules.} The first
+auxiliary check audits the not-lintable verdict. If a normative rule has a corresponding
 implementation in a lint tool such as zlint, it must be lintable, so the check
 counts the violations $\Nviol$ and is cleared when $\Nviol = 0$. $\Nviol$ is
 computed by a reverse coverage check---running the coverage judge over
-the not-lintable set $\RU$ and counting the rules it rates full or partial; each
+the not-lintable set $\RU$ and counting the normative rules it rates full or partial; each
 such hit is adjudicated as either a $\phi_L$ false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
 \medskip
-\noindent\textbf{S2: synthesizability of lintable rules.} The dual check
-audits the lintable verdict. A rule judged lintable should be synthesizable
+\noindent\textbf{S2: synthesizability of lintable normative rules.} The dual check
+audits the lintable verdict. A normative rule judged lintable should be synthesizable
 within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
-rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
+normative rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
 $\mathcal{P}_A$ have both been exhausted is a candidate signal that $\phi_L$ mislabeled it.
 S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
 marker as a diagnostic, and each persistent abstention is reviewed against the
-four-condition decision of \S\ref{sec:lintability} and adjudicated as either a
+four-condition determination of \S\ref{sec:lintability} and adjudicated as either a
 $\phi_L$ false positive and re-derived to not-lintable, or a genuine $\Tv$
 expressiveness gap and kept as a logged abstention.
 
@@ -406,12 +407,12 @@ Item & Signal & Main repair direction & Repair target \\
   convergence}}\\
 G1 Recall completeness & $\Lrec$, Eq.~\eqref{eq:recall-res} & --- &
   accounting invariant only \\
-G2 Synonymy & $\Lcode$, Eq.~\eqref{eq:code-res} &
+G2 Semantic equivalence & $\Lcode$, Eq.~\eqref{eq:code-res} &
   IR-content, DSL-generation, and verification-judgment repairs &
   IR-content correction / DSL-tree re-synthesis / judgment \& summary
   re-check \\
 \midrule
-\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- police $\phi_L$,
+\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- audit $\phi_L$,
   outside $\Ltot$}}\\
 S1 Reverse lintability & $\Nviol$, \S\ref{subsec:algo} &
   verification-judgment consistency repair &
@@ -450,20 +451,20 @@ when the metric decreases.
 \item \textbf{Lintability repair $\mathcal{P}_L$}: is the same re-extraction
   mechanism restricted to the lintability-gate IR fields---obligation,
   assertion\_subject, enforcement\_phase, and rule\_category. It is invoked when
-  S1 indicates that a not-lintable rule is actually covered by an existing lint,
-  or when S2 indicates that a supposedly lintable rule may not be expressible as
-  a single-certificate static check. After re-extraction, SAIV re-runs
+  S1 indicates that a not-lintable normative rule is actually covered by an existing lint,
+  or when S2 indicates that a supposedly lintable normative rule may not be expressible as
+  a certificate lint. After re-extraction, SAIV re-runs
   $\phi_L$ and updates the set-level partition $\psi_L$.
 \item \textbf{Generation repair $\mathcal{P}_G$}: A missing template routes to the
   offline vocabulary-expansion channel $\mathcal{P}_A$, which adds a new atomic
   template to $\mathcal{A}$ after certificate-level execution verification; a wrong IR field, such as too coarse a granularity,
-  routes to IR-content repair $\mathcal{P}_R$; and a rule that proves not to be lintable
+  routes to IR-content repair $\mathcal{P}_R$; and a normative rule that proves not to be lintable
   routes to lintability repair $\mathcal{P}_L$. When the template, IR, and
   lintability label are all correct but the meaning is too complex to express
-  within $\Tv$, the rule is kept as a logged expressiveness gap rather than
+  within $\Tv$, the normative rule is kept as a logged expressiveness gap rather than
   repaired as code.
-\item \textbf{Verification repair $\mathcal{P}_V$}: enlarges the synonymy
-  judgment's semantic neighborhood, e.g., negation/affirmation interchange or
+\item \textbf{Verification repair $\mathcal{P}_V$}: enlarges the semantic-equivalence
+  judgment's semantic neighborhood, such as negation/affirmation interchange or
   one-to-many decomposition, or corrects the inconsistency between the two
   verdict sources.
 \end{itemize}

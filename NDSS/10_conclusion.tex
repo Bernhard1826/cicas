@@ -4,16 +4,17 @@
 %-------------------------------------------------------------------------------
 
 We presented an end-to-end framework that transforms natural-language Web PKI
-normative text into auditable static lint code. On RFC~5280 and CABF~BR, the
-pipeline recalled 2,080 candidates and retained 1,567 as normative rules through
+normative text into auditable lint code. On RFC~5280 and CABF~BR, the
+pipeline recalled 2,080 candidate records and retained 1,567 as normative rules through
 its adjudication procedure.
-Under our single-certificate static-check criterion, 260 (16.6\%) are lintable.
-Existing zlint lints fully cover 165, leaving 95 uncovered rules for generation.
-The restricted generator produced 93 compilable lints, including 77 with at
-least one GENERIC atom. Of these, 79 passed the unanimous code--specification
-synonymy gate and were added to zlint. Certificate detection confirmed five
+Under our lintability criterion, 260 (16.6\%) are lintable.
+Existing zlint lints fully cover 165, leaving 95 uncovered normative rules for generation.
+The restricted generator produced 76 compilable lints with at
+least one GENERIC atom, 64 of which passed the unanimous code--normative-rule
+semantic-equivalence gate. Together with 15 NON\_GENERIC-only lints, the final accepted
+lint set contained 79 lints, which were added to zlint. Certificate detection confirmed five
 finding types across the evaluated corpora, including findings not flagged by
-native zlint. Within the evaluated standards and confirmation protocol, these
-results show that source-linked rule extraction, explicit lintability
-classification, and restricted generation can expose actionable gaps in static
+native zlint. Within the evaluated Web PKI normative sources and confirmation protocol, these
+results show that source-linked normative-rule extraction, explicit lintability
+determination, and restricted generation can expose actionable gaps in static
 certificate-lint coverage.

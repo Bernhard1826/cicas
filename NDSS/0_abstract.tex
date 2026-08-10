@@ -1,24 +1,24 @@
-Web PKI trust depends on correctly issued certificates. Static certificate
+Web PKI trust depends on correctly issued certificates. Certificate
 linters such as zlint enforce this trust, but PKI experts must still implement
-and maintain compliance checks as normative sources evolve. This manual process
+and maintain certificate lints as Web PKI normative sources evolve. This manual process
 is increasingly difficult to scale as pre-issuance linting becomes mandatory and
 certificate lifetimes shorten. The ecosystem lacks a systematic way to translate
 natural-language normative text into lint code, including a principled method to
-decide which rules are observable from one certificate alone. We present an
-end-to-end framework that extracts normative rules from Web PKI specifications,
-classifies their lintability, and generates auditable lint code. A dual-layer
-extraction pipeline combines deterministic candidate recall with
+determine which normative rules are observable from one certificate alone. We present an
+end-to-end framework that extracts normative rules from Web PKI normative sources,
+determines their lintability, and generates auditable lint code. A dual-layer
+extraction pipeline combines deterministic normative-rule recall with
 schema-constrained large-language-model parsing into an intermediate
-representation. A four-condition decision rule then classifies lintability from
+representation. A four-condition criterion then determines lintability from
 the representation rather than from keyword heuristics. Restricted code
-generation maps supported rules to a closed, typed DSL tree that a deterministic
-renderer converts to Go lint code, with a build-gated LLM fallback for unresolved
-cases. On RFC~5280 and the CA/Browser Forum Baseline Requirements, the framework
-recalls 2,080 candidate rules and retains 1,567 as normative rules through its
+generation maps supported normative rules to a closed, typed DSL tree that a deterministic
+renderer converts to Go lint code. On RFC~5280 and the CA/Browser Forum Baseline Requirements, the framework
+recalls 2,080 candidate records for normative rules and retains 1,567 as normative rules through its
 adjudication procedure. Only
-260 (16.6\%) are lintable as single-certificate static checks; existing zlint
-lints fully cover 165. For the remaining 95 rules, the generator produces 93
-compilable lints, 79 of which pass a unanimous code--specification synonymy gate.
+260 (16.6\%) are lintable as certificate lints; existing zlint
+lints fully cover 165. For the remaining 95 normative rules, the generator produces 76
+compilable lints that draw on general-purpose atoms, 64 of which pass a unanimous
+code--normative-rule semantic-equivalence gate.
 When added to zlint, these lints confirm five certificate-problem types across
 the evaluated corpora, including findings missed by native zlint in a scan of
 111,118 deployed certificates.
