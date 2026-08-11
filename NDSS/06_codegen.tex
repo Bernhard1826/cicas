@@ -3,18 +3,22 @@
 \label{sec:codegen}
 %-------------------------------------------------------------------------------
 
-Our code-generation design does not emit Go code directly from an unrestricted
-LLM response. Instead, it confines a normative rule's code body to a finite, closed
-DSL-tree space $\Tv$. Each accepted code body is a tree in that space, which a
-deterministic function renders into Go code. The generator first attempts
-deterministic synthesis. When that path yields no tree, the LLM fallback may
-propose a tree from the same closed space. Its output must parse as an in-space
-tree, render, and pass go build before it enters semantic verification.
+Generating checking code directly with a large language model faces two
+inherent difficulties. The first is hallucination. The model may
+misspell a field name as another field that happens to exist but is
+semantically unrelated, or introduce a unit error in an OID. The second is
+output instability. The same code-generation prompt often produces
+different outputs across calls, with no guarantee that the result will compile or
+be logically correct. To contain this uncertainty, we confine a rule's code body
+to a finite, closed DSL-tree space $\Tv$. Each rule's code body can only be a
+tree in that space, which is then rendered into Go code by a deterministic
+function. The deterministic main path avoids unconstrained code emission, and
+the restricted LLM fallback is bounded to the same closed space and gated by
+``render and pass go build,'' so any out-of-space or non-compiling output is
+rejected rather than shipped.
 Figure~\ref{fig:codegen-pipeline} illustrates the whole
 pipeline on a single normative rule---CA certificates must assert the keyCertSign
-key-usage bit---tracing it from the filled IR fields, through the DSL tree,
-represented as an abstract syntax tree, and its JSON serialization, to the
-deterministically rendered Go checking code.
+key-usage bit.
 
 \begin{figure*}[tb]
   \centering
@@ -48,9 +52,8 @@ representative examples in Appendix~\ref{app:tv}; $\{\neg, \wedge, \vee\}$ are
 the propositional-logic combinators. The code body of a lint rule is modeled as
 an ordered pair $(p, q) \in \mathcal{T}_\varepsilon \times \mathcal{T}$, where
 $q \in \mathcal{T}$ is the main assertion and $p \in \mathcal{T}_\varepsilon =
-\mathcal{T} \cup \{\varepsilon\}$ is an optional precondition. Here $\varepsilon$ is
-the placeholder for an absent precondition, a normal value distinct from the $\bot$
-that denotes synthesis failure in the table of \S\ref{subsec:synth}. In the
+\mathcal{T} \cup \{\varepsilon\}$ is an optional precondition, where $\varepsilon$
+marks an absent precondition. In the
 equation below, $c$ is a single certificate, and $\lVert u \rVert(c) \in
 \{\mathrm{true}, \mathrm{false}\}$ denotes the Boolean result of evaluating a
 DSL tree or precondition $u$ on $c$; atomic templates evaluate by their semantics, and
@@ -85,12 +88,12 @@ slot. For example, the normative rule ``the dNSName of subjectAltName must be no
 is, after mapping and filling, instantiated as
 $\mathrm{FieldNonEmpty}(\mathrm{DNSNames})$.
 
-\textbf{The mapping $\mu$ from IR predicates to atomic templates.} The upstream
+\textbf{Mapping IR predicates to atomic templates.} The upstream
 IR and the downstream DSL use two vocabularies. The IR describes normative rules
 with extraction-stage predicates such as must\_be\_present,
 encode\_as, and in\_range, while the DSL expresses checks with
 atomic templates, and the two are not in one-to-one correspondence. To
-bridge them, we maintain a many-to-many mapping $\mu$ that assigns each IR
+bridge them, we maintain a many-to-many predicate-to-template map that assigns each IR
 predicate a set of candidate atomic templates that can semantically carry it.
 For instance, must\_be\_present may correspond to $\{\mathrm{ExtPresent},
 \mathrm{FieldNonEmpty}\}$, and in\_range to $\{\mathrm{IntInRange},
@@ -118,8 +121,8 @@ Each atomic template has a signature table specifying which class, or base type
 integer/Boolean/string, each of its parameters must draw from; a call to an
 atomic template is legal if and only if every actual argument falls in the class its
 signature prescribes. Writing $\Tv$ for the set of DSL trees all of whose
-parameters are legal, we strictly restrict the range of the code-generation
-module $\phi_G$ to it. Any tree in $\Tv$ contains no field name, OID, or regex
+parameters are legal, we strictly restrict the range of the code generator to
+it. Any tree in $\Tv$ contains no field name, OID, or regex
 outside $\mathcal{V}$; an out-of-bounds tree necessarily errors at the parsing
 stage, triggering repair, and never enters code generation.
 
@@ -158,12 +161,9 @@ parameter closure of \S\ref{subsec:tv} confine a DSL tree to $\Tv$, but two
 decisions still require synthesis. The first is which atomic template carries
 which IR predicate. The second is whether the IR's subject and
 constraint can both be filled into the chosen atomic template.
-This subsection gives the implementation of $\phi_G$. The generator
-first attempts deterministic synthesis and triggers LLM synthesis only when it
-returns $\bot$. Here $\bot$ denotes synthesis failure, meaning no result at all,
-and is distinct
-from the normal value $\varepsilon$, which denotes an absent precondition in
-\S\ref{subsec:atoms}. Both paths use rendering and passing go build as
+This subsection gives the implementation of the generator. It
+first attempts deterministic synthesis and falls back to LLM synthesis only when
+deterministic synthesis returns no tree. Both paths use rendering and passing go build as
 the acceptance gate---even if deterministic synthesis returns a tree, that is
 not enough; it must actually compile, otherwise it is treated as unresolved and
 passed to LLM synthesis. Both paths are constrained by the same set of
@@ -171,25 +171,23 @@ structural checks, and neither determines whether the code expresses the
 normative rule, which is the job of the verification chain of
 \S\ref{subsec:exec-verify}; they only confine the output to a traceable space.
 
-\textbf{Deterministic main path.} When an IR predicate can select an atomic
-template via $\mu$ and its subject and constraint can fill that template's
+\textbf{Deterministic main path.} When an IR predicate selects an atomic
+template through the predicate-to-template map and its subject and constraint can fill that template's
 parameter slots, the generator deterministically derives a DSL tree using
 predefined rules. Here, deriving means constructing a DSL tree from the IR step by
 step by fixed rules, with no LLM call throughout. Most lintable normative rules in our
 study are covered by this deterministic path.
 
-\textbf{Restricted LLM synthesis.} When deterministic synthesis returns failure,
+\textbf{Restricted LLM synthesis.} When deterministic synthesis returns no tree,
 the generator switches to LLM synthesis. The model receives the normative-rule context,
 the structured IR, the candidate atomic-template set, and a readable enumeration
 and signature table of $\mathcal{V}$ and $\mathcal{A}$. It
 outputs only one of two results, either a serialized DSL tree or an explicit
-no-template abstention marker $\bot_{\mathrm{NT}}$. Both $\bot_{\mathrm{NT}}$ and
-synthesis-failure $\bot$ report that no usable result was produced, so they share the $\bot$
-form, whereas $\varepsilon$ denotes the normal case of an absent precondition. The raw LLM
-output is first validated by the parsing function $\eta$, which parses it into
-a legal DSL tree $t \in \Tv$, a type error, or $\bot_{\mathrm{NT}}$, and any
+no-template abstention marker NT. The raw LLM
+output is first validated by a parser, which resolves it into
+a legal DSL tree $t \in \Tv$, a type error, or NT, and any
 identifier outside $\mathcal{V}/\mathcal{A}$ is rejected here; a passing tree is
-rendered by $\rho$, and then a deterministic post-processor $\Phi_{\mathrm{post}}$
+rendered by $\rho$, and then a deterministic post-processor
 binds Description/Citation/Name and the metadata of
 each normative source, with details in Appendix~\ref{app:tv}.
 
@@ -226,7 +224,7 @@ IR error surfaces here as a mismatch.
 determinized; as a complement, we introduce a model-independent
 deterministic verification to check whether the generated code executes the DSL
 tree it corresponds to, written \CodeEqIR. Its idea borrows
-from the test oracle in software testing, using a set of samples with
+from the test oracle in software testing~\cite{barr2015oracle}, using a set of samples with
 known-correct answers to check the code under test. It proceeds in two steps.
 
 Step 1, checking a single atomic template. For each atomic template we

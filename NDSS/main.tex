@@ -28,6 +28,50 @@
 % Extra float slots --- this paper has many full-width table*/figure* floats.
 \extrafloats{64}
 
+%-------------------------------------------------------------------------------
+% Vertical-space tuning for the page budget.
+%
+% SCOPE, deliberately limited: this block touches only float separation, caption
+% separation, float-packing thresholds, and display-math skips. It does NOT touch
+% any length controlling margins, column widths, the column gap, the page size,
+% the body font size, or the body leading --- see the NDSS/IEEEtran template
+% instruction "Do not adjust lengths that control margins, column widths, etc."
+% The values below stay moderate; IEEEtran already revised its float separations
+% down relative to article.cls, so the remaining headroom is small.
+%
+% IEEEtran defaults, for reference:
+%   \floatsep/\dblfloatsep/\intextsep  0.85\baselineskip  (approx. 10.2pt)
+%   \textfloatsep/\dbltextfloatsep     1.55\baselineskip  (approx. 18.6pt)
+%   \abovecaptionskip                  0.5\baselineskip   (approx. 6pt)
+%   \topfraction 0.9  \textfraction 0.1  \floatpagefraction 0.8
+%   \dbltopfraction 0.8  \dblfloatpagefraction 0.8
+%-------------------------------------------------------------------------------
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\dbltextfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{7pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{7pt plus 2pt minus 2pt}
+\setlength{\intextsep}{7pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{3pt}
+\setlength{\belowcaptionskip}{0pt}
+
+% Let float-heavy pages pack more tightly, so fewer columns end in white space.
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.85}
+\renewcommand{\dbltopfraction}{0.92}
+\renewcommand{\dblfloatpagefraction}{0.85}
+
+% Display-math skips. These must be set inside \AtBeginDocument: the font-size
+% command \normalsize resets them, and \begin{document} issues \normalsize before
+% running the begin-document hook. This paper has 11 display equations.
+\AtBeginDocument{%
+  \setlength{\abovedisplayskip}{4pt plus 1pt minus 1pt}%
+  \setlength{\belowdisplayskip}{4pt plus 1pt minus 1pt}%
+  \setlength{\abovedisplayshortskip}{2pt plus 1pt minus 1pt}%
+  \setlength{\belowdisplayshortskip}{3pt plus 1pt minus 1pt}%
+}
+
 \pagestyle{plain}   % show page numbers after the title page (NDSS submission)
 
 % Keep the submission PDF free of author-identifying metadata. The title remains

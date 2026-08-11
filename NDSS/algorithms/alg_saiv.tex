@@ -1,6 +1,12 @@
 % Algorithm 2 -- Stage-Aware Iterative Verification, abbreviated SAIV.
 % Included from the SAIV section of appendix.tex via \input{algorithms/alg_saiv}.
-\begin{figure*}[tb]
+%
+% Typeset single-column (not figure*) at \scriptsize, for the same reason as
+% Algorithm 1: short algorithmic lines wasted the right half of a full-width float,
+% which is billed two columns of page area. The RouteRepair \Comment is on its own
+% \Statex line because \Comment is right-aligned and cannot wrap. No step, symbol,
+% or comment wording was changed.
+\begin{figure}[tb]
 \makeatletter
 \@ifundefined{c@algorithm}{%
   \newcounter{algorithm}%
@@ -16,7 +22,7 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
 \par\smallskip
 \noindent\rule{\linewidth}{0.4pt}
 \par\smallskip
-\small
+\scriptsize
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} Web PKI normative-source corpus $D$, threshold $\theta$, max iterations $K$
 \Statex \textbf{Output:} final code set $C^{*}$ and termination status
@@ -33,7 +39,7 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
     \State \textbf{break} \Comment{objectives converged, checks clear}
   \EndIf
   \State $\mathit{op}\gets \textsc{RouteRepair}(\Lrec,\Lcode,\Nviol,\bot_{\mathrm{NT}},\cdots)$
-    \Comment{repair routing, \S\ref{subsec:repair}}
+  \Statex \Comment{repair routing, \S\ref{subsec:repair}}
   \If{$\mathit{op}=\mathcal{P}_R$} \Comment{IR-content repair}
     \ForAll{$r$ routed to $\mathcal{P}_R$}
       \State $\mathit{rep}\gets \mathcal{P}_R(\textsc{FailTrace}(r))$
@@ -57,4 +63,4 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
 \end{algorithmic}
 \par\smallskip
 \noindent\rule{\linewidth}{0.6pt}
-\end{figure*}
+\end{figure}

@@ -97,7 +97,7 @@ each an audited literal RE2 pattern. Table~\ref{tab:vocab} gives the size and
 representative members of each component.
 All components are finite sets; the LLM receives a full enumeration of
 each component in the prompt, so any identifier outside $\mathcal{V}$ in its
-output triggers an $\eta$ parse error.
+output triggers a parse error.
 
 \begin{table*}[tb]
 \centering
@@ -275,37 +275,34 @@ objective loss; when a lintability label is suspected to be wrong, SAIV updates
 the relevant IR fields and applies the lintability determination again in the next
 iteration.
 
-\subsection{Formal Definition}
+\subsection{Pipeline Structure and Partition}
 \label{subsec:saiv-formal}
 
-The whole pipeline $\Pi$ chains four modules---extraction $\to$ lintability
-determination $\to$ generation $\to$ verification:
-\begin{equation}\label{eq:pipeline}
-  \Pi = \phi_V \circ \phi_G \circ \phi_L \circ \phi_R
-\end{equation}
-where $\phi_R$ is extraction, $\phi_L$ is the four-condition lintability determination
-of \S\ref{sec:lintability}, $\phi_G$ is the generation module restricted to the
-DSL code space $\Tv$ of \S\ref{sec:codegen}, and $\phi_V$ is the three-layer semantic alignment of
-\S\ref{sec:codegen}. $\phi_L$ is the
-single-normative-rule lintability predicate $r \mapsto \{0,1\}$; the $\psi_L$ of
-Algorithm~\ref{alg:saiv} is its set-level lift, which strips the noise $\RN$ from
-$\Rkw$ and sorts the remaining candidates retained as normative rules into lintable $\RL$ and not-lintable
-$\RU$, giving the partition $(\RN, \RL, \RU)$. The loop is driven by the
-computable signals these modules produce.
+The whole pipeline chains four modules: extraction, lintability determination,
+generation, and verification. Lintability determination is the four-condition
+predicate of \S\ref{sec:lintability}, generation is the module restricted to the
+DSL code space $\Tv$ of \S\ref{sec:codegen}, and verification is the three-layer
+semantic alignment of \S\ref{sec:codegen}. Lintability determination decides a
+single normative rule; Algorithm~\ref{alg:saiv} applies its set-level lift, which
+strips the noise $\RN$ from $\Rkw$ and sorts the remaining candidates retained as
+normative rules into lintable $\RL$ and not-lintable $\RU$, giving the partition
+$(\RN, \RL, \RU)$. The loop is driven by the computable signals these modules
+produce.
 
 \subsection{Two Iteration Objectives and Two Auxiliary Lintability Checks}
 \label{subsec:targets}
 
 SAIV fixes two optimization objectives
 for the whole pipeline to approach, and treats the two auxiliary checks
-on the lintability determination $\phi_L$ as repair-routing signals rather than
+on the lintability determination as repair-routing signals rather than
 separate objective terms. Because these checks can change which normative rules enter
 $\RL$ and $\RLunc$, they can affect the semantic-equivalence residual in later iterations
 even though they add no term to $\Ltot$. The two objectives G1 and G2 each carry
 a directly computable residual, $\Lrec$ and $\Lcode$, whose weighted sum is the
 total loss $\Ltot$, so convergence is defined by $\Ltot$ alone. S1 and S2 are
 checks, not objectives, and add no term to $\Ltot$. They form the two sides of a
-single consistency test on $\phi_L$, S1 auditing the not-lintable verdict and S2
+single consistency test on the lintability determination, S1 auditing the
+not-lintable verdict and S2
 the lintable verdict, each firing only to correct a suspected lintability error.
 The subsequent subsections revolve around the two objectives, while the two
 checks gate the labels those objectives consume.
@@ -313,7 +310,7 @@ checks gate the labels those objectives consume.
 \medskip
 \noindent\textbf{G1, recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
-If the lintability partition $\psi_L$ assigns each keyword-recalled candidate in
+If the set-level lintability determination assigns each keyword-recalled candidate in
 $\Rkw(\mathcal{D})$ to exactly one of the three classes---noise, lintable, and
 not-lintable---then recall is conserved from recall to lintability
 determination:
@@ -366,19 +363,20 @@ implementation in a lint tool such as zlint, it must be lintable, so the check
 counts the violations $\Nviol$ and is cleared when $\Nviol = 0$. $\Nviol$ is
 computed by a reverse coverage check---running the coverage judge over
 the not-lintable set $\RU$ and counting the normative rules it rates full or partial; each
-such hit is adjudicated as either a $\phi_L$ false negative and re-extracted to
+such hit is adjudicated as either a lintability false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
 \medskip
 \noindent\textbf{S2, synthesizability of lintable normative rules.} The dual check
 audits the lintable verdict. A normative rule judged lintable should be synthesizable
-within $\Tv$, so a no-template abstention $\bot_{\mathrm{NT}}$ returned for such a
-normative rule after generation repair $\mathcal{P}_G$ and vocabulary expansion
-$\mathcal{P}_A$ have both been exhausted is a candidate signal that $\phi_L$ mislabeled it.
+within $\Tv$, so a no-template abstention NT returned for such a
+normative rule after generation repair and vocabulary expansion
+have both been exhausted is a candidate signal that the lintability determination
+mislabeled it.
 S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
 marker as a diagnostic, and each persistent abstention is reviewed against the
 four-condition determination of \S\ref{sec:lintability} and adjudicated as either a
-$\phi_L$ false positive and re-derived to not-lintable, or a genuine $\Tv$
+lintability false positive and re-derived to not-lintable, or a genuine $\Tv$
 expressiveness gap and kept as a logged abstention.
 
 \medskip
@@ -410,58 +408,55 @@ G2 Semantic equivalence & $\Lcode$, Eq.~\eqref{eq:code-res} &
   IR-content correction / DSL-tree re-synthesis / judgment \& summary
   re-check \\
 \midrule
-\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- audit $\phi_L$,
-  outside $\Ltot$}}\\
+\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- audit the
+  lintability determination, outside $\Ltot$}}\\
 S1 Reverse lintability & $\Nviol$, \S\ref{subsec:algo} &
   verification-judgment consistency repair &
-  $\phi_L$ false negatives / spurious coverage matches \\
-S2 Synthesizability & $\bot_{\mathrm{NT}}$ abstention, \S\ref{subsec:algo} &
+  lintability false negatives / spurious coverage matches \\
+S2 Synthesizability & NT abstention, \S\ref{subsec:algo} &
   diagnose lintability vs. generation gap &
-  $\phi_L$ false positives / missing atoms / $\Tv$ expressiveness gaps \\
+  lintability false positives / missing atoms / $\Tv$ expressiveness gaps \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
 Table~\ref{tab:saiv-objectives} gives only the item-to-repair-direction correspondence; the
-concrete repair operations and their notation are defined in
+concrete repair operations are defined in
 \S\ref{subsec:repair}.
-\textsc{RouteRepair} in Algorithm~\ref{alg:saiv} denotes the operator-guided
-routing step that uses the residuals, lintability-check signals, and failure
-traces to select the next applicable repair direction from
-$\{\mathcal{P}_R,\mathcal{P}_L,\mathcal{P}_G,\mathcal{P}_V\}$.
+\textsc{RouteRepair} in Algorithm~\ref{alg:saiv} denotes the routing step that
+uses the residuals, lintability-check signals, and failure
+traces to select the next applicable repair direction among IR-content,
+lintability, generation, and verification repair.
 
 \subsection{Repair Operations}
 \label{subsec:repair}
 
-SAIV comprises four kinds of operations---IR-content
-repair $\mathcal{P}_R$, lintability repair $\mathcal{P}_L$, generation repair
-$\mathcal{P}_G$, and verification repair $\mathcal{P}_V$. The repair operator
-$\mathcal{P}$ is distinct
-from the rendering function $\rho$ of \S\ref{subsec:mech}. The next round's
-operation is selected from the signals above, and a repair is accepted only
-when the metric decreases.
+SAIV comprises four kinds of repair operations---IR-content
+repair, lintability repair, generation repair, and verification repair. The
+next round's operation is selected from the signals above, and a repair is
+accepted only when the metric decreases.
 
 \begin{itemize}
-\item \textbf{IR-content repair $\mathcal{P}_R$} changes the extraction prompt
+\item \textbf{IR-content repair} changes the extraction prompt
   and re-runs IR extraction when the source-level meaning captured by the IR is
   wrong. The LLM may return a corrected IR, denoted REPAIR(ir'), or
   abstain with NO\_FIX.
-\item \textbf{Lintability repair $\mathcal{P}_L$} is the same re-extraction
+\item \textbf{Lintability repair} is the same re-extraction
   mechanism restricted to the lintability-gate IR fields---obligation,
   assertion\_subject, enforcement\_phase, and rule\_category. It is invoked when
   S1 indicates that a not-lintable normative rule is actually covered by an existing lint,
   or when S2 indicates that a supposedly lintable normative rule may not be expressible as
-  a certificate lint. After re-extraction, SAIV re-runs
-  $\phi_L$ and updates the set-level partition $\psi_L$.
-\item \textbf{Generation repair $\mathcal{P}_G$} routes by cause. A missing template routes to the
-  offline vocabulary-expansion channel $\mathcal{P}_A$, which adds a new atomic
+  a certificate lint. After re-extraction, SAIV re-runs the lintability
+  determination and updates the partition $(\RN, \RL, \RU)$.
+\item \textbf{Generation repair} routes by cause. A missing template routes to the
+  offline vocabulary-expansion channel, which adds a new atomic
   template to $\mathcal{A}$ after certificate-level execution verification; a wrong IR field, such as too coarse a granularity,
-  routes to IR-content repair $\mathcal{P}_R$; and a normative rule that proves not to be lintable
-  routes to lintability repair $\mathcal{P}_L$. When the template, IR, and
+  routes to IR-content repair; and a normative rule that proves not to be lintable
+  routes to lintability repair. When the template, IR, and
   lintability label are all correct but the meaning is too complex to express
   within $\Tv$, the normative rule is kept as a logged expressiveness gap rather than
   repaired as code.
-\item \textbf{Verification repair $\mathcal{P}_V$} enlarges the semantic-equivalence
+\item \textbf{Verification repair} enlarges the semantic-equivalence
   judgment's semantic neighborhood, such as negation/affirmation interchange or
   one-to-many decomposition, or corrects the inconsistency between the two
   verdict sources.

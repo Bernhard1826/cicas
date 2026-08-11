@@ -14,6 +14,19 @@
 \usepackage{tabularx}    % width-constrained tables (X column absorbs slack)
 \usepackage{multirow}    % multirow table cells
 \usepackage{stfloats}    % full-width (starred) floats at page bottom (modern; avoids deprecated fixltx2e)
+\usepackage{enumitem}    % vertical spacing of itemize/enumerate (spacing only; margins untouched)
+
+% Character protrusion only. expansion=false is deliberate: font expansion would
+% scale glyph widths, which the NDSS/IEEEtran template forbids ("do not use
+% packages that alter fonts"). Protrusion only shifts punctuation optically into
+% the margin edge and leaves every glyph, the typeface, and the body font size
+% unchanged.
+\usepackage[protrusion=true,expansion=false]{microtype}
+
+% Tighten only the vertical spacing of lists. leftmargin is deliberately left at
+% the class default so no length controlling horizontal margins is touched.
+\setlist[itemize]{topsep=2pt,partopsep=0pt,parsep=0pt,itemsep=2pt}
+\setlist[enumerate]{topsep=2pt,partopsep=0pt,parsep=0pt,itemsep=2pt}
 
 \newif\ifshowcomments
 \showcommentsfalse

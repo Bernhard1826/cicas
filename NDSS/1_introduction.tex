@@ -13,7 +13,7 @@ These incidents have already translated into ecosystem-wide policy changes.
 The CA/Browser Forum mandated pre-issuance linting for all publicly trusted CAs beginning March~15,~2025~\cite{cabf-sc75-2024}.
 Subsequently, Ballot~SC-081v3~\cite{cabf-sc081v3} introduced a progressive reduction of TLS certificate validity periods to 47~days, substantially increasing certificate issuance frequency and the operational demand for automated compliance verification.
 
-Currently, certificate compliance analysis relies primarily on certificate-linting tools, such as zlint~\cite{kumar2018tracking}, pkilint~\cite{pkilint}, certlint~\cite{certlint}, and x509lint~\cite{x509lint}, which are widely integrated into Certificate Transparency (CT) monitoring and CA issuance pipelines.
+Currently, certificate compliance analysis relies primarily on certificate-linting tools, such as zlint~\cite{kumar2018tracking}, pkilint~\cite{pkilint}, certlint~\cite{certlint}, and x509lint~\cite{x509lint}, which are widely integrated into Certificate Transparency (CT)~\cite{stark2019does} monitoring and CA issuance pipelines.
 However, these tools depend heavily on manual certificate-lint engineering, since each certificate lint must be individually implemented and continuously maintained by PKI experts as Web PKI normative sources are revised.
 As certificate issuance volume and the complexity of Web PKI normative sources continue to grow, this approach becomes increasingly difficult to scale.
 
@@ -28,7 +28,7 @@ First, normative-rule extraction must be accurate. Web PKI normative sources con
 
 Second, lintability determination\footnote{Lintability in this study denotes the extent to which a normative rule can be implemented as a certificate lint without dependence on external context or runtime behavior.} is itself non-trivial. The presence of RFC~2119 keywords such as MUST, SHALL, or SHOULD does not by itself indicate that a normative rule can be translated into a deterministic certificate lint, since many keyword-bearing normative rules depend on external context or runtime behavior not contained in the certificate. This calls for an explicit, checkable characterization of lintability rather than a keyword heuristic.
 
-Third, code generation must be trustworthy. An LLM-to-code workflow without an explicit output-space restriction does not enforce the field selections, constants, or program structures represented by a normative rule. Our design instead confines code generation to a closed DSL-tree space and applies structural and build checks before a candidate enters downstream verification.
+Third, code generation must be trustworthy. An LLM-to-code workflow~\cite{liu2023evalplus} without an explicit output-space restriction does not enforce the field selections, constants, or program structures represented by a normative rule. Our design instead confines code generation to a closed DSL-tree space and applies structural and build checks before a candidate enters downstream verification.
 
 \noindent \textbf{Our study.}
 We design a pipeline that automatically extracts lintable normative rules from Web PKI normative sources, determines their lintability, and generates auditable lint code, addressing the three challenges in turn.

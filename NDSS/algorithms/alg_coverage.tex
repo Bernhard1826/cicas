@@ -1,6 +1,12 @@
 % Algorithm 1 -- zlint coverage-alignment determination for lintable normative rules.
 % Included from sections/08_evaluation.tex via \input{algorithms/alg_coverage}.
-\begin{figure*}[tb]
+%
+% Typeset single-column (not figure*) at \scriptsize: the algorithmic lines are
+% short, so at full width the right half of most lines was blank and the float was
+% billed two columns of page area. Long \Comment texts are placed on their own
+% \Statex lines because \Comment is right-aligned and cannot wrap. No step, symbol,
+% or comment wording was changed.
+\begin{figure}[tb]
 \makeatletter
 \@ifundefined{c@algorithm}{%
   \newcounter{algorithm}%
@@ -16,7 +22,7 @@ coverage-alignment determination for individual normative rules.
 \par\smallskip
 \noindent\rule{\linewidth}{0.4pt}
 \par\smallskip
-\small
+\scriptsize
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} lintable normative-rule set $B=\{b_1,\dots,b_m\}$, where each normative rule has
   IR four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$,
@@ -31,7 +37,7 @@ coverage-alignment determination for individual normative rules.
 \ForAll{$\ell \in L$}
   \State $\ell.\mathit{ir} \gets M_{\mathrm{summ}}(\ell.\mathrm{src},
     \ell.\mathrm{tests}, \ell.\mathrm{meta})$
-    \Comment{four-tuple $+$ code\_summary}
+  \Statex \Comment{four-tuple $+$ code\_summary}
 \EndFor
 \State pre-split candidate pools by Source: $L_{\mathrm{RFC}}\gets$ RFC lints,\;
   $L_{\mathrm{CABF}}\gets$ CABF lints
@@ -47,13 +53,14 @@ coverage-alignment determination for individual normative rules.
   \EndIf
   \State // Stage-2: field-level judge, compare four-tuple, best across candidates
   \State $(v,\ell^{*})\gets M_{\mathrm{judge}}(b.\mathit{ir}, C(b))$
-    \Comment{$v\in\{\text{full},\text{partial},\text{none}\}$}
+  \Statex \Comment{$v\in\{\text{full},\text{partial},\text{none}\}$}
   \State // Stage-3: reject positive matches with conflicting concrete subject families
   \If{$v\in\{\text{full},\text{partial}\} \wedge
       \mathrm{Family}(b.\mathrm{subject})\neq\emptyset \wedge
       \mathrm{Family}(\ell^{*}.\mathrm{subject})\neq\emptyset \wedge
       \mathrm{Family}(b.\mathrm{subject})\neq\mathrm{Family}(\ell^{*}.\mathrm{subject})$}
-    \State $v\gets\text{none}$ \Comment{different concrete families $\Rightarrow$ wrong-field false positive}
+    \State $v\gets\text{none}$
+    \Statex \Comment{different concrete families $\Rightarrow$ wrong-field false positive}
   \EndIf
   \State $\mathrm{verdict}(b)\gets v$
 \EndFor
@@ -64,4 +71,4 @@ coverage-alignment determination for individual normative rules.
 \end{algorithmic}
 \par\smallskip
 \noindent\rule{\linewidth}{0.6pt}
-\end{figure*}
+\end{figure}
