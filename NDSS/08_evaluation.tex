@@ -274,6 +274,69 @@ scale~\cite{landis1977measurement}. BR~1.4.8 has more balanced classes, with 69
 of 106 matched pairs positive (65\%), and yields $\kappa = 0.823$,
 almost-perfect agreement and a tighter estimate of system quality.
 
+\subsection{Comparison Against Unconstrained LLM Generation}
+\label{subsec:baseline}
+
+The claim that confining synthesis to $\Tv$ yields more trustworthy lints than an
+unconstrained LLM-to-code workflow is comparative, so we test it on
+CABF~BR~v2.2.6 \S7.1.2 (Certificate Content and Extensions), which contributes
+141 of the 260 lintable normative rules and 70 of the 95 rules in $\RLunc$.
+
+\textbf{Baseline arm.} The baseline receives the verbatim text of one subsection,
+67 in total, enumerates the obligations it finds, and writes one zlint lint for
+each obligation it judges checkable against a single parsed certificate. It
+shares our model at temperature~0, our render-and-build gate, and our
+semantic-equivalence judge; we withhold exactly the manipulated
+variable---the typed vocabulary $\mathcal{V}$, the atomic templates
+$\mathcal{A}$, the DSL grammar, and every rule and IR our pipeline
+produced---while supplying host-API facts that are not our contribution, such as
+zlint~v3's registration skeleton and zcrypto's certificate type, whose absence
+would depress compilation for reasons unrelated to output-space restriction.
+Extraction is repeated three times under an identical prompt. Our own arm is not
+re-run: its figures come from the frozen ledger of
+\S\ref{subsec:codegen-results}.
+
+\textbf{Reference set.} Scoring recall against our own extracted rules would be
+circular, so we enumerate mechanically all 496 obligation-class BCP~14 keyword
+occurrences in \S7.1.2 and adjudicate each one, blind to both arms' outputs, on
+whether it states a normative obligation and whether that obligation constrains
+certificate content. This yields 493 obligations, 460 of them on certificate
+content. Both arms are scored by the same estimator, which counts occurrences
+per (subsection,~keyword) pair.
+
+\begin{table}[tb]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Unconstrained LLM generation versus this work on CABF~BR~v2.2.6
+\S7.1.2. An obligation counts as recalled when the arm produced a record for it;
+the baseline recall is the mean of three repetitions under an identical prompt,
+with population standard deviation.}
+\label{tab:baseline}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrr@{}}
+\toprule
+ & Unconstrained & This work \\
+\midrule
+Extraction recall ($n=460$) & 94.0\% $\pm$ 0.27 & 99.1\% \\
+Code generation, common subset ($n=81$) & 33 (40.7\%) & 81 (100\%) \\
+Semantic equivalence & 34/99 (34.3\%) & 57/70 (81.4\%) \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\textbf{Results.} Extraction is where the baseline comes closest: it recovers
+94.0\% of the 460 obligations against our 99.1\%, with less than a third of a
+percentage point of spread across its three repetitions. The separation is
+downstream. The two arms' self-declared lintable sets are not comparable as
+denominators---ours passes the audited four-condition criterion of
+\S\ref{sec:lintability}, the baseline's is self-asserted, and over \S7.1.2 it
+declares 344 obligations checkable and compiles 99 of them---so we compare on the
+81 adjudicated obligations that both arms recorded and that lie inside our
+code-generation domain. There our generator compiles 81 of 81 and the baseline
+33. Under the identical unanimous $k=5$ gate, 34 of the baseline's 99 compiling
+lints are judged semantically equivalent to the normative text, against 57 of our
+70.
+
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
 
