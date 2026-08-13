@@ -11,14 +11,14 @@
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabularx}{\textwidth}{@{}l l L{0.36\linewidth} X@{}}
-\hline
+\toprule
 ID & IR field & Value domain & Condition \\
-\hline
+\midrule
 $C_1$      & obligation         & MUST, SHALL, REQUIRED, SHOULD, RECOMMENDED, MUST NOT, SHALL NOT, SHOULD NOT, MAY, OPTIONAL & obligation $\notin$ \{MAY, OPTIONAL\} \\
 $C_2$      & assertion\_subject & Certificate, CA, CrossArtifact & assertion\_subject $=$ Certificate \\
 $C_3$      & enforcement\_phase & Encoding, Validation, Comparison, Processing & enforcement\_phase $=$ Encoding \\
 $\neg C_4$ & rule\_category     & encoding\_constraint, comparison, definition, capability, algorithm\_ref, display, \dots & rule\_category $\notin$ \{definition, capability, algorithm\_ref, display, \dots\} \\
-\hline
+\bottomrule
 \end{tabularx}
 \end{table*}
 
@@ -36,7 +36,7 @@ determination then becomes a Boolean function of four discrete fields. Third,
 separating the four conditions makes the IR fields contributing to a label
 explicit rather than locating the determination in an opaque end-to-end LLM call.
 
-Table~\ref{tab:four-conditions} lists the four IR fields, their value domains, and the conditions they determine. The deontic level obligation comes from the IR core four-tuple in Table~\ref{tab:ir-core}. The remaining three fields, assertion\_\allowbreak subject, enforcement\_\allowbreak phase, and rule\_\allowbreak category, are key extension fields. From the enumeration of rule\_\allowbreak category, we designate
+Table~\ref{tab:four-conditions} lists the four IR fields, their value domains, and the conditions they determine. The deontic level obligation comes from the IR core four-tuple in Table~\ref{tab:ir-core}. The remaining three key extension fields are assertion\_\allowbreak subject, enforcement\_\allowbreak phase, and rule\_\allowbreak category. From the enumeration of rule\_\allowbreak category, we designate
 \begin{gather*}
 \mathcal{N} = \{definition,\,capability,\,algorithm\_ref,\,display,\,\dots\}
 \end{gather*}
@@ -57,8 +57,8 @@ The obligation field also fixes the lint severity. MUST-class obligations map to
 The three non-deontic conditions encode three orthogonal boundaries. $C_2$ is the subject boundary, separating obligations on the certificate from obligations on the CA, relying party, or surrounding ecosystem. $C_3$ is the runtime boundary, separating obligations observable in the issued bytes from those that fire during chain processing, name comparison, revocation handling, or CAA retrieval. $\neg C_4$ is the process boundary, separating state assertions from terms in $\mathcal{N}$.
 
 Since each $C_i$ is a deterministic function of one IR field, the lintability
-determination---which adopts the conjunction $C_1\wedge C_2\wedge C_3\wedge\neg C_4$ of
-these necessary conditions as its operational criterion---is computed from
+determination, which adopts the conjunction $C_1\wedge C_2\wedge C_3\wedge\neg C_4$ of
+these necessary conditions as its operational criterion, is computed from
 the IR rather than predicted by the LLM. When the values of the four IR fields
 used by this criterion are fixed, repeated evaluation yields the same
 lintability result.

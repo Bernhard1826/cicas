@@ -3,7 +3,7 @@
 \label{sec:codegen}
 %-------------------------------------------------------------------------------
 
-Generating checking code directly with a large language model faces two
+Generating checking code directly with an LLM faces two
 inherent difficulties. The first is hallucination. The model may
 misspell a field name as another field that happens to exist but is
 semantically unrelated, or introduce a unit error in an OID. The second is
@@ -17,14 +17,14 @@ the restricted LLM fallback is bounded to the same closed space and gated by
 ``render and pass go build,'' so any out-of-space or non-compiling output is
 rejected rather than shipped.
 Figure~\ref{fig:codegen-pipeline} illustrates the whole
-pipeline on a single normative rule---CA certificates must assert the keyCertSign
+pipeline on a single normative rule: CA certificates must assert the keyCertSign
 key-usage bit.
 
 \begin{figure*}[tb]
   \centering
   \paperfig{figures/fig03_codegen_pipeline.png}{Worked example of restricted
-    code generation. A single normative rule flows from its filled IR fields through the
-    DSL tree, represented as an abstract syntax tree, and its JSON serialization to deterministically rendered Go
+    code generation. A single normative rule flows from its filled IR fields to the
+    DSL tree, an abstract syntax tree, then to its JSON serialization, and finally to deterministically rendered Go
     checking code.}
   \caption{Worked example of restricted code generation. }
   \label{fig:codegen-pipeline}
@@ -69,7 +69,7 @@ is:
   \end{cases}
 \end{equation}
 The precondition $p$ is the normative rule's precondition. When it exists and is
-false on $c$, the result is $\mathrm{NA}$, not applicable; when the
+false on $c$, the result is $\mathrm{NA}$, meaning not applicable; when the
 precondition is absent or holds and $q$ holds, the result is $\mathrm{Pass}$;
 when the precondition holds but $q$ does not, it is a violation, returning
 $\mathrm{Severity}(r)$ by obligation. Because $C_1$ of \S\ref{sec:lintability}
@@ -80,10 +80,10 @@ MUST-class or SHOULD-class, so $\mathrm{Severity}(r) \in \{\mathrm{Error},
 \textbf{The IR fills the atomic template's parameter slots.} Selecting an atomic
 template fixes only which check to use; one still needs to know what to check and
 against what value, and these parameter values come precisely from the current
-normative rule's IR. The IR's subject, the certificate field path given by the
-field resolver such as subjectAltName.dNSName, fills the atomic
-template's field slot, and the IR's constraint, a constraint value or
-pattern such as a value set, a length interval, or a regex name, fills the value
+normative rule's IR. The IR's subject is the certificate field path given by the
+field resolver, such as subjectAltName.dNSName, and it fills the atomic
+template's field slot. The IR's constraint is a constraint value or
+pattern such as a value set, a length interval, or a regex name, and it fills the value
 slot. For example, the normative rule ``the dNSName of subjectAltName must be non-empty''
 is, after mapping and filling, instantiated as
 $\mathrm{FieldNonEmpty}(\mathrm{DNSNames})$.
@@ -97,14 +97,14 @@ bridge them, we maintain a many-to-many predicate-to-template map that assigns e
 predicate a set of candidate atomic templates that can semantically carry it.
 For instance, must\_be\_present may correspond to $\{\mathrm{ExtPresent},
 \mathrm{FieldNonEmpty}\}$, and in\_range to $\{\mathrm{IntInRange},
-\mathrm{PathLenConstraintHas}, \dots\}$---which one to take depends on the type
+\mathrm{PathLenConstraintHas}, \dots\}$. Which one to take depends on the type
 of the constrained field.
 
 \subsection{Typed Vocabulary and Parameter Closure}
 \label{subsec:tv}
 
 \S\ref{subsec:atoms} described how atomic templates and IR filling place the
-IR's subject and constraint into an atomic template's parameter slots---but the
+IR's subject and constraint into an atomic template's parameter slots, but the
 IR provides only the field that a normative rule restricts and the value it
 restricts that field to,
 without constraining the legal type of those values. If the subject path
@@ -113,12 +113,12 @@ requires an integer, a structurally legal but semantically misaligned tree can
 still result. This subsection closes that gap with a typed vocabulary
 $\mathcal{V}$. $\mathcal{V}$ is the disjoint union of seven finite sets, frozen
 at system startup, and each atomic-template parameter may only draw from one of
-them---certificate field names, DN fields, OID constants, KeyUsage bits,
+them: certificate field names, DN fields, OID constants, KeyUsage bits,
 ExtKeyUsage bits, ASN.1 encoding types, and named regexes. The size and samples
 of each class appear in Appendix~\ref{app:tv}.
 
-Each atomic template has a signature table specifying which class, or base type
-integer/Boolean/string, each of its parameters must draw from; a call to an
+Each atomic template has a signature table that specifies, for each parameter,
+which class or base type integer/Boolean/string it must draw from; a call to an
 atomic template is legal if and only if every actual argument falls in the class its
 signature prescribes. Writing $\Tv$ for the set of DSL trees all of whose
 parameters are legal, we strictly restrict the range of the code generator to
@@ -130,11 +130,11 @@ stage, triggering repair, and never enters code generation.
 \label{subsec:mech}
 
 A legal DSL tree $t$ must be turned into two products. One is executable Go
-checking code, and the other is a code summary, the code\_summary, that
+checking code, and the other is a code summary that
 summarizes its checking logic in one sentence. Both conversions are performed by
 deterministic total functions, with no LLM call. The rendering function $\rho$
 maps a tree to Go code, and the mechanical translation function $\smech$ maps the
-same tree to a code\_summary sentence; for the same $t$, each produces a unique
+same tree to a code summary sentence; for the same $t$, each produces a unique
 output.
 
 $\rho$ is type-safe. It never generates an out-of-bounds field, OID, or
@@ -149,8 +149,8 @@ detailed in Appendix~\ref{app:sigma}.
 
 Thus $\rho$'s product leads to executable code and the certificate-level execution
 verification of \S\ref{subsec:exec-verify}, while $\smech$'s product leads to
-semantic-equivalence verification---comparing the code\_summary with the
-normative rule text and determining whether the two are semantically equivalent.
+semantic-equivalence verification, which compares the code summary with the
+normative rule text and determines whether the two are semantically equivalent.
 
 \subsection{Tree Synthesis with a Deterministic Main Path and Restricted LLM
 Fallback}
@@ -164,7 +164,7 @@ constraint can both be filled into the chosen atomic template.
 This subsection gives the implementation of the generator. It
 first attempts deterministic synthesis and falls back to LLM synthesis only when
 deterministic synthesis returns no tree. Both paths use rendering and passing go build as
-the acceptance gate---even if deterministic synthesis returns a tree, that is
+the acceptance gate. Even if deterministic synthesis returns a tree, that is
 not enough; it must actually compile, otherwise it is treated as unresolved and
 passed to LLM synthesis. Both paths are constrained by the same set of
 structural checks, and neither determines whether the code expresses the
@@ -183,13 +183,15 @@ the generator switches to LLM synthesis. The model receives the normative-rule c
 the structured IR, the candidate atomic-template set, and a readable enumeration
 and signature table of $\mathcal{V}$ and $\mathcal{A}$. It
 outputs only one of two results, either a serialized DSL tree or an explicit
-no-template abstention marker NT. The raw LLM
+no-template abstention marker (NT). The raw LLM
 output is first validated by a parser, which resolves it into
 a legal DSL tree $t \in \Tv$, a type error, or NT, and any
 identifier outside $\mathcal{V}/\mathcal{A}$ is rejected here; a passing tree is
 rendered by $\rho$, and then a deterministic post-processor
-binds Description/Citation/Name and the metadata of
-each normative source, with details in Appendix~\ref{app:tv}.
+binds the lint's metadata, taking Description from the IR's rule\_text field,
+which holds the verbatim text of the normative rule, Citation from the source
+identifier and section number, and Name from the DSL tree and the rule
+identifier, with details in Appendix~\ref{app:tv}.
 
 \subsection{Three-Layer Semantic Alignment Verification}
 \label{subsec:exec-verify}
@@ -198,15 +200,29 @@ Whether the generated code expresses the normative rule is the hardest judgment
 in the whole pipeline. This subsection checks it at three levels from coarse to
 fine.
 
-\textbf{Layer~A, description provenance.} Check whether the Description
-can be traced back to the normative source.
+\textbf{Layer~A, description provenance.} Description is an IR field. When Layer~2 of DLEP
+(\S\ref{sec:method-dual-layer}) parses a normative sentence, it stores that
+sentence verbatim in the IR's rule\_text field, and the deterministic
+post-processor of \S\ref{subsec:synth} copies that field unchanged into the
+Description metadata of every generated lint, on both the deterministic and the
+fallback path, so a lint carries the normative rule
+text it was generated from. Layer~A checks that this holds for the shipped
+code, requiring the Description string to trace back to the text of the cited
+normative source. The check is a deterministic string comparison and calls no
+LLM: the Description is first matched against the rule's source span and the
+IR's rule\_text and constraint raw text, and if none of them is near-identical,
+against the full text of the cited section. A Description
+matching nothing in the cited source fails the layer, which catches the case
+where a repair or the LLM fallback substituted a paraphrase or invented text for
+the normative sentence.
 
 \textbf{Layer~B, semantic equivalence of the code-behavior summary.} It turns
 the cross-modal judgment of whether the code implements the
 normative rule into the same-modal judgment of whether two natural-language
 sentences are semantically equivalent. Following $\smech$ of \S\ref{subsec:mech}, with the
 phrase dictionary in Appendix~\ref{app:sigma}, the code is translated into a
-code\_summary, which is then judged against the Description.
+code summary, which is then judged against the Description, that is, against the
+normative rule text carried in rule\_text.
 
 \textbf{Layer~C, compilation and structure.} Verify that the code can be parsed
 syntactically, that the function and metadata fields are complete, that
@@ -246,8 +262,8 @@ the IR, \CodeEqIR.
 
 This verification is performed on controlled certificate samples; the result is
 deterministic and does not vary with run count or model. Its boundary
-must be stressed. \CodeEqIR{} only shows that the code follows the intermediate
-representation IR, which is not the same as code--normative-rule
+must be stressed. \CodeEqIR{} only shows that the code follows the IR, which is
+not the same as code--normative-rule
 alignment; if the IR itself has already drifted from the normative rule, this
 verification cannot detect it. The code--normative-rule judgment therefore still
 rests with \CodeEqRule{}, the Layer~B semantic-equivalence judgment.

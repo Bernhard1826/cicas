@@ -7,6 +7,7 @@
 % \Statex lines because \Comment is right-aligned and cannot wrap. No step, symbol,
 % or comment wording was changed.
 \begin{figure}[tb]
+\setlength{\parskip}{0pt}
 \makeatletter
 \@ifundefined{c@algorithm}{%
   \newcounter{algorithm}%
@@ -15,13 +16,16 @@
 \makeatother
 \refstepcounter{algorithm}
 \label{alg:coverage}
-\noindent\rule{\linewidth}{0.6pt}
-\par\smallskip
+\hrule width \linewidth height 0.6pt\relax
+\vspace{1pt}
+\nointerlineskip
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for zlint
 coverage-alignment determination for individual normative rules.
-\par\smallskip
-\noindent\rule{\linewidth}{0.4pt}
-\par\smallskip
+\par
+\vspace{1pt}
+\nointerlineskip
+\hrule width \linewidth height 0.4pt\relax
+\nointerlineskip
 \scriptsize
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} lintable normative-rule set $B=\{b_1,\dots,b_m\}$, where each normative rule has
@@ -37,7 +41,7 @@ coverage-alignment determination for individual normative rules.
 \ForAll{$\ell \in L$}
   \State $\ell.\mathit{ir} \gets M_{\mathrm{summ}}(\ell.\mathrm{src},
     \ell.\mathrm{tests}, \ell.\mathrm{meta})$
-  \Statex \Comment{four-tuple $+$ code\_summary}
+  \Statex \Comment{four-tuple $+$ code summary}
 \EndFor
 \State pre-split candidate pools by Source: $L_{\mathrm{RFC}}\gets$ RFC lints,\;
   $L_{\mathrm{CABF}}\gets$ CABF lints
@@ -69,6 +73,6 @@ coverage-alignment determination for individual normative rules.
   $\RLunc\gets B\setminus \RLcov$
 \State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \RLcov,\ \RLunc)$
 \end{algorithmic}
-\par\smallskip
-\noindent\rule{\linewidth}{0.6pt}
+\vspace{1pt}
+\hrule width \linewidth height 0.6pt\relax
 \end{figure}

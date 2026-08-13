@@ -3,7 +3,7 @@
 \label{sec:rule-extraction}
 %-------------------------------------------------------------------------------
 
-This section presents DLEP, our framework for extracting Web PKI normative rules into a structured intermediate representation.
+This section presents DLEP, our framework for extracting Web PKI normative rules into a structured IR.
 
 \subsection{PKI Knowledge Graph Builder}
 \label{sec:method-kg-builder}
@@ -11,11 +11,11 @@ This section presents DLEP, our framework for extracting Web PKI normative rules
 The PKI knowledge graph builder is the offline component that converts heterogeneous Web PKI normative sources into the retrieval substrate used by DLEP.
 It normalizes each normative source into a hierarchical structure with stable identifiers for the source, sections, headings, and text units.
 It then extracts explicit references such as section citations, RFC references, and policy cross-links, and links them to target nodes when the targets can be resolved unambiguously.
-In parallel, it records certificate-field concepts and aliases, namely subjectAltName, dNSName, basicConstraints.cA, and policy OIDs, to map natural-language mentions to canonical certificate paths during later extraction.
+In parallel, it records certificate-field concepts and aliases such as subjectAltName, dNSName, basicConstraints.cA, and policy OIDs, to map natural-language mentions to canonical certificate paths during later extraction.
 
 Web PKI normative sources form a densely interconnected cross-document network.
 For example, RFC~5280 references multiple RFCs, while CABF~BR directly depends on RFC~5280 field definitions.
-We model this knowledge as a multi-edge directed graph with eight node types, namely Specification, Section, Definition, CertificateField, Rule, Operation, Value, and Concept, and four source-backed relations, namely CONTAINS, DEFINES, REFERENCES, and APPLIES\_TO. Appendix~\ref{app:kg} summarizes these relations and their deterministic retrieval constraints.
+We model this knowledge as a multi-edge directed graph. Its eight node types are Specification, Section, Definition, CertificateField, Rule, Operation, Value, and Concept, and its four source-backed relations are CONTAINS, DEFINES, REFERENCES, and APPLIES\_TO. Appendix~\ref{app:kg} summarizes these relations and their deterministic retrieval constraints.
 
 This builder is deliberately conservative.
 It stores only relations directly supported by source-document structure or textual evidence, while leaving normative judgments such as conflict, override, and lintability to later deterministic stages.
@@ -41,14 +41,14 @@ It then assembles LLM context by relation-type priority and provides term defini
 \setlength{\tabcolsep}{4pt}
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}L{0.27\linewidth} L{0.30\linewidth} X@{}}
-\hline
+\toprule
 Tier & Keywords & Semantics \\
-\hline
+\midrule
 Mandatory      & MUST, SHALL, REQUIRED   & Absolute requirement; a violation is non-compliance \\
 Prohibition    & MUST NOT, SHALL NOT     & Absolute prohibition \\
 Recommendation & SHOULD, SHOULD NOT, RECOMMENDED & Strongly recommended or discouraged; justified deviation permitted \\
 Optional       & MAY, OPTIONAL           & Fully optional \\
-\hline
+\bottomrule
 \end{tabularx}
 \end{table}
 
@@ -59,14 +59,14 @@ Optional       & MAY, OPTIONAL           & Fully optional \\
 \setlength{\tabcolsep}{4pt}
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}L{0.18\linewidth} X@{}}
-\hline
+\toprule
 Field & Meaning \\
-\hline
+\midrule
 subject    & Certificate field path, for example extensions.\allowbreak subjectAltName.\allowbreak dNSName, resolved by FieldResolver \\
 obligation & RFC~2119 keyword, such as MUST/SHALL/SHOULD/\dots \\
 predicate  & Assertion type, such as must\_be\_present, conform\_to, equal, \dots \\
 constraint & constraint value or pattern \\
-\hline
+\bottomrule
 \end{tabularx}
 \end{table}
 
@@ -82,7 +82,7 @@ Pass~2 detects nested structures so subordinate normative rules inherit the pare
 Pass~3 performs Non-Canonical Recovery.
 
 Layer~2 performs controlled semantic parsing using an LLM, but restricts the model to a constrained language-understanding role.
-Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized intermediate representation (IR), while all normative reasoning is deferred to later deterministic stages.
+Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized IR, while all normative reasoning is deferred to later deterministic stages.
 
 The IR decouples semantic extraction from downstream tasks, allowing the same extraction result to support multiple uses, as shown in Fig.~\ref{fig:ir-downstream}.
 Each IR record is serialized as a JSON object with 33 fields.

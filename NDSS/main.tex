@@ -194,8 +194,10 @@
 % IEEE journal ordering (appendix, then bibliography) from Michael Shell's
 % generic bare_conf.tex, but published NDSS papers place REFERENCES before the
 % APPENDIX, and the CFP puts the optional "Ethics Considerations" section
-% immediately before the reference section. An Ethics Considerations section,
-% if added, goes here --- directly above \bibliography.
+% immediately before the reference section --- hence the \input below, directly
+% above \bibliography.
+\input{11_ethics}
+
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 

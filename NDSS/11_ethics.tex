@@ -1,0 +1,18 @@
+%-------------------------------------------------------------------------------
+% NDSS "Ethics Considerations" section, \input immediately before the reference
+% section (see the note above \bibliography in main.tex). The heading is
+% unnumbered because the CFP treats this section as outside the page limit;
+% switch \section* to \section for a numbered heading.
+%-------------------------------------------------------------------------------
+\section*{Ethics Considerations}
+
+We strictly follow the Menlo Report~\cite{kenneally2012menlo} and established best
+practices for network measurement research~\cite{partridge2016ethical,allman2007issues}.
+All data analyzed in this work is publicly available: public normative documents,
+zlint's open-source testdata, the chains served by the Tranco Top~1M domains, and a
+sample of public CT logs. The only active component is the
+one-time TLS-handshake collection of the Tranco chains, where we strictly limit the
+scan rate to minimize the impact on real networks and production services and perform
+only the handshake needed to retrieve the served chain. All remaining analysis is
+offline, and the work involves no user traffic, no personal data, and no human
+subjects.

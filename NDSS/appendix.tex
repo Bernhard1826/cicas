@@ -66,6 +66,9 @@ obligation & core & RFC~2119 deontic level, such as MUST/SHOULD/\dots \\
 predicate & core & constraint relation, such as presence, equality,
   containment, or range \\
 constraint & core & constraint value, pattern, or condition \\
+rule\_text & key ext. & verbatim text of the normative rule sentence, bound
+  unchanged to the Description metadata of the generated lint
+  (\S\ref{subsec:exec-verify}) \\
 rule\_category & key ext. & normative rule's semantic category, such as
   encoding\_constraint, definition, algorithm\_ref, \dots \\
 assertion\_subject & key ext. & assertion subject, such as Certificate / CA /
@@ -263,7 +266,7 @@ when $p = \varepsilon$ it outputs the single sentence $\smech(q)$.
 \label{sec:saiv}
 
 To coordinate the modules and safeguard their output quality without manual
-ground truth, we propose the Stage-Aware Iterative Verification (SAIV) framework.
+ground truth, we propose the SAIV framework.
 The basic idea is to predefine two quantifiable optimization
 objectives, measure the gap between the current and ideal states by each
 objective's computable residual, and when a residual has not reached its
@@ -311,8 +314,8 @@ checks gate the labels those objectives consume.
 \noindent\textbf{G1, recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
 If the set-level lintability determination assigns each keyword-recalled candidate in
-$\Rkw(\mathcal{D})$ to exactly one of the three classes---noise, lintable, and
-not-lintable---then recall is conserved from recall to lintability
+$\Rkw(\mathcal{D})$ to exactly one of the three classes noise, lintable, and
+not-lintable, then recall is conserved from recall to lintability
 determination:
 \begin{equation}\label{eq:cons}
   |\Rkw(\mathcal{D})| = |\RN| + |\RL| + |\RU|
@@ -344,7 +347,7 @@ closed, as shown in Table~\ref{tab:codegen-results}:
 
 \medskip
 \noindent\textbf{G2, code--normative-rule semantic equivalence for uncovered normative rules.} For the
-uncovered subset $\RLunc$, the code summary $\smech(t_r)$, the code\_summary of
+uncovered subset $\RLunc$, the code summary $\smech(t_r)$, the code summary of
 normative rule $r$'s DSL tree $t_r$ computed by $\smech$ of \S\ref{subsec:mech}, is
 required to be semantically equivalent to the normative rule text.
 The residual $\Lcode$ is the average, over $\RLunc$, of the per-normative-rule correctness
@@ -361,8 +364,8 @@ $\equiv 1$ in the fixed zlint shell, so it drops out:
 auxiliary check audits the not-lintable verdict. If a normative rule has a corresponding
 implementation in a lint tool such as zlint, it must be lintable, so the check
 counts the violations $\Nviol$ and is cleared when $\Nviol = 0$. $\Nviol$ is
-computed by a reverse coverage check---running the coverage judge over
-the not-lintable set $\RU$ and counting the normative rules it rates full or partial; each
+computed by a reverse coverage check that runs the coverage judge over
+the not-lintable set $\RU$ and counts the normative rules it rates full or partial; each
 such hit is adjudicated as either a lintability false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
@@ -399,16 +402,16 @@ their signals and repair routing.}
 \toprule
 Item & Signal & Main repair direction & Repair target \\
 \midrule
-\multicolumn{4}{@{}l}{\emph{Iteration objectives --- define $\Ltot$ and
+\multicolumn{4}{@{}l}{\emph{Iteration objectives: define $\Ltot$ and
   convergence}}\\
-G1 Recall completeness & $\Lrec$, Eq.~\eqref{eq:recall-res} & --- &
+G1 Recall completeness & $\Lrec$, Eq.~\eqref{eq:recall-res} & none &
   accounting invariant only \\
 G2 Semantic equivalence & $\Lcode$, Eq.~\eqref{eq:code-res} &
   IR-content, DSL-generation, and verification-judgment repairs &
   IR-content correction / DSL-tree re-synthesis / judgment \& summary
   re-check \\
 \midrule
-\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks --- audit the
+\multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks: audit the
   lintability determination, outside $\Ltot$}}\\
 S1 Reverse lintability & $\Nviol$, \S\ref{subsec:algo} &
   verification-judgment consistency repair &
@@ -431,7 +434,7 @@ lintability, generation, and verification repair.
 \subsection{Repair Operations}
 \label{subsec:repair}
 
-SAIV comprises four kinds of repair operations---IR-content
+SAIV comprises four kinds of repair operations: IR-content
 repair, lintability repair, generation repair, and verification repair. The
 next round's operation is selected from the signals above, and a repair is
 accepted only when the metric decreases.
@@ -442,7 +445,7 @@ accepted only when the metric decreases.
   wrong. The LLM may return a corrected IR, denoted REPAIR(ir'), or
   abstain with NO\_FIX.
 \item \textbf{Lintability repair} is the same re-extraction
-  mechanism restricted to the lintability-gate IR fields---obligation,
+  mechanism restricted to the lintability-gate IR fields: obligation,
   assertion\_subject, enforcement\_phase, and rule\_category. It is invoked when
   S1 indicates that a not-lintable normative rule is actually covered by an existing lint,
   or when S2 indicates that a supposedly lintable normative rule may not be expressible as

@@ -12,7 +12,7 @@ normative rules governing issuance from natural-language normative sources, dete
 and synthesizes certificate lints with explicit audit evidence on the same input.
 
 The accuracy of lintability determination, code-generation rate, and semantic-equivalence
-rate all depend on IR accuracy. SAIV audits and repairs IR outputs over multiple
+rate all depend on IR accuracy. The stage-aware iterative verification (SAIV) framework of Appendix~\ref{sec:saiv} audits and repairs IR outputs over multiple
 rounds, but current LLMs can still produce an incorrect IR in a single pass.
 Improving IR extraction and independently measuring its error therefore remain
 important future work.
@@ -57,7 +57,7 @@ rather than vague forms such as ``as described in [RFC~X]'' or ``see
 [RFC~X]''. This form makes each reference easier to map to a typed graph edge.
 
 For maintainers of certificate linters, we recommend an
-implementation-aligned code\_summary in the metadata description, namely one
+implementation-aligned code summary in the metadata description, namely one
 RFC~2119-style sentence that states the field path, assertion type, allowed or
 forbidden values, lint severity, and citation. Many existing lint descriptions
 are neither citations to the normative source nor precise summaries of the

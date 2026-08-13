@@ -1,5 +1,5 @@
 %-------------------------------------------------------------------------------
-\section{Background and Related Work}
+\section{Background}
 \label{sec:background}
 %-------------------------------------------------------------------------------
 
@@ -8,7 +8,7 @@ This section reviews the domain background and the prior work that motivate our 
 \subsection{X.509 Certificate and Web PKI Normative Sources}
 \label{sec:bg-pki}
 
-X.509 certificates are the primary data representation in the Web PKI. Their structure and validation semantics are defined across layered normative sources and policy frameworks. IETF~RFC~5280 defines the foundational layer, including the certificate ASN.1 structure, field-level semantics, and the path-validation algorithm. Above it, the CA/Browser Forum Baseline Requirements (BR) impose operational and configuration constraints on commercial CAs that issue publicly trusted TLS certificates. The ETSI~EN\,319 series adds EU-specific configuration profiles aligned with the eIDAS trust framework, and the Mozilla Root Store Policy (MRSP) occupies the browser-policy layer with its own technical requirements. Together, these four normative sources form the Web PKI normative-source stack. The layers cross-reference one another and sometimes impose local overrides. Chapter~7 of CABF~BR, for example, references RFC~5280 directly while tightening individual field-level constraints.
+X.509 certificates are the primary data representation in the Web PKI. Their structure and validation semantics are defined across layered normative sources and policy frameworks. IETF~RFC~5280 defines the foundational layer, including the certificate ASN.1 structure, field-level semantics, and the path-validation algorithm. Above it, the CA/Browser Forum Baseline Requirements impose operational and configuration constraints on commercial CAs that issue publicly trusted TLS certificates. The ETSI~EN\,319 series adds EU-specific configuration profiles aligned with the eIDAS trust framework, and the Mozilla Root Store Policy occupies the browser-policy layer with its own technical requirements. Together, these four normative sources form the Web PKI normative-source stack. The layers cross-reference one another and sometimes impose local overrides. Chapter~7 of CABF~BR, for example, references RFC~5280 directly while tightening individual field-level constraints.
 
 A certificate is a signed ASN.1 object whose core payload is the tbsCertificate structure. This payload contains identity and validity metadata, including version, serialNumber, signature, issuer, validity, subject, and subjectPublicKeyInfo. Version~3 certificates further carry an extension sequence, which is where many security-relevant Web PKI constraints reside. Common examples include subjectAltName for DNS names and email names, basicConstraints for CA status and path-length limits, keyUsage and extendedKeyUsage for allowed cryptographic purposes, certificatePolicies for policy identifiers, and authority-information or revocation pointers such as AIA and CRL distribution points. These fields are encoded as DER bytes, but normative rules are usually written as natural-language statements over semantic field names, profiles, and certificate roles.
 
@@ -25,8 +25,8 @@ This design has two important implications for our work. First, a certificate li
 \label{sec:bg-related}
 
 PolicyLint~\cite{andow2019policylint} and PrivacyFlash~Pro~\cite{zimmeck2021privacyflash}
-analyze privacy text~\cite{harkous2018polisis,amaral2022ai}, Hassani et al.~\cite{hassani2024rethinking} use LLMs for
-legal-compliance analysis~\cite{sun2025compliance,masoudifard2024leveraging,chung2025graphcompliance}, and N-Check~\cite{feng2024analyzing} formalizes
+analyze privacy text~\cite{harkous2018polisis}, Hassani et al.~\cite{hassani2024rethinking} use LLMs for
+legal-compliance analysis~\cite{sun2025compliance}, and N-Check~\cite{feng2024analyzing} formalizes
 normative rules as FOL$^*$ formulas for well-formedness analysis. These systems
 extract or formalize obligations, but do not map Web PKI issuance rules to
 DER-encoded certificate fields or determine their single-certificate lintability.
@@ -35,7 +35,7 @@ Specification analysis covers protocol states, formats, and code~\cite{pacheco20
 PROSPER~\cite{sharma2023prosper}, ParCleanse~\cite{zheng2025validating}, and
 SpecGPT~\cite{zhang2025automated} extract RFC state machines, protocol formats,
 and 3GPP state-machine behavior. Wu et al.~\cite{wu2025uncovering} align RFC text
-with kernel code using GraphRAG-style context~\cite{lewis2020retrieval,edge2024local,peng2025graph},
+with kernel code using GraphRAG-style context~\cite{lewis2020retrieval,edge2024local},
 while RFCAUDIT~\cite{zheng2025rfcaudit} uses hierarchical code-semantic indexing
 and retrieval-guided LLM analysis to find inconsistencies between RFC rules and
 protocol implementations. SPEC2CODE~\cite{wang2025spec2code} maps fine-grained
@@ -50,13 +50,15 @@ Output-control and verification work addresses complementary layers.
 XGrammar~\cite{dong2025xgrammar} and CRANE~\cite{banerjee2025crane} constrain LLM
 outputs through grammars, although constrained decoding can impair reasoning
 quality~\cite{schall2025hidden,park2024grammar}. ARMOR~\cite{debnath2024armor} verifies the
-RFC~5280 path-validation algorithm in Agda, while EverParse~\cite{ramananandro2019everparse}
-and Nail~\cite{bangert2014nail} generate verified parsers and serializers from
-declarative format grammars. They improve output form, algorithm assurance~\cite{debnath2021reengineering}, or
+RFC~5280 path-validation algorithm in Agda. EverParse~\cite{ramananandro2019everparse}
+provides verified secure zero-copy parsers for authenticated message formats, while
+Nail~\cite{bangert2014nail} generates parser and serializer code from declarative
+format grammars with a semantic bijection between data formats and internal representations.
+They improve output form, algorithm assurance, or
 format handling rather than translating natural-language issuance rules into
 auditable certificate lints.
 
-Certificate studies provide the closest empirical context~\cite{durumeric2013analysis,georgiev2012most,amann2017mission,ma2021tracing,zhang2021rusted}. Kumar et
+Certificate studies provide the closest empirical context~\cite{durumeric2013analysis,georgiev2012most,amann2017mission}. Kumar et
 al.~\cite{kumar2018tracking} measured misissuance at ecosystem scale, and Zhang et
 al.~\cite{zhang2025unicert} identified Unicode-related issuance and parsing
 non-compliance, but both begin with known lints or defect classes.

@@ -17,7 +17,7 @@ certificates.
 \label{subsec:setup}
 
 All experiments use GPT-5.4 as the only LLM. The LLM judges are configured at temperature~$0$. We target
-RFC~5280 and the CA/Browser Forum Baseline Requirements because they are
+RFC~5280 and CABF~BR because they are
 the two most authoritative and foundational Web PKI normative sources for publicly
 trusted TLS certificates. RFC~5280 defines the base X.509 certificate profile that
 virtually every downstream normative rule inherits, and CABF~BR is the baseline that every
@@ -29,7 +29,7 @@ CABF~BR release when the experiments began.
 \label{subsec:coverage}
 
 This subsection measures how many of our lintable normative rules an existing tool already
-implements. We restrict the analysis to zlint---the most widely deployed
+implements. We restrict the analysis to zlint, the most widely deployed
 certificate linter, integrated into major CA issuance and CT-monitoring
 pipelines. The criterion is deliberately strict. A lintable normative rule counts as
 covered only when some cognate, or provenance-matched, zlint lint genuinely implements it, not merely
@@ -40,17 +40,17 @@ full as covered.
 Our matching criterion requires information beyond a metadata description
 alone. We therefore first summarize each lint into a reverse IR in Stage-0. For
 every lint we pass three inputs to an offline summarizer
-$M_{\mathrm{summ}}$ under a constrained prompt, namely the lint's Go source code,
-its Pass/Error test certificates, and its metadata fields description, citation,
-and severity. From these we recover the same IR schema our normative rules use, the core
+$M_{\mathrm{summ}}$ under a constrained prompt: the lint's Go source code,
+its Pass/Error test certificates, and the description, citation, and severity
+metadata fields. From these we recover the same IR schema our normative rules use, the core
 four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$ plus a
-one-sentence code\_summary. Three considerations motivate these inputs. First, the
+one-sentence code summary. Three considerations motivate these inputs. First, the
 CheckApplies and Execute branches expose the concrete field and threshold the lint
 actually tests. Second, the
 Pass/Error samples fix the direction of the check, that is, which values it
 accepts and which it rejects, together with its applicable scope. Third, casting
 the lint into our four-tuple lets each normative rule and lint be compared field by field.
-Extracting the full four-tuple, not just the code\_summary sentence, is what lets
+Extracting the full four-tuple, not just the code summary sentence, is what lets
 Stage-2 compare subject, obligation, predicate, and constraint jointly and reach a
 defensible full-versus-partial distinction.
 
@@ -155,7 +155,7 @@ uncovered lintable, code-generation domain & 95 &
 reported compilable lint, GENERIC-participating & 76 &
   generated trees containing at least one GENERIC atom and rendering and
   passing go build; code-generation rate $= 76/95 = 80.0\%$; this consists of
-  72/95, or 75.8\%, GENERIC-only and 4/95, or 4.2\%, GENERIC $+$ NON\_GENERIC
+  72/95 (75.8\%) GENERIC-only and 4/95 (4.2\%) GENERIC $+$ NON\_GENERIC
   generated trees \\
 NON\_GENERIC-only compilable lints & 17 &
   the remainder of the compilable partition, $93 = 72 + 4 + 17$; excluded from the
@@ -216,7 +216,7 @@ conservation holds strictly, instantiating the two appendix
 identities~\eqref{eq:cons} and~\eqref{eq:split}:
 \[
 \begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
-  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{260} & + & \underset{|\RU|\ \text{not-lintable}}{1307} \\[3pt]
+  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{260} & + & \underset{|\RU|\ \text{not-lintable}}{1307} \\[9pt]
   \underset{|\RL|}{260} & = & \underset{|\RLcov|\ \text{covered}}{165} & + & \underset{|\RLunc|\ \text{uncovered}}{95}
 \end{array}
 \]
@@ -267,11 +267,11 @@ A small number of sheet rows fall outside our scope, so match coverage is near
 ``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing
 correctly skips, together with, on the BR~2.0.2 sheet, cross-references or chapter
 anchors with no matching extracted clause. On BR~2.0.2 the matched positive class is
-very small, just 12 of 217 matched pairs or 5.5\%, so a naive all-No baseline
+very small, just 12 of 217 matched pairs (5.5\%), so a naive all-No baseline
 already attains 94.5\% agreement. The more meaningful figure is therefore
 $\kappa = 0.616$, substantial agreement on the Landis--Koch
 scale~\cite{landis1977measurement}. BR~1.4.8 has more balanced classes, with 69
-of 106 matched pairs positive or 65\%, and yields $\kappa = 0.823$,
+of 106 matched pairs positive (65\%), and yields $\kappa = 0.823$,
 almost-perfect agreement and a tighter estimate of system quality.
 
 \subsection{Certificate Detection}

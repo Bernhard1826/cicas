@@ -7,6 +7,7 @@
 % \Statex line because \Comment is right-aligned and cannot wrap. No step, symbol,
 % or comment wording was changed.
 \begin{figure}[tb]
+\setlength{\parskip}{0pt}
 \makeatletter
 \@ifundefined{c@algorithm}{%
   \newcounter{algorithm}%
@@ -15,13 +16,16 @@
 \makeatother
 \refstepcounter{algorithm}
 \label{alg:saiv}
-\noindent\rule{\linewidth}{0.6pt}
-\par\smallskip
+\hrule width \linewidth height 0.6pt\relax
+\vspace{1pt}
+\nointerlineskip
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for
 Stage-Aware Iterative Verification, abbreviated SAIV.
-\par\smallskip
-\noindent\rule{\linewidth}{0.4pt}
-\par\smallskip
+\par
+\vspace{1pt}
+\nointerlineskip
+\hrule width \linewidth height 0.4pt\relax
+\nointerlineskip
 \scriptsize
 \begin{algorithmic}[1]
 \Statex \textbf{Input:} Web PKI normative-source corpus $D$, threshold $\theta$, max iterations $K$
@@ -61,6 +65,6 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
 \State \textbf{return} $(C,\ \mathit{status}\in\{\textsc{closed},\textsc{dry},
   \textsc{max\_iter}\})$
 \end{algorithmic}
-\par\smallskip
-\noindent\rule{\linewidth}{0.6pt}
+\vspace{1pt}
+\hrule width \linewidth height 0.6pt\relax
 \end{figure}
