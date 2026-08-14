@@ -48,8 +48,9 @@ coverage-alignment determination for individual normative rules.
 \ForAll{$b \in B$}
   \State // Stage-1: deterministic candidate retrieval
   \If{$b.\mathrm{source}=\mathrm{RFC}$}
-    \State $C(b)\gets\{\ell\in L_{\mathrm{RFC}}:
-      \textsc{SectionPrefixMatch}(b.\mathrm{section},\ell.\mathrm{citedSections})\}$
+    \State {$C(b)\gets\{\ell\in L_{\mathrm{RFC}}:$}
+    \Statex \hspace{\algorithmicindent}
+      {$\textsc{SectionPrefixMatch}(b.\mathrm{section},\ell.\mathrm{citedSections})\}$}
   \ElsIf{$b.\mathrm{source}=\mathrm{CABF}$}
     \State $C(b)\gets L_{\mathrm{CABF}}$ \Comment{CABF sections drift $\Rightarrow$ take all}
   \Else

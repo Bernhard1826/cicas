@@ -16,6 +16,19 @@
 \usepackage{stfloats}    % full-width (starred) floats at page bottom (modern; avoids deprecated fixltx2e)
 \usepackage{enumitem}    % vertical spacing of itemize/enumerate (spacing only; margins untouched)
 
+% IEEEtran applies \scshape to table-caption text, but the Times companion
+% font used here has no such shape. Keep IEEEtran's caption layout and make
+% that one local request upright instead.
+\makeatletter
+\let\NDSSoriginalmakecaption\@makecaption
+\long\def\@makecaption#1#2{%
+  \begingroup
+  \let\scshape\upshape
+  \NDSSoriginalmakecaption{#1}{#2}%
+  \endgroup
+}
+\makeatother
+
 % Character protrusion only. expansion=false is deliberate: font expansion would
 % scale glyph widths, which the NDSS/IEEEtran template forbids ("do not use
 % packages that alter fonts"). Protrusion only shifts punctuation optically into

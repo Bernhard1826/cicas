@@ -25,8 +25,8 @@ This design has two important implications for our work. First, a certificate li
 \label{sec:bg-related}
 
 PolicyLint~\cite{andow2019policylint} and PrivacyFlash~Pro~\cite{zimmeck2021privacyflash}
-analyze privacy text~\cite{harkous2018polisis}, Hassani et al.~\cite{hassani2024rethinking} use LLMs for
-legal-compliance analysis~\cite{sun2025compliance}, and N-Check~\cite{feng2024analyzing} formalizes
+analyze privacy text~\cite{harkous2018polisis,amaral2022ai}, Hassani et al.~\cite{hassani2024rethinking} use LLMs for
+legal-compliance analysis~\cite{sun2025compliance,masoudifard2024leveraging,chung2025graphcompliance}, and N-Check~\cite{feng2024analyzing} formalizes
 normative rules as FOL$^*$ formulas for well-formedness analysis. These systems
 extract or formalize obligations, but do not map Web PKI issuance rules to
 DER-encoded certificate fields or determine their single-certificate lintability.
@@ -35,7 +35,7 @@ Specification analysis covers protocol states, formats, and code~\cite{pacheco20
 PROSPER~\cite{sharma2023prosper}, ParCleanse~\cite{zheng2025validating}, and
 SpecGPT~\cite{zhang2025automated} extract RFC state machines, protocol formats,
 and 3GPP state-machine behavior. Wu et al.~\cite{wu2025uncovering} align RFC text
-with kernel code using GraphRAG-style context~\cite{lewis2020retrieval,edge2024local},
+with kernel code using GraphRAG-style context~\cite{lewis2020retrieval,edge2024local,peng2025graph},
 while RFCAUDIT~\cite{zheng2025rfcaudit} uses hierarchical code-semantic indexing
 and retrieval-guided LLM analysis to find inconsistencies between RFC rules and
 protocol implementations. SPEC2CODE~\cite{wang2025spec2code} maps fine-grained
@@ -54,11 +54,11 @@ RFC~5280 path-validation algorithm in Agda. EverParse~\cite{ramananandro2019ever
 provides verified secure zero-copy parsers for authenticated message formats, while
 Nail~\cite{bangert2014nail} generates parser and serializer code from declarative
 format grammars with a semantic bijection between data formats and internal representations.
-They improve output form, algorithm assurance, or
+They improve output form, algorithm assurance~\cite{debnath2021reengineering}, or
 format handling rather than translating natural-language issuance rules into
 auditable certificate lints.
 
-Certificate studies provide the closest empirical context~\cite{durumeric2013analysis,georgiev2012most,amann2017mission}. Kumar et
+Certificate studies provide the closest empirical context~\cite{durumeric2013analysis,georgiev2012most,amann2017mission,ma2021tracing,zhang2021rusted}. Kumar et
 al.~\cite{kumar2018tracking} measured misissuance at ecosystem scale, and Zhang et
 al.~\cite{zhang2025unicert} identified Unicode-related issuance and parsing
 non-compliance, but both begin with known lints or defect classes.
