@@ -280,40 +280,36 @@ per (subsection,~keyword) pair.
 \setlength{\tabcolsep}{3pt}
 \caption{Unconstrained LLM generation versus this work on CABF~BR~v2.2.6
 \S7.1.2. An obligation counts as recalled when the arm produced a record for it.
-Unconstrained cells are means over three end-to-end repetitions with population
-standard deviation; its text-matched common subsets hold 81, 80, and 80
+The table reports means and population variances; variances are in
+percentage-point squared ($\mathrm{pp}^2$). Unconstrained rates use three
+end-to-end repetitions; the baseline's text-matched common subsets hold 81, 80, and 80
 obligations. For this work, extraction and code generation are fixed on 67
 rules; semantic equivalence is the mean of three independent $k=5$
-rejudgments (50/67, 49/67, and 47/67), with population standard deviation.}
+rejudgments (50/67, 49/67, and 47/67). A zero in a fixed column denotes no
+rerun component rather than three independent measurements.}
 \label{tab:baseline}
-\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrr@{}}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrr@{}}
 \toprule
- & Unconstrained & This work \\
+Metric & \multicolumn{2}{c}{Unconstrained} & \multicolumn{2}{c}{This work} \\
+ & Mean (\%) & Variance ($\mathrm{pp}^2$) & Mean (\%) & Variance ($\mathrm{pp}^2$) \\
 \midrule
-Extraction recall ($n=460$) & 94.0\% $\pm$ 0.27 & 99.1\% \\
-Compiling lint & 40.3\% $\pm$ 1.1 & 100\% (67/67) \\
-Semantic equivalence & 20.3\% $\pm$ 2.7 & 72.6\% $\pm$ 1.9 \\
+Extraction recall ($n=460$) & 94.0 & 0.07 & 99.1 & 0.00 \\
+Compiling lint & 40.3 & 1.16 & 100.0 & 0.00 \\
+Semantic equivalence & 20.3 & 7.03 & 72.6 & 3.47 \\
 \bottomrule
 \end{tabular*}
 \end{table}
 
-\textbf{Results.} Extraction is where the baseline comes closest: it recovers
-94.0\% of the 460 obligations against our 99.1\%, with less than a third of a
-percentage point of spread across its three repetitions. The separation is
-downstream. The two arms' self-declared lintable sets are not comparable as
-denominators---ours passes the audited four-condition criterion of
-\S\ref{sec:lintability}, the baseline's is self-asserted, and over \S7.1.2 it
-declares 333 to 344 checkable and compiles 90 to 99. The baseline's compilation
-and semantic-equivalence figures are therefore calculated on its text-matched
-common subsets (81, 80, and 80), fixed by text matching rather than outcome.
-Our side instead uses the fixed 67-rule code-generation domain. All 67 generated
-lints compile, so repeating the judgment leaves its 100\% generation rate
-unchanged. On the unchanged frozen inputs, the three unanimous $k=5$
-rejudgments accept 50, 49, and 47 of 67 lints, respectively
-(72.6\% $\pm$ 1.9). The baseline's reported semantic-equivalence mean over its
-text-matched common subsets is 20.3\% $\pm$ 2.7. These different denominators
-make the semantic-equivalence comparison directional rather than a paired
-per-obligation accuracy estimate.
+\textbf{Results.} Extraction is where the baseline comes closest, but the
+separation widens downstream. The two arms' self-declared lintable sets are not
+comparable as denominators---ours passes the audited four-condition criterion of
+\S\ref{sec:lintability}, whereas the baseline's set is self-asserted. We
+therefore evaluate the baseline on text-matched common subsets, fixed by text
+matching rather than outcome, and our side on the fixed rule domain. This
+denominator asymmetry makes the semantic-equivalence comparison directional
+rather than a paired per-obligation accuracy estimate. Because code generation
+is held fixed on our side, its compilation variance is structural; the remaining
+nonzero variance comes from rejudging the unchanged code semantics.
 
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
