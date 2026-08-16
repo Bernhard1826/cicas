@@ -213,10 +213,7 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 
 NON\_GENERIC atomic templates are allowed into code generation and correspond
 to real PKI constructs, but are explicitly
-marked and excluded from the rates reported in
-\S\ref{sec:eval}. The 93 generated lints split 72 GENERIC-only, 4 mixed, and 17
-NON\_GENERIC-only; among the 79 lints accepted by the unanimous semantic-equivalence gate the split is 60
-GENERIC-only, 4 mixed, and 15 NON\_GENERIC-only.
+marked.
 
 \section{Phrase Dictionary of the Mechanical Translation $\smech$}
 \label{app:sigma}
@@ -339,7 +336,7 @@ fills the ecosystem gap, while the covered subset $\RLcov$ provides external
 evidence of reverse lintability. The residual is the recall-conservation
 residual $\Lrec$, a symmetric normalization of the gap in
 Theorem~\ref{thm:recall}, computable without manual ground truth and currently
-closed, as shown in Tables~\ref{tab:rule-recall} and~\ref{tab:lintability-results}:
+closed, as shown in Tables~\ref{tab:rule-recall} and~\ref{tab:coverage}:
 \begin{equation}\label{eq:recall-res}
   \Lrec = 1 - \frac{\min\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
   {\max\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}

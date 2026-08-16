@@ -4,11 +4,12 @@
 %-------------------------------------------------------------------------------
 
 This section runs experiments with the methods and framework above and draws
-quantitative conclusions. The internal layered metrics are the code-generation
-results of \S\ref{subsec:codegen-results} and the lint-coverage analysis of
-\S\ref{subsec:coverage}. Beyond them, two mutually independent external
-validations each check one half of the framework. \S\ref{subsec:lintability-ext}
-externally validates normative-rule extraction and lintability determination against the
+quantitative conclusions. The internal pipeline metrics are reported in four
+subsections in pipeline order: normative-rule extraction, lintability
+determination, Lint Coverage Analysis, and code generation and semantic
+equivalence. Beyond them, two mutually independent external validations
+each check one half of the framework. \S\ref{subsec:lintability-ext} externally
+validates normative-rule extraction and lintability determination against the
 zlint maintainers' manual gold standard, and \S\ref{subsec:certdetect} externally
 validates code generation and semantic-equivalence judgment by execution on real
 certificates.
@@ -25,21 +26,40 @@ publicly trusted CA is mandated to meet; it also builds directly on RFC~5280, so
 together they bound where compliance linting matters most. Normative-rule extraction was run on CABF~BR~v2.2.6. This was the latest
 CABF~BR release when the experiments began.
 
-\subsection{Code-Generation Results}
-\label{subsec:codegen-results}
+The pipeline is evaluated in four stages reported below in execution order:
+normative-rule extraction, lintability determination, Lint Coverage Analysis,
+and code generation and semantic equivalence. The coverage analysis determines
+which lintable rules are already implemented by zlint; only its uncovered
+remainder enters the downstream code-generation experiment.
 
-The code-generation experiment is evaluated over the audited uncovered domain
-$\RLunc$. We report rule extraction, lintability determination, and code
-generation in pipeline order; \S\ref{subsec:coverage} specifies the zlint
-matching procedure behind the lintability counts.
+\subsection{Normative-Rule Extraction}
+\label{subsec:rule-extraction}
 
-\textbf{Normative-rule extraction.}
+The 1,804 raw capitalized RFC~2119 occurrences expand to 2,080 Layer-1
+candidate records because nested clauses can inherit an obligation without
+repeating its keyword.
+
+The first-layer quality signal is G1 conservation, stated as
+Theorem~\ref{thm:recall}. For the extracted candidates, the first conservation
+identity is:
+\[
+\begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
+  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{260} & + & \underset{|\RU|\ \text{not-lintable}}{1307}
+\end{array}
+\]
+
+\subsection{Lintability Determination}
+\label{subsec:lintability-eval}
+
+The four-condition gate retains 260 single-certificate obligations and excludes
+process, cross-certificate, runtime, external-semantic, MAY/OPTIONAL. These 260 lintable rules are the input to the zlint coverage
+analysis below; no rule outside this set enters either coverage or code generation.
 
 \begin{table}[tb]
 \centering
 \small
 \setlength{\tabcolsep}{3pt}
-\caption{Rule-extraction denominators over RFC~5280 and CABF BR.}
+\caption{Normative-rule extraction and lintability counts.}
 \label{tab:rule-recall}
 \begin{tabularx}{\columnwidth}{@{}X r r r@{}}
 \toprule
@@ -47,27 +67,76 @@ Metric & CABF & RFC~5280 & Total \\
 \midrule
 Keyword occurrences & 1262 & 542 & 1804 \\
 Recalled candidate records & 1440 & 640 & 2080 \\
+Lintable rules & 175 & 85 & 260 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-The 1,804 raw capitalized RFC~2119 occurrences expand to 2,080 Layer-1
-candidate records because nested clauses can inherit an obligation without
-repeating its keyword.
+\subsection{Lint Coverage Analysis}
+\label{subsec:coverage}
 
-\textbf{Lintability determination.}
+This analysis determines how many of the 260 lintable normative rules are
+already implemented by an existing tool. We restrict the analysis to zlint,
+the most widely deployed certificate linter, integrated into major CA issuance
+and CT-monitoring pipelines. The criterion is deliberately strict. A lintable
+normative rule counts as covered only when some cognate, or provenance-matched,
+zlint lint genuinely implements it, not merely mentions the same field. We
+accordingly label each normative rule full, partial, or none by whether such a
+lint implements it fully, partially, or not at all, and count only full as
+covered.
+
+Our matching criterion requires information beyond a metadata description
+alone. We therefore first summarize each lint into a reverse IR in Stage-0. For
+every lint we pass three inputs to an offline summarizer
+$M_{\mathrm{summ}}$ under a constrained prompt: the lint's Go source code, its
+Pass/Error test certificates, and the description, citation, and severity
+metadata fields. From these we recover the same IR schema our normative rules
+use, the core four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$
+plus a one-sentence code summary. Three considerations motivate these inputs.
+First, the CheckApplies and Execute branches expose the concrete field and
+threshold the lint actually tests. Second, the Pass/Error samples fix the
+direction of the check, that is, which values it accepts and which it rejects,
+together with its applicable scope. Third, casting the lint into our four-tuple
+lets each normative rule and lint be compared field by field. Extracting the
+full four-tuple, not just the code summary sentence, is what lets Stage-2
+compare subject, obligation, predicate, and constraint jointly and reach a
+defensible full-versus-partial distinction.
+
+\input{algorithms/alg_coverage}
+
+Given these reverse IRs, Algorithm~\ref{alg:coverage} aligns each normative
+rule to zlint in four further stages that combine deterministic steps with a
+single controlled judge. Stage-1 retrieves candidate lints for a normative rule
+by provenance. A normative rule from RFC~5280 is matched only against RFC lints
+whose cited section shares a common prefix with the normative rule's section,
+a test we write \textsc{SectionPrefixMatch}, since RFC section numbers are
+stable. Because CABF section numbers drift across versions, every CABF lint is
+taken as a candidate for a CABF normative rule. Stage-2 hands the normative
+rule's four-tuple and its candidate set to a field-level judge $M_{\mathrm{judge}}$,
+which compares the tuples field by field and returns the best candidate with a
+full, partial, or none verdict. Stage-3 is a deterministic false-positive
+guard. It maps the subject of the normative rule and of the selected lint to a
+field family such as KeyUsage or SubjectAltName via $\mathrm{Family}(\cdot)$,
+and downgrades a full or partial verdict to none whenever the two resolve to
+different nonempty families, so a KeyUsage normative rule is never credited to
+a lint that checks SubjectAltName merely because both mention an extension.
+Stage-4 aggregates deterministically. A normative rule is covered if and only
+if its verdict is full, and we define the uncovered remainder as the
+code-generation domain $\RLunc = \RL \setminus \RLcov$. The LLM is invoked only
+at Stage-0 and Stage-2; candidate
+retrieval, the family guard, and aggregation are fully deterministic.
 
 \begin{table}[tb]
 \centering
 \small
 \setlength{\tabcolsep}{3pt}
-\caption{Lintability and zlint coverage of the 260 lintable normative rules, by source.}
-\label{tab:lintability-results}
+\caption{zlint coverage of the 260 lintable normative rules, by source.}
+\label{tab:coverage}
 \begin{tabularx}{\columnwidth}{@{}X r r r@{}}
 \toprule
 Item & CABF & RFC~5280 & Total \\
 \midrule
-lintable total & 175 & 85 & 260 \\
+lintable normative rules & 175 & 85 & 260 \\
 zlint cognate lints & 170 & 122 & 292 \\
 full coverage & 94 & 71 & 165 \\
 uncovered code-generation domain & 81 & 14 & 95 \\
@@ -75,12 +144,28 @@ uncovered code-generation domain & 81 & 14 & 95 \\
 \end{tabularx}
 \end{table}
 
-The gate retains 260 single-certificate obligations and excludes process,
-cross-certificate, runtime, external-semantic, MAY/OPTIONAL, and CRL-document
-rules. Of them, 165 are fully covered, leaving $\RLunc=260-165=95$; the 292
-cognate lints are lint instances, not a covered-rule count.
+The deterministic aggregation yields the source-level covered and uncovered
+counts in Table~\ref{tab:coverage}; only a full verdict contributes to the 165
+covered rules, and every partial or none verdict remains in the 95-rule
+code-generation domain $\RLunc$. The 292 cognate lints are lint instances, not
+a covered-rule count.
 
-\textbf{Code generation and semantic equivalence.}
+The second conservation layer is the covered/uncovered split of the lintable
+set in Eq.~\eqref{eq:split}:
+\[
+\begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
+  \underset{|\RL|}{260} & = & \underset{|\RLcov|\ \text{covered}}{165} & + & \underset{|\RLunc|\ \text{uncovered}}{95}
+\end{array}
+\]
+Both identities hold term by term, so the G1 residual $\Lrec = 0$ and the top
+two conservation layers are closed and deterministically recomputable. The
+first layer is the three-way recall split of Eq.~\eqref{eq:cons}.
+The 260 lintable normative rules further split by normative source into 175 CABF
+and 85 RFC~5280, and the 95 uncovered normative rules $\RLunc$ are fed to the
+downstream code generator.
+
+\subsection{Code Generation and Semantic Equivalence}
+\label{subsec:codegen-results}
 
 \begin{table}[tb]
 \centering
@@ -92,107 +177,32 @@ cognate lints are lint instances, not a covered-rule count.
 \toprule
 Metric & Count & Scope / notes \\
 \midrule
-reported compilable lint, GENERIC-participating & 76 &
-  at least one GENERIC atom and successful rendering and Go build; rate $=76/95=80.0\%$;
-  72 GENERIC-only and 4 mixed trees \\
-NON\_GENERIC-only compilable lints & 17 &
-  remainder of the compilable partition; $93=72+4+17$; excluded from the rate \\
-cannot generate, no tree / not compiling / abstain & 2 &
-  no-template abstentions retained in the denominator; S2 expressiveness gaps \\
-final accepted lint, GENERIC-participating under \CodeEqRule & 64 &
-  final emitted zlint lint judged against the source rule; $64/76=84.2\%$ pass;
-  with 15 NON\_GENERIC-only lints, 79 are accepted \\
-rejected by the final semantic-equivalence gate & 14 &
-  9 DOES\_NOT\_EXPRESS, 3 non-unanimous EXPRESS diagnostics, 2 uncertain \\
+reported compilable lint & 76 &
+  successful rendering and Go build; code-generation rate
+  $=76/95=80.0\%$ \\
+final accepted lint under \CodeEqRule & 64 &
+  final emitted zlint lint judged against the source rule; synonymy rate
+  $=64/76=84.2\%$ \\
 certificate-level execution verification under \CodeEqIR & 35 &
-  model-independent IR-to-code evidence; supporting only, outside the \CodeEqRule numerator \\
+  model-independent IR-to-code evidence; supporting only, outside the
+  \CodeEqRule numerator \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-The $76/95$ rate requires a GENERIC atom and successful rendering and Go build;
-the complete final lint is judged against the source rule and context under
-\CodeEqRule{} (\S\ref{subsec:exec-verify}). The two abstentions are S2
-expressiveness gaps, so $95=76+17+2$ and 79 lints are accepted.
+The 19 rules outside the reported GENERIC-participating numerator are not a
+single failure class. Seventeen produced compilable lints using only
+NON\_GENERIC atoms; these are successful generations but are excluded from the
+GENERIC-participating rate because they rely on domain-specific templates. The
+remaining two returned no-template abstentions after generation repair and
+vocabulary expansion, indicating genuine $\Tv$-expressiveness gaps. Thus
+$95=76+17+2$; only the latter two failed to produce code.
 
 The 14 rejections comprise nine DOES\_NOT\_EXPRESS outcomes, three
 non-unanimous EXPRESS diagnostics, and two uncertain cases. Their primary
-causes are IR/context loss (6), DSL/atom gaps (2), and conservative or
+causes were IR/context loss (6), DSL/atom gaps (2), and conservative or
 table-context ambiguity (6). The 35 \CodeEqIR{} checks are supporting
 IR-level evidence, not the semantic-equivalence numerator.
-
-The first-layer quality signal is G1 conservation, stated as
-Theorem~\ref{thm:recall} in \S\ref{subsec:targets}. For the denominator accounting above,
-conservation holds strictly, instantiating the two appendix
-identities~\eqref{eq:cons} and~\eqref{eq:split}:
-\[
-\begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
-  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{260} & + & \underset{|\RU|\ \text{not-lintable}}{1307} \\[9pt]
-  \underset{|\RL|}{260} & = & \underset{|\RLcov|\ \text{covered}}{165} & + & \underset{|\RLunc|\ \text{uncovered}}{95}
-\end{array}
-\]
-Both identities hold term by term, so the G1 residual $\Lrec = 0$ and the top two
-conservation layers are closed and deterministically recomputable. The first layer
-is the three-way recall split of Eq.~\eqref{eq:cons}, and the second is the
-covered/uncovered split of the lintable set in Eq.~\eqref{eq:split}. The 260
-lintable normative rules further split by normative source into 175 CABF and 85 RFC~5280, and
-the 95 uncovered normative rules $\RLunc$ are fed to the downstream code generator.
-
-\subsection{Lint Coverage Analysis}
-\label{subsec:coverage}
-
-This subsection specifies the lint-coverage analysis behind
-Table~\ref{tab:lintability-results}. It measures how many of our lintable
-normative rules an existing tool already implements. We restrict the analysis to zlint, the most widely deployed
-certificate linter, integrated into major CA issuance and CT-monitoring
-pipelines. The criterion is deliberately strict. A lintable normative rule counts as
-covered only when some cognate, or provenance-matched, zlint lint genuinely implements it, not merely
-mentions the same field. We accordingly label each normative rule full, partial, or none by
-whether such a lint implements it fully, partially, or not at all, and count only
-full as covered.
-
-Our matching criterion requires information beyond a metadata description
-alone. We therefore first summarize each lint into a reverse IR in Stage-0. For
-every lint we pass three inputs to an offline summarizer
-$M_{\mathrm{summ}}$ under a constrained prompt: the lint's Go source code,
-its Pass/Error test certificates, and the description, citation, and severity
-metadata fields. From these we recover the same IR schema our normative rules use, the core
-four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$ plus a
-one-sentence code summary. Three considerations motivate these inputs. First, the
-CheckApplies and Execute branches expose the concrete field and threshold the lint
-actually tests. Second, the
-Pass/Error samples fix the direction of the check, that is, which values it
-accepts and which it rejects, together with its applicable scope. Third, casting
-the lint into our four-tuple lets each normative rule and lint be compared field by field.
-Extracting the full four-tuple, not just the code summary sentence, is what lets
-Stage-2 compare subject, obligation, predicate, and constraint jointly and reach a
-defensible full-versus-partial distinction.
-
-\input{algorithms/alg_coverage}
-
-Given these reverse IRs, Algorithm~\ref{alg:coverage} aligns each normative rule to zlint in
-four further stages that combine deterministic steps with a single controlled
-judge. Stage-1 retrieves candidate lints for a normative rule by provenance. A
-normative rule from RFC~5280 is matched only against RFC lints whose cited section shares a common prefix
-with the normative rule's section, a test we write \textsc{SectionPrefixMatch}, since RFC
-section numbers are stable. Because CABF section numbers drift across versions,
-every CABF lint is taken as a candidate for a CABF normative rule. Stage-2 hands the normative rule's four-tuple and its candidate set to a
-field-level judge $M_{\mathrm{judge}}$, which compares the tuples field by
-field and returns the best candidate with a full, partial, or none verdict.
-Stage-3 is a deterministic false-positive guard. It maps the subject of the normative rule
-and of the selected lint to a field family such as KeyUsage or SubjectAltName via
-$\mathrm{Family}(\cdot)$, and downgrades a full or partial verdict to none whenever
-the two resolve to different nonempty families, so a KeyUsage normative rule is never
-credited to a lint that checks SubjectAltName merely because both mention an
-extension. Stage-4 aggregates deterministically. A normative rule is covered if and only if its verdict
-is full, and the uncovered remainder forms the code-generation domain $\RLunc$. The LLM is invoked
-only at Stage-0 and Stage-2; candidate retrieval, the family guard, and
-aggregation are fully deterministic.
-
-The deterministic aggregation yields the source-level covered and uncovered
-counts in Table~\ref{tab:lintability-results}; only a full verdict contributes
-to the 165 covered rules, and every partial or none verdict remains in the
-95-rule code-generation domain.
 
 \subsection{External Validation of Normative-Rule Extraction and Lintability
 Determination}
@@ -246,12 +256,11 @@ almost-perfect agreement and a tighter estimate of system quality.
 
 The claim that confining synthesis to $\Tv$ yields more trustworthy lints than an
 unconstrained LLM-to-code workflow is comparative, so we test it on
-CABF~BR~v2.2.6 \S7.1.2 (Certificate Content and Extensions), which contributes
+CABF~BR~v2.2.6 \S7.1.2, which contributes
 141 of the 260 lintable normative rules and 67 of the 95 rules in $\RLunc$.
 
-\textbf{Baseline arm.} The baseline receives the verbatim text of one subsection,
-67 in total, enumerates the obligations it finds, and writes one zlint lint for
-each obligation it judges checkable against a single parsed certificate. It
+\textbf{Baseline arm.} The baseline receives the verbatim text of one subsection, enumerates the obligations it finds, and writes one zlint lint for
+each obligation it judges lintable against a single parsed certificate. It
 shares our model at temperature~0, our render-and-build gate, and our
 semantic-equivalence judge; we withhold exactly the manipulated
 variable---the typed vocabulary $\mathcal{V}$, the atomic templates
@@ -259,62 +268,73 @@ $\mathcal{A}$, the DSL grammar, and every rule and IR our pipeline
 produced---while supplying host-API facts that are not our contribution, such as
 zlint~v3's registration skeleton and zcrypto's certificate type, whose absence
 would depress compilation for reasons unrelated to output-space restriction.
-The baseline's extraction, generation, and judging are each repeated three
-times under identical prompts. For our arm, the extracted rules, generated
-code, and code-semantics summaries are held fixed on the 67-rule domain. To
-isolate judgment variability, we invoke the same unanimous $k=5$
-semantic-equivalence gate three times on those frozen inputs; code generation
-is not rerun.
+The unconstrained baseline is repeated end to end three times: extraction,
+generation, and judging each receive identical prompts. Our arm is likewise
+run three times on the same domain. Its Layer-1 extraction is
+deterministic; each code-generation run renders and builds all 67 rules, so the
+observed recall and code-generation-count variances are zero. To isolate the remaining judge variability, we
+invoke the same unanimous $k=5$ semantic-equivalence gate three times on a
+fixed code-semantics snapshot.
 
-\textbf{Reference set.} Scoring recall against our own extracted rules would be
-circular, so we enumerate mechanically all 496 obligation-class BCP~14 keyword
+\textbf{Reference set.} We enumerate mechanically all 496 obligation-class RFC~2119 keyword
 occurrences in \S7.1.2 and adjudicate each one, blind to both arms' outputs, on
 whether it states a normative obligation and whether that obligation constrains
 certificate content. This yields 493 obligations, 460 of them on certificate
 content. Both arms are scored by the same estimator, which counts occurrences
 per (subsection,~keyword) pair.
 
+For this comparison, the paired columns under each arm report the mean rate in
+percent and population variance. Variance for extraction recall and semantic
+equivalence is measured in percentage-point squared ($\mathrm{pp}^2$); for
+code-generation success, it is computed over the raw compiled counts and
+reported in count squared ($\mathrm{count}^2$). The baseline code-generation success rate uses its
+self-declared checkable set, giving $99/344$, $90/333$, and $98/343$ across
+the three runs. Its semantic-equivalence rate uses the compile-passing outputs
+as the denominator, giving $34/99$, $40/90$, and $42/98$. Our arm uses the same
+$n=67$ code-generation domain in each run and the same 67 compiled outputs for
+the semantic-equivalence judgments. The text-matched $81/80/80$ occurrence
+subsets are retained only as an auxiliary diagnostic and are not used in the
+table. The zero-variance entries are empirical results across three
+measurements; the semantic-equivalence row measures judge variability on the
+fixed method-side code-semantics snapshot.
+
 \begin{table}[tb]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
 \caption{Unconstrained LLM generation versus this work on CABF~BR~v2.2.6
-\S7.1.2. An obligation counts as recalled when the arm produced a record for it.
-The table reports means and population variances; variances are in
-percentage-point squared ($\mathrm{pp}^2$). Unconstrained rates use three
-end-to-end repetitions; the baseline's text-matched common subsets hold 81, 80, and 80
-obligations. For this work, extraction and code generation are fixed on 67
-rules; semantic equivalence is the mean of three independent $k=5$
-rejudgments (50/67, 49/67, and 47/67). A zero in a fixed column denotes no
-rerun component rather than three independent measurements.}
+\S7.1.2. Variance is in $\mathrm{count}^2$ for code-generation success and
+in $\mathrm{pp}^2$ for the other rate metrics.}
 \label{tab:baseline}
 \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrr@{}}
 \toprule
 Metric & \multicolumn{2}{c}{Unconstrained} & \multicolumn{2}{c}{This work} \\
- & Mean (\%) & Variance ($\mathrm{pp}^2$) & Mean (\%) & Variance ($\mathrm{pp}^2$) \\
+ & Mean & Var. & Mean & Var. \\
 \midrule
-Extraction recall ($n=460$) & 94.0 & 0.07 & 99.1 & 0.00 \\
-Compiling lint & 40.3 & 1.16 & 100.0 & 0.00 \\
-Semantic equivalence & 20.3 & 7.03 & 72.6 & 3.47 \\
+Extraction recall & 94.0\% & 0.07 & 99.1\% & 0.00 \\
+Code-generation success & 28.1\% & 16.22 & 100.0\% & 0.00 \\
+Semantic equivalence & 40.5\% & 19.67 & 72.6\% & 3.47 \\
 \bottomrule
 \end{tabular*}
 \end{table}
 
-\textbf{Results.} Extraction is where the baseline comes closest, but the
-separation widens downstream. The two arms' self-declared lintable sets are not
-comparable as denominators---ours passes the audited four-condition criterion of
-\S\ref{sec:lintability}, whereas the baseline's set is self-asserted. We
-therefore evaluate the baseline on text-matched common subsets, fixed by text
-matching rather than outcome, and our side on the fixed rule domain. This
-denominator asymmetry makes the semantic-equivalence comparison directional
-rather than a paired per-obligation accuracy estimate. Because code generation
-is held fixed on our side, its compilation variance is structural; the remaining
-nonzero variance comes from rejudging the unchanged code semantics.
+% \textbf{Results.} Extraction is where the baseline comes closest, but the
+% separation widens downstream. The baseline's code-generation success is 28.1\%
+% over its self-declared checkable candidates, while the method compiles all
+% $67/67$ inputs. Among compiled outputs, the baseline's mean semantic-equivalence
+% rate is 40.5\%, compared with 72.6\% for the method. The two arms therefore
+% have different arm-level denominators---the baseline's set is self-asserted,
+% whereas ours passes the audited four-condition criterion---so this is a
+% directional comparison rather than a paired per-obligation accuracy estimate.
+% All three runs of our code generator compile 67/67 lints, so its zero variance
+% reflects the observed repeated success rate rather than identical emitted code.
+% The remaining nonzero variance comes from independently rejudging fixed
+% code-semantics summaries.
 
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
 
-Injecting the 79 final accepted lints into the zlint binary and scanning
+Injecting the 64 selected certificate-level lints into the zlint binary and scanning
 certificates checks code generation and semantic-equivalence judgment. We count a hit as a
 valid finding only when three conditions hold. First, the final zlint code's
 semantics have been checked back to the source text. Second, the certificate
@@ -362,19 +382,19 @@ profile faults whose direct cryptographic consequence is indirect, while the Roo
 CA CRLDP finding is a lower, Warn-level advisory.
 
 The corpus first uses zlint's own testdata as a gate rather than an ecosystem
-estimate. On 1128 parsable certificates the 79 lints raise 2962 raw
+estimate. On 1128 parsable certificates the 64 lints raise 2849 raw
 hits. Of these, 137 row-level fixture violations are independently confirmed,
-while 2825 are NOCHECK, meaning no independent check applies to that lint family, so
+while 2712 are NOCHECK, meaning no independent check applies to that lint family, so
 they are neither confirmed nor refuted and are not claimed. To test whether these findings exist only
 in hand-constructed testdata, we scan two external corpora. The first is the
 TLS-handshake certificate chains of the Tranco Top~1M domains, 47,791 deduplicated
 PEMs, and the second is a recent sample of CT logs, 63,327 deduplicated PEMs. The
-raw generated-lint hit counts are large, 57,583 on Tranco and 80,021 on CT.
+raw generated-lint hit counts are large, 57,209 on Tranco and $7.9966\times10^4$ on CT.
 
 The three confirmation conditions collapse these raw counts sharply. Discarding
 every hit on a certificate that some native zlint lint already flags removes the
 bulk of them, because most raw matches land on certificates that existing coverage
-also rejects, and leaves 1042 candidates on Tranco and 167 on CT. The independent
+also rejects, and leaves 844 candidates on Tranco and 141 on CT. The independent
 structural audit then re-derives each surviving defect from the DER and confirms 4
 certificate-problem instances on Tranco and 1 on CT, marking the remainder NOCHECK
 and therefore not claiming those rows. The externally confirmed findings summarized in
@@ -382,7 +402,7 @@ Table~\ref{tab:certfind} each escape native zlint coverage and reproduce under a
 independent audit, so the reading stays conservative and no finding rests on the
 generated lint alone.
 
-Overall, the final accepted lints confirm five finding types across the evaluated
+Overall, the 64 selected certificate-level lints confirm five finding types across the evaluated
 corpora, including findings in deployed certificates that native zlint misses.
 All five trace to GENERIC-participating lints.
 Every claimed finding survives both a source-text re-check and an independent
