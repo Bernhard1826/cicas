@@ -7,7 +7,7 @@
 \label{subsec:limitations}
 
 The accuracy of lintability determination, code-generation rate, and semantic-equivalence
-rate all depend on IR accuracy. The stage-aware iterative verification (SAIV) framework of Appendix~\ref{sec:saiv} audits and repairs IR outputs over multiple
+rate all depend on IR accuracy. The SAIV framework of Appendix~\ref{sec:saiv} audits and repairs IR outputs over multiple
 rounds, but current LLMs can still produce an incorrect IR in a single pass.
 Improving IR extraction and independently measuring its error therefore remain
 important future work.
@@ -22,15 +22,6 @@ must supply recognizable formal deontic keywords. Second, the constraint targets
 must be structured and machine-parsable, such as certificates, protocol
 messages, or configuration files. Third, the document must have a
 hierarchy that supports graph construction and scope-inheritance modeling.
-
-Code generation also depends on the regularity of the target lint framework.
-It works for zlint because many checks are small predicates over a parsed
-certificate and can be represented as typed DSL trees. Lints with idiosyncratic
-control flow, global state, multi-artifact reasoning, or semantics outside
-reusable atoms require DSL extensions. NON\_GENERIC atoms make this boundary
-concrete, since they improve coverage but encode hand-curated domain knowledge. A new
-ecosystem would need specialized atoms, renderers, and validation tests before
-similar generation rates could be expected.
 
 \subsection{Recommendations for Authors of Web PKI Normative Sources and Tool Maintainers}
 \label{subsec:recommendations}

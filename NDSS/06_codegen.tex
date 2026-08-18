@@ -46,10 +46,19 @@ characterize most static constraints. The abstract syntax of the code DSL is:
 \end{equation}
 where $a \in \mathcal{A}$ is an atomic-template predicate and $\bar{v}$ is its
 argument list. $\mathcal{A}$ is a finite, closed set of atomic
-templates; the experiments use 151 atomic templates in total, split by
-generality into 98 GENERIC and 53 NON\_GENERIC, with grading criteria and
-representative examples in Appendix~\ref{app:tv}; $\{\neg, \wedge, \vee\}$ are
-the propositional-logic combinators. The code body of a lint rule is modeled as
+templates, and $\{\neg, \wedge, \vee\}$ are
+the propositional-logic combinators.
+
+\textbf{Generality grading, GENERIC and NON\_GENERIC.} Atomic templates are
+graded by semantic reuse. An atomic template is GENERIC if it expresses a
+general PKI certificate-attribute judgment reusable across normative rules and
+is not tied to a corpus-specific OID, a single clause, or a one-off extension
+structure, as $\mathrm{ExtPresent}$ is; otherwise it is NON\_GENERIC, as
+$\mathrm{DomainComponentOrdered}$ is, which checks only the RFC~4519 ordering of
+a Subject DN's domainComponent. The grading is fixed in code as two sets with a
+partition-completeness assertion and is deterministically recomputable. The
+experiments use 151 atomic templates, 98 GENERIC and 53 NON\_GENERIC, with
+representative members in Appendix~\ref{app:tv}. The code body of a lint rule is modeled as
 an ordered pair $(p, q) \in \mathcal{T}_\varepsilon \times \mathcal{T}$, where
 $q \in \mathcal{T}$ is the main assertion and $p \in \mathcal{T}_\varepsilon =
 \mathcal{T} \cup \{\varepsilon\}$ is an optional precondition, where $\varepsilon$
@@ -133,9 +142,12 @@ A legal DSL tree $t$ must be turned into two products. One is executable Go
 checking code, and the other is a code summary that
 summarizes its checking logic in one sentence. Both conversions are performed by
 deterministic total functions, with no LLM call. The rendering function $\rho$
-maps a tree to Go code, and the mechanical translation function $\smech$ maps the
+maps a tree to Go code, and the mechanical translation function $\smech$, read as
+the mechanical summarizer, maps the
 same tree to a code summary sentence; for the same $t$, each produces a unique
-output.
+output. Informally, $\rho(t)$ is what the checker runs and $\smech(t)$ is what it
+says it runs; both being fixed functions of $t$, the second cannot flatter the
+first.
 
 $\rho$ is type-safe. It never generates an out-of-bounds field, OID, or
 parameter type, so closure is preserved from the DSL-tree layer down to the
@@ -197,11 +209,16 @@ identifier, with details in Appendix~\ref{app:tv}.
 \label{subsec:exec-verify}
 
 Whether the generated code expresses the normative rule is the hardest judgment
-in the whole pipeline. This subsection checks it at three levels from coarse to
-fine.
+in the whole pipeline. Two claims are at stake, and this subsection keeps them
+apart. \CodeEqRule{}, read as ``the emitted lint checks what the normative
+sentence requires'', spans the whole pipeline; one side of it is prose, so no
+deterministic procedure decides it. \CodeEqIR{}, read as ``the emitted lint
+checks what the IR specifies'', spans only the machine-side tail,
+where both sides are formal objects and execution can decide it. Layers~A to~C
+target the former at three levels from coarse to fine; the certificate-level
+execution verification at the end of this subsection settles the latter.
 
-\textbf{Layer~A, description provenance.} Description is an IR field. When Layer~2 of DLEP
-(\S\ref{sec:method-dual-layer}) parses a normative sentence, it stores that
+\textbf{Layer~A, description provenance.} Description is an IR field. When Layer~2 of DLEP parses a normative sentence, it stores that
 sentence verbatim in the IR's rule\_text field, and the deterministic
 post-processor of \S\ref{subsec:synth} copies that field unchanged into the
 Description metadata of every generated lint, on both the deterministic and the
@@ -230,18 +247,16 @@ dependencies are correctly imported, and that the lint is registered.
 
 The three layers form a Boolean acceptance gate by conjunction. Layer~B's
 judgment is the core signal, and Layer~A's provenance serves as a
-prefilter; failing any layer triggers the repair loop of Appendix~\ref{sec:saiv}.
+prefilter; failing any layer triggers stage-aware iterative verification
+(SAIV, Appendix~\ref{sec:saiv}).
 Since $\rho$ and $\smech$ are deterministic and Layer~A anchors the Description
 to source text, the LLM contributes only this one same-modal comparison, and an
 IR error surfaces here as a mismatch.
 
-\textbf{Certificate-level execution verification, execution-level evidence for
-\CodeEqIR.} Layer~B's semantic-equivalence judgment is given by an LLM and cannot be fully
-determinized; as a complement, we introduce a model-independent
-deterministic verification to check whether the generated code executes the DSL
-tree it corresponds to, written \CodeEqIR. Its idea borrows
-from the test oracle in software testing~\cite{barr2015oracle}, using a set of samples with
-known-correct answers to check the code under test. It proceeds in two steps.
+\textbf{Certificate-level execution verification, the constructed-certificate
+oracle for \CodeEqIR.} We deterministically check whether the generated code is semantically equivalent to its corresponding IR. The check is a test oracle in the sense of software testing~\cite{barr2015oracle}: certificates whose expected
+verdict is fixed by construction supply the known-correct answers that prose
+cannot. It proceeds in two steps.
 
 Step 1, checking a single atomic template. For each atomic template we
 construct a pair of controlled certificate samples, one that should
@@ -259,11 +274,3 @@ $\neg/\wedge/\vee$ evaluate by classical propositional logic and preserve that
 behavior level by level, so the rendered code $\rho(t)$ executes the whole tree,
 written $\mathrm{Code}\equiv t$; and because $t$ is deterministically reduced from
 the IR, \CodeEqIR.
-
-This verification is performed on controlled certificate samples; the result is
-deterministic and does not vary with run count or model. Its boundary
-must be stressed. \CodeEqIR{} only shows that the code follows the IR, which is
-not the same as code--normative-rule
-alignment; if the IR itself has already drifted from the normative rule, this
-verification cannot detect it. The code--normative-rule judgment therefore still
-rests with \CodeEqRule{}, the Layer~B semantic-equivalence judgment.

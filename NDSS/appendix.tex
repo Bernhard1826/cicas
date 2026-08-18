@@ -169,15 +169,9 @@ VI Special structure & DomainComponentOrdered & $()$ &
 There are three combinators $\{\neg, \wedge, \vee\}$, with semantics following
 classical propositional logic.
 
-\textbf{Generality grading of atomic templates, GENERIC and NON\_GENERIC.} Atomic
-templates are graded by semantic reuse. An atomic template is GENERIC if and only if it expresses a
-general PKI certificate-attribute judgment reusable across multiple normative rules and is
-not tied to a corpus-specific OID, single clause, or one-off
-extension structure. Otherwise it is NON\_GENERIC. This grading is fixed in code as the two sets GENERIC\_ATOMS /
-NON\_GENERIC\_ATOMS with a partition-completeness assertion, and is
-deterministically recomputable.
-
-Of the 151 atomic templates in $\mathcal{A}$, 98 are GENERIC and 53 are
+\textbf{Generality grading of atomic templates.} The GENERIC / NON\_GENERIC
+grading is defined in \S\ref{subsec:atoms}; of the 151 atomic templates in
+$\mathcal{A}$, 98 are GENERIC and 53 are
 NON\_GENERIC. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
 examples.
 
@@ -211,9 +205,8 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 \end{tabularx}
 \end{table*}
 
-NON\_GENERIC atomic templates are allowed into code generation and correspond
-to real PKI constructs, but are explicitly
-marked.
+The specialization target column names the single construct each template is
+written for, which is what keeps it outside the GENERIC set.
 
 \section{Phrase Dictionary of the Mechanical Translation $\smech$}
 \label{app:sigma}
@@ -374,10 +367,13 @@ normative rule after generation repair and vocabulary expansion
 have both been exhausted is a candidate signal that the lintability determination
 mislabeled it.
 S2 adds no residual to $\Ltot$; it reuses the generator's existing abstention
-marker as a diagnostic, and each persistent abstention is reviewed against the
-four-condition determination of \S\ref{sec:lintability} and adjudicated as either a
-lintability false positive and re-derived to not-lintable, or a genuine $\Tv$
-expressiveness gap and kept as a logged abstention.
+marker as a diagnostic. Abstentions that survive both repair channels are held
+in a pending set $\NTpend$ and reviewed against the four-condition determination
+of \S\ref{sec:lintability}: each is adjudicated either a lintability false
+positive, re-derived to not-lintable, or a genuine $\Tv$ expressiveness gap,
+moved to the logged set $\NTlog$. S2 clears when $|\NTpend| = 0$. Entries in
+$\NTlog$ are reported gaps that do not block termination, though their normative
+rules stay in $\RLunc$ and keep contributing to $\Lcode$.
 
 \medskip
 The two objective residuals are weighted into the total loss in
@@ -410,12 +406,14 @@ G2 Semantic equivalence & $\Lcode$, Eq.~\eqref{eq:code-res} &
 \midrule
 \multicolumn{4}{@{}l}{\emph{Auxiliary lintability checks: audit the
   lintability determination, outside $\Ltot$}}\\
-S1 Reverse lintability & $\Nviol$, \S\ref{subsec:algo} &
+S1 Reverse lintability & $\Nviol$, cleared at $\Nviol=0$, \S\ref{subsec:algo} &
   verification-judgment consistency repair &
   lintability false negatives / spurious coverage matches \\
-S2 Synthesizability & NT abstention, \S\ref{subsec:algo} &
+S2 Synthesizability & $\NTpend$, pending NT abstentions, cleared at
+  $|\NTpend|=0$, \S\ref{subsec:algo} &
   diagnose lintability vs. generation gap &
-  lintability false positives / missing atoms / $\Tv$ expressiveness gaps \\
+  lintability false positives / missing atoms / $\Tv$ expressiveness gaps
+  logged in $\NTlog$ \\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -454,8 +452,8 @@ accepted only when the metric decreases.
   routes to IR-content repair; and a normative rule that proves not to be lintable
   routes to lintability repair. When the template, IR, and
   lintability label are all correct but the meaning is too complex to express
-  within $\Tv$, the normative rule is kept as a logged expressiveness gap rather than
-  repaired as code.
+  within $\Tv$, the normative rule is recorded in the logged gap set $\NTlog$
+  rather than repaired as code.
 \item \textbf{Verification repair} enlarges the semantic-equivalence
   judgment's semantic neighborhood, such as negation/affirmation interchange or
   one-to-many decomposition, or corrects the inconsistency between the two
@@ -469,9 +467,11 @@ Algorithm~\ref{alg:saiv} gives the full procedure.
 
 \input{algorithms/alg_saiv}
 
-\textbf{Termination conditions.} The loop terminates when $\Ltot < \theta$ and the two
-lintability checks clear, when it reaches the maximum iteration cap $K$, or when no residual
-decreases in a round. If every
+\textbf{Termination conditions.} The loop returns \textsc{closed} when
+$\Ltot < \theta$ and both checks clear, $\Nviol = 0$ for S1 and
+$|\NTpend| = 0$ for S2; \textsc{max\_iter} at the iteration cap $K$; and
+\textsc{dry} when no residual decreases in a round. Adjudicated gaps in $\NTlog$
+are reported, not pending, so they do not prevent \textsc{closed}. If every
 accepted stage-repair operation is monotone, reducing that stage's error or
 leaving it unchanged, then $\Ltot$ is non-increasing each round; the actual
 system stops as soon as no residual decreases, together with the hard cap $K$,

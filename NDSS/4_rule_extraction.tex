@@ -3,12 +3,13 @@
 \label{sec:rule-extraction}
 %-------------------------------------------------------------------------------
 
-This section presents DLEP, our framework for extracting Web PKI normative rules into a structured IR.
+This section presents our methodology for extracting normative rules from Web
+PKI normative sources and converting them into a structured IR.
 
 \subsection{PKI Knowledge Graph Builder}
 \label{sec:method-kg-builder}
 
-The PKI knowledge graph builder is the offline component that converts heterogeneous Web PKI normative sources into the retrieval substrate used by DLEP.
+The PKI knowledge graph builder is the offline component that converts heterogeneous Web PKI normative sources into the retrieval substrate.
 It normalizes each normative source into a hierarchical structure with stable identifiers for the source, sections, headings, and text units.
 It then extracts explicit references such as section citations, RFC references, and policy cross-links, and links them to target nodes when the targets can be resolved unambiguously.
 In parallel, it records certificate-field concepts and aliases such as subjectAltName, dNSName, basicConstraints.cA, and policy OIDs, to map natural-language mentions to canonical certificate paths during later extraction.
@@ -25,7 +26,7 @@ The resulting graph serves as a traceable context index rather than as an oracle
 \subsection{Deterministic Context Retrieval}
 \label{sec:method-graphrag}
 
-To address cross-document references, DLEP organizes context deterministically rather than relying on the LLM to infer relations.
+To address cross-document references, We organize context deterministically rather than relying on the LLM to infer relations.
 We implement a deterministic retrieval module based on GraphRAG~\cite{edge2024local} that treats the knowledge graph of \S\ref{sec:method-kg-builder} as a fixed input and retrieves context through bounded subgraph queries.
 
 Given a target Section node, the retrieval module performs a BFS expansion over the $k$-hop neighborhood using the source-backed CONTAINS, DEFINES, REFERENCES, and APPLIES\_TO relations.

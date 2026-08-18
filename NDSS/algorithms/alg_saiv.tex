@@ -38,11 +38,12 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
 \State $t\gets 0$
 \Repeat
   \State compute objective residuals $\Lrec$~\eqref{eq:recall-res},
-    $\Lcode$~\eqref{eq:code-res}; lintability-check signals $\Nviol$ and $\bot_{\mathrm{NT}}$
-  \If{$\Ltot<\theta$ \textbf{and} $\Nviol=0$}
-    \State \textbf{break} \Comment{objectives converged, checks clear}
+    $\Lcode$~\eqref{eq:code-res}; lintability-check signals $\Nviol$ (S1) and the
+    pending-abstention set $\NTpend$ (S2)
+  \If{$\Ltot<\theta$ \textbf{and} $\Nviol=0$ \textbf{and} $|\NTpend|=0$}
+    \State \textbf{break} \Comment{objectives converged, S1 and S2 clear}
   \EndIf
-  \State $\mathit{op}\gets \textsc{RouteRepair}(\Lrec,\Lcode,\Nviol,\bot_{\mathrm{NT}},\cdots)$
+  \State $\mathit{op}\gets \textsc{RouteRepair}(\Lrec,\Lcode,\Nviol,\NTpend,\cdots)$
   \Statex \Comment{repair routing, \S\ref{subsec:repair}}
   \If{$\mathit{op}=\mathcal{P}_R$} \Comment{IR-content repair}
     \ForAll{$r$ routed to $\mathcal{P}_R$}
@@ -62,8 +63,8 @@ Stage-Aware Iterative Verification, abbreviated SAIV.
   \State update $(\RN,\RL,\RU,\RLunc)$ and $C$
   \State $t\gets t+1$
 \Until{$t\ge K$ \textbf{or} no residual decreased, the no-progress condition}
-\State \textbf{return} $(C,\ \mathit{status}\in\{\textsc{closed},\textsc{dry},
-  \textsc{max\_iter}\})$
+\State \textbf{return} $(C,\ \mathit{status})$, with $\mathit{status}=\textsc{closed}$
+  on break, else \textsc{max\_iter} if $t\ge K$ and \textsc{dry} otherwise
 \end{algorithmic}
 \vspace{1pt}
 \hrule width \linewidth height 0.6pt\relax

@@ -181,28 +181,30 @@ reported compilable lint & 76 &
   successful rendering and Go build; code-generation rate
   $=76/95=80.0\%$ \\
 final accepted lint under \CodeEqRule & 64 &
-  final emitted zlint lint judged against the source rule; synonymy rate
+  final emitted lint judged against the source rule; synonymy rate
   $=64/76=84.2\%$ \\
 certificate-level execution verification under \CodeEqIR & 35 &
-  model-independent IR-to-code evidence; supporting only, outside the
-  \CodeEqRule numerator \\
+  deterministic IR-to-code evidence, reported alongside the \CodeEqRule{}
+  numerator rather than inside it \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-The 19 rules outside the reported GENERIC-participating numerator are not a
+The 19 rules outside the GENERIC-participating numerator, the lints using at
+least one GENERIC atom (\S\ref{subsec:atoms}), are not a
 single failure class. Seventeen produced compilable lints using only
 NON\_GENERIC atoms; these are successful generations but are excluded from the
 GENERIC-participating rate because they rely on domain-specific templates. The
 remaining two returned no-template abstentions after generation repair and
 vocabulary expansion, indicating genuine $\Tv$-expressiveness gaps. Thus
-$95=76+17+2$; only the latter two failed to produce code.
+$95=76+17+2$; only the latter two failed to produce code. Under S2
+(Appendix~\ref{sec:saiv}) both were adjudicated as genuine $\Tv$ gaps rather
+than lintability false positives and logged in $\NTlog$, leaving
+$|\NTpend| = 0$; they remain in $\RLunc$ and count against $\Lcode$ above.
 
-The 14 rejections comprise nine DOES\_NOT\_EXPRESS outcomes, three
-non-unanimous EXPRESS diagnostics, and two uncertain cases. Their primary
-causes were IR/context loss (6), DSL/atom gaps (2), and conservative or
-table-context ambiguity (6). The 35 \CodeEqIR{} checks are supporting
-IR-level evidence, not the semantic-equivalence numerator.
+Their primary
+causes were IR/context loss, DSL/atom gaps, and conservative or
+table-context ambiguity.
 
 \subsection{External Validation of Normative-Rule Extraction and Lintability
 Determination}
@@ -244,92 +246,75 @@ A small number of sheet rows fall outside our scope, so match coverage is near
 ``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing
 correctly skips, together with, on the BR~2.0.2 sheet, cross-references or chapter
 anchors with no matching extracted clause. On BR~2.0.2 the matched positive class is
-very small, just 12 of 217 matched pairs (5.5\%), so a naive all-No baseline
+very small, just 12 of 217 matched pairs, so a naive all-No baseline
 already attains 94.5\% agreement. The more meaningful figure is therefore
 $\kappa = 0.616$, substantial agreement on the Landis--Koch
 scale~\cite{landis1977measurement}. BR~1.4.8 has more balanced classes, with 69
-of 106 matched pairs positive (65\%), and yields $\kappa = 0.823$,
+of 106 matched pairs positive, and yields $\kappa = 0.823$,
 almost-perfect agreement and a tighter estimate of system quality.
 
-\subsection{Comparison Against Unconstrained LLM Generation}
+\subsection{End-to-End Comparison with a Raw-Text Free-Form Baseline}
 \label{subsec:baseline}
 
-The claim that confining synthesis to $\Tv$ yields more trustworthy lints than an
-unconstrained LLM-to-code workflow is comparative, so we test it on
-CABF~BR~v2.2.6 \S7.1.2, which contributes
-141 of the 260 lintable normative rules and 67 of the 95 rules in $\RLunc$.
+We compare the complete pipeline with a raw-text, free-form LLM-to-code workflow
+on CABF~BR~v2.2.6 \S7.1.2, which contributes 141 of the 260 lintable normative
+rules and 67 of the 95 rules in $\RLunc$. The baseline receives the verbatim text
+of one subsection, enumerates the obligations it finds, and writes one zlint lint
+for each obligation it judges lintable against a single parsed certificate. It
+shares our model at temperature~0, our render-and-build gate, and our judging
+protocol, and receives zlint~v3's registration skeleton and zcrypto's certificate
+type, so failures cannot be mere unfamiliarity with zlint. It receives none of
+the pipeline's apparatus: IR and rule records, the typed vocabulary $\mathcal{V}$,
+atomic templates $\mathcal{A}$, the DSL grammar, the predicate-to-template map,
+the deterministic renderer, and metadata binding. Both arms run end to end three
+times on the same domain under identical prompts; the pipeline's Layer-1
+extraction is deterministic. For semantic equivalence, the pipeline supplies its
+deterministic code-semantics summary and the baseline raw Go source to the same
+judge.
 
-\textbf{Baseline arm.} The baseline receives the verbatim text of one subsection, enumerates the obligations it finds, and writes one zlint lint for
-each obligation it judges lintable against a single parsed certificate. It
-shares our model at temperature~0, our render-and-build gate, and our
-semantic-equivalence judge; we withhold exactly the manipulated
-variable---the typed vocabulary $\mathcal{V}$, the atomic templates
-$\mathcal{A}$, the DSL grammar, and every rule and IR our pipeline
-produced---while supplying host-API facts that are not our contribution, such as
-zlint~v3's registration skeleton and zcrypto's certificate type, whose absence
-would depress compilation for reasons unrelated to output-space restriction.
-The unconstrained baseline is repeated end to end three times: extraction,
-generation, and judging each receive identical prompts. Our arm is likewise
-run three times on the same domain. Its Layer-1 extraction is
-deterministic; each code-generation run renders and builds all 67 rules, so the
-observed recall and code-generation-count variances are zero. To isolate the remaining judge variability, we
-invoke the same unanimous $k=5$ semantic-equivalence gate three times on a
-fixed code-semantics snapshot.
-
-\textbf{Reference set.} We enumerate mechanically all 496 obligation-class RFC~2119 keyword
-occurrences in \S7.1.2 and adjudicate each one, blind to both arms' outputs, on
+To score them we enumerate mechanically all 496 obligation-class RFC~2119 keyword
+occurrences in \S7.1.2 and adjudicate each, blind to both arms' outputs, on
 whether it states a normative obligation and whether that obligation constrains
-certificate content. This yields 493 obligations, 460 of them on certificate
-content. Both arms are scored by the same estimator, which counts occurrences
-per (subsection,~keyword) pair.
+certificate content. This yields 493 obligations, 460 on certificate content. The
+pipeline misses four of them, all table rows that Layer-1's regex matching failed
+to segment; completing that logic would give 100\% recall.
 
-For this comparison, the paired columns under each arm report the mean rate in
-percent and population variance. Variance for extraction recall and semantic
-equivalence is measured in percentage-point squared ($\mathrm{pp}^2$); for
-code-generation success, it is computed over the raw compiled counts and
-reported in count squared ($\mathrm{count}^2$). The baseline code-generation success rate uses its
-self-declared checkable set, giving $99/344$, $90/333$, and $98/343$ across
-the three runs. Its semantic-equivalence rate uses the compile-passing outputs
-as the denominator, giving $34/99$, $40/90$, and $42/98$. Our arm uses the same
-$n=67$ code-generation domain in each run and the same 67 compiled outputs for
-the semantic-equivalence judgments. The text-matched $81/80/80$ occurrence
-subsets are retained only as an auxiliary diagnostic and are not used in the
-table. The zero-variance entries are empirical results across three
-measurements; the semantic-equivalence row measures judge variability on the
-fixed method-side code-semantics snapshot.
+Most of what the baseline accepts as lintable never compiles
+(Table~\ref{tab:baseline}), and the accepted set is itself unstable from run to
+run, so its denominator is an output of the baseline rather than a stated domain.
+The pipeline splits its domain identically every run, 63 rules through the
+deterministic main path and the remaining four through LLM fallback, and all
+compile. Among the lints that do compile, the baseline's are likelier to be
+judged non-equivalent to the obligation they claim to enforce. The variance
+column follows the same line: what the pipeline does by machine does not move,
+and the one stage it still leaves to a judge moves less than the baseline's.
 
 \begin{table}[tb]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Unconstrained LLM generation versus this work on CABF~BR~v2.2.6
-\S7.1.2. Variance is in $\mathrm{count}^2$ for code-generation success and
-in $\mathrm{pp}^2$ for the other rate metrics.}
+\caption{End-to-end comparison of a raw-text, free-form LLM-to-code baseline and
+the complete pipeline.}
 \label{tab:baseline}
-\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrr@{}}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lcccc@{}}
 \toprule
-Metric & \multicolumn{2}{c}{Unconstrained} & \multicolumn{2}{c}{This work} \\
- & Mean & Var. & Mean & Var. \\
+Metric & \multicolumn{2}{c}{\shortstack{Raw-text\\free-form}} &
+\multicolumn{2}{c}{\shortstack{Complete\\pipeline}} \\
+ & \shortstack{Num.\\/$n$} & \shortstack{Rate\\(Var.)} &
+ \shortstack{Num.\\/$n$} & \shortstack{Rate\\(Var.)} \\
 \midrule
-Extraction recall & 94.0\% & 0.07 & 99.1\% & 0.00 \\
-Code-generation success & 28.1\% & 16.22 & 100.0\% & 0.00 \\
-Semantic equivalence & 40.5\% & 19.67 & 72.6\% & 3.47 \\
+Extraction recall & \shortstack{$434/460$\\$432/460$\\$431/460$} &
+  \shortstack{$94.0\%$\\$(1.56)$} & \shortstack{$456/460$\\$\times 3$} &
+  \shortstack{$99.1\%$\\$(0.00)$} \\
+\shortstack[l]{Code-generation\\success} & \shortstack{$99/344$\\$90/333$\\$98/343$} &
+  \shortstack{$28.1\%$\\$(16.22)$} & \shortstack{$67/67$\\$\times 3$} &
+  \shortstack{$100.0\%$\\$(0.00)$} \\
+\shortstack[l]{Semantic\\equivalence} & \shortstack{$34/99$\\$40/90$\\$42/98$} &
+  \shortstack{$40.5\%$\\$(11.56)$} & \shortstack{$53/67$\\$49/67$\\$47/67$} &
+  \shortstack{$74.1\%$\\$(6.22)$} \\
 \bottomrule
 \end{tabular*}
 \end{table}
-
-% \textbf{Results.} Extraction is where the baseline comes closest, but the
-% separation widens downstream. The baseline's code-generation success is 28.1\%
-% over its self-declared checkable candidates, while the method compiles all
-% $67/67$ inputs. Among compiled outputs, the baseline's mean semantic-equivalence
-% rate is 40.5\%, compared with 72.6\% for the method. The two arms therefore
-% have different arm-level denominators---the baseline's set is self-asserted,
-% whereas ours passes the audited four-condition criterion---so this is a
-% directional comparison rather than a paired per-obligation accuracy estimate.
-% All three runs of our code generator compile 67/67 lints, so its zero variance
-% reflects the observed repeated success rate rather than identical emitted code.
-% The remaining nonzero variance comes from independently rejudging fixed
-% code-semantics summaries.
 
 \subsection{Certificate Detection}
 \label{subsec:certdetect}
