@@ -39,8 +39,7 @@ The 1,804 raw capitalized RFC~2119 occurrences expand to 2,080 Layer-1
 candidate records because nested clauses can inherit an obligation without
 repeating its keyword.
 
-The first-layer quality signal is G1 conservation, stated as
-Theorem~\ref{thm:recall}. For the extracted candidates, the first conservation
+The first-layer quality signal is G1 conservation; see Appendix~\ref{sec:saiv}. For the extracted candidates, the first conservation
 identity is:
 \[
 \begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
@@ -121,8 +120,7 @@ and downgrades a full or partial verdict to none whenever the two resolve to
 different nonempty families, so a KeyUsage normative rule is never credited to
 a lint that checks SubjectAltName merely because both mention an extension.
 Stage-4 aggregates deterministically. A normative rule is covered if and only
-if its verdict is full, and we define the uncovered remainder as the
-code-generation domain $\RLunc = \RL \setminus \RLcov$. The LLM is invoked only
+if its verdict is full. The LLM is invoked only
 at Stage-0 and Stage-2; candidate
 retrieval, the family guard, and aggregation are fully deterministic.
 
@@ -158,7 +156,7 @@ set in Eq.~\eqref{eq:split}:
 \end{array}
 \]
 Both identities hold term by term, so the G1 residual $\Lrec = 0$ and the top
-two conservation layers are closed and deterministically recomputable. The
+two conservation layers are deterministically recomputable. The
 first layer is the three-way recall split of Eq.~\eqref{eq:cons}.
 The 260 lintable normative rules further split by normative source into 175 CABF
 and 85 RFC~5280, and the 95 uncovered normative rules $\RLunc$ are fed to the
@@ -166,6 +164,8 @@ downstream code generator.
 
 \subsection{Code Generation and Semantic Equivalence}
 \label{subsec:codegen-results}
+
+The code generation results are shown in Table~\ref{tab:codegen-results}.
 
 \begin{table}[tb]
 \centering
@@ -184,27 +184,22 @@ final accepted lint under \CodeEqRule & 64 &
   final emitted lint judged against the source rule; synonymy rate
   $=64/76=84.2\%$ \\
 certificate-level execution verification under \CodeEqIR & 35 &
-  deterministic IR-to-code evidence, reported alongside the \CodeEqRule{}
-  numerator rather than inside it \\
+  deterministic IR-to-code evidence \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 The 19 rules outside the GENERIC-participating numerator, the lints using at
-least one GENERIC atom (\S\ref{subsec:atoms}), are not a
+least one GENERIC atom, are not a
 single failure class. Seventeen produced compilable lints using only
 NON\_GENERIC atoms; these are successful generations but are excluded from the
 GENERIC-participating rate because they rely on domain-specific templates. The
 remaining two returned no-template abstentions after generation repair and
 vocabulary expansion, indicating genuine $\Tv$-expressiveness gaps. Thus
-$95=76+17+2$; only the latter two failed to produce code. Under S2
-(Appendix~\ref{sec:saiv}) both were adjudicated as genuine $\Tv$ gaps rather
-than lintability false positives and logged in $\NTlog$, leaving
-$|\NTpend| = 0$; they remain in $\RLunc$ and count against $\Lcode$ above.
+$95=76+17+2$; only the latter two failed to produce code.
 
-Their primary
-causes were IR/context loss, DSL/atom gaps, and conservative or
-table-context ambiguity.
+The primary causes of non-equivalence between the generated code and the normative
+rule were IR/context loss, DSL/atom gaps, and conservative or table-context ambiguity.
 
 \subsection{External Validation of Normative-Rule Extraction and Lintability
 Determination}

@@ -23,6 +23,8 @@ must be structured and machine-parsable, such as certificates, protocol
 messages, or configuration files. Third, the document must have a
 hierarchy that supports graph construction and scope-inheritance modeling.
 
+The current implementation still relies on a LLM to determine whether the code and the original text are semantically equivalent, but this is part of the compliance automation process. We adopt a conservative strategy: each semantic-equivalence judgment is performed five times independently, and a match is considered valid only when all five results are consistent. During certificate detection, an issue is considered a genuine problem only after it has been manually verified.
+
 \subsection{Recommendations for Authors of Web PKI Normative Sources and Tool Maintainers}
 \label{subsec:recommendations}
 

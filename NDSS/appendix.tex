@@ -304,21 +304,20 @@ checks gate the labels those objectives consume.
 \noindent\textbf{G1, recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
 If the set-level lintability determination assigns each keyword-recalled candidate in
-$\Rkw(\mathcal{D})$ to exactly one of the three classes noise, lintable, and
+$\Rkw$ to exactly one of the three classes noise, lintable, and
 not-lintable, then recall is conserved from recall to lintability
 determination:
 \begin{equation}\label{eq:cons}
-  |\Rkw(\mathcal{D})| = |\RN| + |\RL| + |\RU|
+  \Rkw = \RN + \RL + \RU
 \end{equation}
 \end{theorem}
-\noindent where $\mathcal{D}$ is the normative-source corpus, written D in
-ASCII inside the Algorithm~\ref{alg:saiv} listing, $\RN$ is noise that contains
+\noindent where $\RN$ is noise that contains
 RFC~2119 keyword matches rejected as noise by the adjudication procedure,
 $\RL$ the lintable normative rules, and $\RU$
 the not-lintable normative rules. The lintable class $\RL$ is further split by whether
 a normative rule is already implemented by an existing external lint tool,
 \begin{equation}\label{eq:split}
-  |\RL| = |\RLcov| + |\RLunc|
+  \RL = \RLcov + \RLunc
 \end{equation}
 where $\RLcov$ are normative rules covered by some lint tool and $\RLunc$ are
 not-yet-covered normative rules. The first identity~\eqref{eq:cons} is total conservation
@@ -328,11 +327,10 @@ subset $\RLunc$ is the most important observation domain for generation that
 fills the ecosystem gap, while the covered subset $\RLcov$ provides external
 evidence of reverse lintability. The residual is the recall-conservation
 residual $\Lrec$, a symmetric normalization of the gap in
-Theorem~\ref{thm:recall}, computable without manual ground truth and currently
-closed, as shown in Tables~\ref{tab:rule-recall} and~\ref{tab:coverage}:
+Theorem~\ref{thm:recall}, computable without manual ground truth, as shown in Tables~\ref{tab:rule-recall} and~\ref{tab:coverage}:
 \begin{equation}\label{eq:recall-res}
-  \Lrec = 1 - \frac{\min\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
-  {\max\!\big(|\Rkw|,\; |\RN|+|\RL|+|\RU|\big)}
+  \Lrec = 1 - \frac{\min\!\big(\Rkw,\; \RN+\RL+\RU\big)}
+  {\max\!\big(\Rkw,\; \RN+\RL+\RU\big)}
 \end{equation}
 
 \medskip
