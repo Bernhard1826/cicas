@@ -25,8 +25,8 @@ As Web PKI standards evolve, experts must identify, interpret, and encode applic
 % This gap matters as linting becomes increasingly critical to PKI governance, because Web PKI normative sources still do not distinguish normative rules that admit certificate lints from those that require evidence not contained in the certificate.
 \zmmmod{
 More fundamentally, existing linting tools begin only after a requirement has already been understood and deemed suitable for certificate-level checking. 
-What is missing is a systematic mechanism that starts from the normative sources themselves and determines which requirements can be translated into executable certificate lints.
-This distinction is essential because \textit{normative does not imply lintable}: many mandatory requirements depend on operational procedures, external state, or runtime behavior that cannot be determined from certificate contents alone.
+What is missing is a systematic mechanism that starts from the normative sources themselves and determines which requirements can be translated into lintable certificate lints.
+This distinction is essential because normative does not imply lintable: many mandatory requirements depend on operational procedures, external state, or runtime behavior that cannot be determined from certificate contents alone.
 Consequently, the Web PKI ecosystem lacks a systematic framework from normative text to enforceable certificate-lint logic.
 }
 
@@ -78,8 +78,9 @@ This design grounds semantic interpretation in structured source evidence, avoid
 }
 
 % To address the second challenge, we operationalize lintability through a four-condition framework in \S\ref{sec:method-lintability}, evaluated over IR attributes, turning the lintability determination, given a fixed IR, into a traceable deterministic computation rather than a keyword heuristic.
-\zmmmod{To address the second challenge, we determine lintability through a four-condition framework that evaluates whether the compliance decision can be expressed using information available to a certificate lint.
-Given a fixed IR, the framework turns lintability determination into a traceable and reproducible computation rather than a heuristic based on keywords.}
+\zmmmod{To address the second challenge, we apply a four-condition operational criterion to the extracted IR.
+It determines whether a normative rule can be checked by a certificate lint that examines only the encoded contents of a single certificate.
+Given a fixed IR, the criterion determines lintability by jointly evaluating four explicit IR fields rather than relying on a direct LLM judgment, yielding a traceable and reproducible decision.}
 
 % To address the third challenge, we restrict code generation to a finite, closed DSL-tree space. Each normative rule's checking logic is a tree in this space that a deterministic function renders into Go lint code. The generator first attempts deterministic synthesis; when that path yields no tree, an LLM fallback may propose a tree from the same closed space. Every candidate is gated by a requirement that it render and pass go build, so out-of-space and non-compiling candidates are rejected before downstream semantic evaluation.
 \zmmmod{To address the third challenge, we restrict generated checking logic to a closed DSL-tree representation that admits deterministic rendering into Go lint code.
@@ -89,14 +90,14 @@ The goal is not merely to generate compilable code, but to constrain generation 
 \noindent \textbf{Evaluation and Analysis.}
 We evaluate the full framework on two central Web PKI normative sources RFC~5280 and CABF~BR.
 Of 2,080 keyword-recalled candidate records, 1,567 are retained as normative rules by the pipeline's adjudication procedure, of which 260 (16.6\%) are determined to be lintable.
-Existing zlint lints cover 165 of these rules, leaving 95 lintable normative rules (36.5\%) without full zlint coverage. 
+Existing zlint lints cover 165 of these rules, leaving 95 lintable normative rules without full zlint coverage. 
 % and revealing a substantial gap between deployed tooling and the normative sources.
 % For the uncovered rules, we report the code-generation rate using the
 % GENERIC-participating count, which is 76/95 (80.0\%), consisting of 72/95 (75.8\%)
 % GENERIC-only generated lints and 4/95 (4.2\%) lints that mix GENERIC and
 % NON\_GENERIC atoms.
 % Sixty-four of these pass the final unanimous code--normative-rule semantic-equivalence gate, a rate of 64/76 (84.2\%).
-\zmmmod{For these uncovered rules, our framework generates candidate lints for 76 of 95 rules (80.0\%), and 64 of the 76 generated candidates (84.2\%) pass the final semantic-equivalence validation.}
+\zmmmod{For these uncovered rules, our framework generates candidate lints for 76 of 95 rules, and 64 of the 76 generated candidates pass the final semantic-equivalence validation.}
 
 We further perform two independent external validations, targeting the two major halves of the framework.
 Against the zlint maintainers' manually annotated CABF~BR mapping sheet~\cite{zlint-mapping-sheet}, our normative-rule extraction and lintability determination show substantial agreement with expert annotations across both available versions.
@@ -108,8 +109,8 @@ This paper makes three contributions.
 \begin{itemize}
     \item 
     % We design DLEP, a dual-layer pipeline that automatically extracts normative rules from natural-language Web PKI normative sources, confines the LLM to schema-bounded semantic parsing, and produces source-linked IR records for inspection.
-    We present DLEP, a source-grounded framework for translating natural-language Web PKI normative text into structured, auditable rule representations, combining deterministic context retrieval with schema-constrained semantic parsing.
-    \item We propose a four-condition operational criterion for determining whether an extracted normative rule can be enforced as a certificate lint.
+    We present DLEP, a source-grounded pipeline for translating natural-language Web PKI normative text into structured, auditable rule representations, combining deterministic context retrieval with schema-constrained semantic parsing.
+    \item We propose a four-condition operational criterion for determining whether an extracted normative rule is lintable.
     \item 
     % We develop a restricted code-generation method that confines each normative rule's checking logic to a finite, closed DSL-tree space, yielding deterministic lint-code rendering with explicit audit evidence and a build-gated LLM fallback.
     We develop a constrained normative-rule-to-lint synthesis approach that restricts checking logic to a closed DSL-tree representation, enabling deterministic code rendering, explicit audit evidence, and systematic structural and semantic validation.
