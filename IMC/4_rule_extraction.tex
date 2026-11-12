@@ -35,7 +35,7 @@ It then assembles LLM context by relation-type priority and provides term defini
 \subsection{DLEP}
 \label{sec:method-dual-layer}
 
-\begin{table}[tb]
+\begin{table}[!htbp]
 \centering
 \caption{RFC~2119 keyword tiers.}
 \label{tab:rfc2119}
@@ -53,7 +53,7 @@ Optional       & MAY, OPTIONAL           & Fully optional \\
 \end{tabularx}
 \end{table}
 
-\begin{table}[tb]
+\begin{table}[!htbp]
 \centering
 \caption{IR core four-tuple fields.}
 \label{tab:ir-core}
@@ -85,11 +85,14 @@ Pass~3 performs Non-Canonical Recovery.
 Layer~2 performs controlled semantic parsing using an LLM, but restricts the model to a constrained language-understanding role.
 Instead of generating lint rules or compliance judgments directly, Layer~2 converts normative text into a JSON-serialized IR, while all normative reasoning is deferred to later deterministic stages.
 
+\begingroup\emergencystretch=2em\relax
 The IR decouples semantic extraction from downstream tasks, allowing the same extraction result to support multiple uses, as shown in Fig.~\ref{fig:ir-downstream}.
 Each IR record is serialized as a JSON object with 33 fields.
 Its core component, shown in Table~\ref{tab:ir-core}, is the four-tuple
 $\mathrm{IR} = \langle\text{subject}, \text{obligation}, \text{predicate}, \text{constraint}\rangle$,
 together with 29 extension fields summarized in Appendix~\ref{app:ir}.
+\par\endgroup
+
 
 The IR design provides three properties used by downstream stages.
 First, citation, constraint, and obligation information are stored separately, supporting traceability and conflict handling.
@@ -101,11 +104,11 @@ Every extracted normative rule must map to explicit source text, and certificate
 The IR generation process is also staged. The model first determines the normative-rule category and then fills in the remaining fields.
 Appendix~\ref{app:ir} provides the category definitions, correction rules, and tuning details.
 
-\begin{figure}[tb]
+\begin{figure}[!htbp]
   \centering
-  \paperfig{figures/fig02_ir_downstream.png}{IR-driven architecture in which a
-    single extraction pass feeds every downstream stage.}
+  \includegraphics[width=\linewidth]{figures/fig02_ir_downstream.png}
   \caption{IR-driven architecture in which a single extraction pass feeds every
     downstream stage.}
+  \Description{A structured intermediate representation flows from normative text extraction to lintability analysis, code generation, and validation.}
   \label{fig:ir-downstream}
 \end{figure}

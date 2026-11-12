@@ -1,12 +1,13 @@
 % Algorithm 1 -- zlint coverage-alignment determination for lintable normative rules.
-% Included from sections/08_evaluation.tex via \input{algorithms/alg_coverage}.
+% Included from appendix.tex via \input{algorithms/alg_coverage}.
 %
 % Typeset single-column (not figure*) at \scriptsize: the algorithmic lines are
 % short, so at full width the right half of most lines was blank and the float was
 % billed two columns of page area. Long \Comment texts are placed on their own
 % \Statex lines because \Comment is right-aligned and cannot wrap. No step, symbol,
 % or comment wording was changed.
-\begin{figure}[tb]
+\begin{figure}[!htbp]
+\raggedright
 \setlength{\parskip}{0pt}
 \makeatletter
 \@ifundefined{c@algorithm}{%
@@ -16,13 +17,12 @@
 \makeatother
 \refstepcounter{algorithm}
 \label{alg:coverage}
+\Description{Algorithm for matching each lintable normative rule to candidate zlint checks and aggregating full, partial, and uncovered coverage.}
 \hrule width \linewidth height 0.6pt\relax
-\vspace{1pt}
 \nointerlineskip
 \noindent\textbf{Algorithm~\thealgorithm.} Algorithmic listing for zlint
-coverage-alignment determination for individual normative rules.
+coverage alignment determination for individual normative rules.
 \par
-\vspace{1pt}
 \nointerlineskip
 \hrule width \linewidth height 0.4pt\relax
 \nointerlineskip
@@ -74,6 +74,5 @@ coverage-alignment determination for individual normative rules.
   $\RLunc\gets B\setminus \RLcov$
 \State \textbf{return} $(\{(b,\mathrm{verdict}(b)):b\in B\},\ \RLcov,\ \RLunc)$
 \end{algorithmic}
-\vspace{1pt}
 \hrule width \linewidth height 0.6pt\relax
 \end{figure}

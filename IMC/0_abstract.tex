@@ -11,14 +11,9 @@ extraction pipeline combines deterministic normative-rule recall with
 schema-constrained LLM parsing into an intermediate
 representation. A four-condition criterion then determines lintability from
 the intermediate representation. Restricted code
-generation maps supported normative rules to a closed, typed DSL tree that a deterministic
-renderer converts to Go lint code. On RFC~5280 and the CA/Browser Forum Baseline Requirements, the framework
+generation maps supported normative rules to a closed, typed DSL tree converts to Go lint code. On RFC~5280 and the CA/Browser Forum Baseline Requirements, the framework
 recalls 2,080 candidate records for normative rules and retains 1,567 as normative rules through its
-adjudication procedure. Only
-260 (16.6\%) are lintable as certificate lints; existing zlint
-lints fully cover 165. For the remaining 95 normative rules, the generator produces 76
-compilable lints that draw on general-purpose atoms, 64 of which pass a unanimous
-code--normative-rule semantic-equivalence gate.
-When added to zlint, these lints confirm five certificate-problem types across
-the evaluated corpora, including findings missed by native zlint in a scan of
-111,118 deployed certificates.
+adjudication procedure. Of these,
+278 (17.7\%) are lintable as certificate lints. The manually verified generated lints identify 10 manually confirmed
+finding classes across 2,766 certificates in a scan of one million Bugzilla
+certificate files.

@@ -1,0 +1,22 @@
+%-------------------------------------------------------------------------------
+% NDSS "Ethics Considerations" section, \input immediately before the reference
+% section (see the note above \bibliography in main.tex). The heading is
+% unnumbered because the CFP treats this section as outside the page limit;
+% switch \section* to \section for a numbered heading.
+%-------------------------------------------------------------------------------
+\section*{Ethics Considerations}
+
+We strictly follow the Menlo Report~\cite{kenneally2012menlo} and established best
+practices for network measurement research~\cite{partridge2016ethical,allman2007issues}.
+All data analyzed in this work is publicly available: public normative documents,
+zlint's open-source testdata, and certificate records retrieved from public
+Certificate Transparency logs. The only network activity is the retrieval of
+already-published entries from the logs' public entry-retrieval interface; we
+contact no subscriber host and induce no traffic on production TLS services, and we
+rate-limit the retrieval so that it does not burden the log operators. CT records are
+issued certificates and therefore carry subject identity fields, some of which the
+profile checks in \S\ref{subsec:certdetect} inspect directly. These fields are
+already published irrevocably in append-only public logs; we report only aggregate
+counts per finding type and republish no individual certificate. All remaining
+analysis is offline, and the work involves no user traffic, no private data, and no
+human subjects.

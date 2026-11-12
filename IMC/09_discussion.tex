@@ -12,6 +12,7 @@ rounds, but current LLMs can still produce an incorrect IR in a single pass.
 Improving IR extraction and independently measuring its error therefore remain
 important future work.
 
+\begingroup\emergencystretch=2em\relax
 DLEP's core mechanism is not inherently specific to Web PKI normative sources, but this
 study does not evaluate transfer to another normative-source ecosystem. Layer~1
 currently targets RFC~2119 keywords such as MUST, SHALL, SHOULD, and MAY. Its
@@ -22,15 +23,20 @@ must supply recognizable formal deontic keywords. Second, the constraint targets
 must be structured and machine-parsable, such as certificates, protocol
 messages, or configuration files. Third, the document must have a
 hierarchy that supports graph construction and scope-inheritance modeling.
+\par\endgroup
 
-The current implementation still relies on a LLM to determine whether the code and the original text are semantically equivalent, but this is part of the compliance automation process. We adopt a conservative strategy: each semantic-equivalence judgment is performed five times independently, and a match is considered valid only when all five results are consistent. During certificate detection, an issue is considered a genuine problem only after it has been manually verified.
+
+IR accuracy and code--normative-rule agreement are assessed by human reviewers,
+not an LLM. Certificate findings are likewise reported only after manual
+verification.
 
 \subsection{Recommendations for Authors of Web PKI Normative Sources and Tool Maintainers}
 \label{subsec:recommendations}
 
 The methodology and empirical findings support recommendations for authors of Web PKI
-normative sources and certificate-linter maintainers.
+normative sources and certifdicate-linter maintainers.
 
+\begingroup\emergencystretch=2em\relax
 For authors of Web PKI normative sources, we suggest three drafting principles. First,
 each sentence should express at most one normative obligation; multiple
 obligations should be separately numbered rather than combined through
@@ -43,7 +49,10 @@ as ``it''. Third, cross-document references should use a canonical form such as
 where applicable,
 rather than vague forms such as ``as described in [RFC~X]'' or ``see
 [RFC~X]''. This form makes each reference easier to map to a typed graph edge.
+\par\endgroup
 
+
+\begingroup\emergencystretch=2em\relax
 For maintainers of certificate linters, we recommend an
 implementation-aligned code summary in the metadata description, namely one
 RFC~2119-style sentence that states the field path, assertion type, allowed or
@@ -55,3 +64,4 @@ Apple CT Policy''. Consequently, coverage analysis requires the Stage~0
 code-summarization step in Algorithm~1 before a normative rule can be aligned
 with lint behavior at the IR level. This step adds engineering overhead and can
 introduce adjudication noise at the partial/none boundary.
+\par\endgroup

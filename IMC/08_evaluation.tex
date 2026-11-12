@@ -1,0 +1,314 @@
+%-------------------------------------------------------------------------------
+\section{Analysis and Evaluation}
+\label{sec:eval}
+%-------------------------------------------------------------------------------
+
+This section runs experiments with the methods and framework above and draws
+quantitative conclusions. The internal pipeline metrics are reported in four
+subsections in pipeline order: normative-rule extraction, lintability
+determination, Lint Coverage Analysis, and code generation and semantic
+equivalence. Beyond them, two mutually independent external validations
+each check one half of the framework. \S\ref{subsec:lintability-ext} externally
+validates normative-rule extraction and lintability determination against the
+zlint maintainers' manual gold standard, and \S\ref{subsec:certdetect} externally
+validates the generated lints by execution on real certificates.
+
+\subsection{Experimental Setup}
+\label{subsec:setup}
+
+\begingroup\emergencystretch=2em\relax
+All experiments use GPT-5.4 as the LLM for schema-constrained extraction and
+coverage-alignment judging; the IR and code-accuracy audits are manual. The LLM
+judges are configured at temperature~$0$. We target
+RFC~5280 and CABF~BR because they are
+the two most authoritative and foundational Web PKI normative sources for publicly
+trusted TLS certificates. RFC~5280 defines the base X.509 certificate profile that
+virtually every downstream normative rule inherits, and CABF~BR is the baseline that every
+publicly trusted CA is mandated to meet; it also builds directly on RFC~5280, so
+together they bound where compliance linting matters most. Normative-rule extraction was run on CABF~BR~v2.2.6. This was the latest
+CABF~BR release when the experiments began.
+\par\endgroup
+
+
+The pipeline is evaluated in four stages reported below in execution order:
+normative-rule extraction, lintability determination, Lint Coverage Analysis,
+and code generation and semantic equivalence. The coverage analysis determines
+which lintable rules are already implemented by zlint; only its uncovered
+remainder enters the downstream code-generation experiment.
+
+\subsection{Normative-Rule Extraction}
+\label{subsec:rule-extraction}
+
+The 1,804 raw capitalized RFC~2119 occurrences expand to 2,080 Layer-1
+candidate records because nested clauses can inherit an obligation without
+repeating its keyword.
+
+The first-layer quality signal is G1 conservation; see Appendix~\ref{sec:saiv}. For the extracted candidates, the first conservation
+identity is:
+\[
+\begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
+  \underset{|\Rkw|}{2080} & = & \underset{|\RN|\ \text{noise}}{513} & + & \underset{|\RL|\ \text{lintable}}{278} & + & \underset{|\RU|\ \text{not-lintable}}{1289}
+\end{array}
+\]
+
+\subsection{Lintability Determination}
+\label{subsec:lintability-eval}
+
+\begingroup\emergencystretch=2em\relax
+The four-condition gate retains 278 single-certificate obligations and excludes
+process, cross-certificate, runtime, external-semantic, MAY/OPTIONAL. These 278 lintable rules are the input to the zlint coverage
+analysis below; no rule outside this set enters either coverage or code generation.
+\par\endgroup
+
+
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\caption{Normative-rule extraction and lintability counts.}
+\label{tab:rule-recall}
+\begin{tabularx}{\columnwidth}{@{}X r r r@{}}
+\toprule
+Metric & CABF & RFC~5280 & Total \\
+\midrule
+Keyword occurrences & 1262 & 542 & 1804 \\
+Recalled candidate records & 1440 & 640 & 2080 \\
+Lintable rules & 176 & 102 & 278 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Lint Coverage Analysis}
+\label{subsec:coverage}
+
+This analysis determines how many of the 278 lintable normative rules are
+already implemented by an existing tool. We restrict the analysis to zlint,
+the most widely deployed certificate linter, integrated into major CA issuance
+and CT-monitoring pipelines. The criterion is deliberately strict. A lintable
+normative rule counts as covered only when some cognate, or provenance-matched,
+zlint lint genuinely implements it, not merely mentions the same field. We
+accordingly label each normative rule full, partial, or none by whether such a
+lint implements it fully, partially, or not at all, and count only full as
+covered.
+
+The matching procedure, including Algorithm~\ref{alg:coverage}, is
+detailed in Appendix~\ref{app:coverage}.
+
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\caption{zlint coverage of the 278 lintable normative rules, by source.}
+\label{tab:coverage}
+\begin{tabularx}{\columnwidth}{@{}X r r r@{}}
+\toprule
+Item & CABF & RFC~5280 & Total \\
+\midrule
+lintable normative rules & 176 & 102 & 278 \\
+zlint cognate lints & 170 & 122 & 292 \\
+full coverage & 70 & 66 & 136 \\
+uncovered code-generation domain & 106 & 36 & 142 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The deterministic aggregation yields the source-level covered and uncovered
+counts in Table~\ref{tab:coverage}; only a full verdict contributes to the 136
+covered rules, and every partial or none verdict remains in the 142-rule
+code-generation domain $\RLunc$. The 292 cognate lints are lint instances, not
+a covered-rule count.
+
+The second conservation layer is the covered/uncovered split of the lintable
+set in Eq.~\eqref{eq:split}:
+\[
+\begin{array}{c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c @{\;} c}
+  \underset{|\RL|}{278} & = & \underset{|\RLcov|\ \text{covered}}{136} & + & \underset{|\RLunc|\ \text{uncovered}}{142}
+\end{array}
+\]
+Both identities hold term by term, so the G1 residual $\Lrec = 0$ and the top
+two conservation layers are deterministically recomputable. The
+first layer is the three-way recall split of Eq.~\eqref{eq:cons}.
+The 278 lintable normative rules further split by normative source into 176 CABF
+and 102 RFC~5280, and the 142 uncovered normative rules $\RLunc$ are fed to the
+downstream code generator.
+
+\subsection{Code Generation and Semantic Equivalence}
+\label{subsec:codegen-results}
+
+Of the 142 uncovered rules, 128 have deterministic compilable lints, four use
+LLM fallback, and ten have no delivered lint. Only manually verified generated
+lints are included in the Bugzilla findings.
+
+Human reviewers compared the IR or generated code with the selected source
+text and applicable context; no LLM judged correctness. The frozen IR audit
+found 122/142 source-matching records (85.92\%); the separately frozen code
+audit found 115/128 source--code matches (89.84\%). For designated partial
+rules, a correct nonempty subset on the same field and in the same direction
+is accepted; none rules require the complete selected obligation.
+
+\subsection{External Validation of Normative-Rule Extraction and Lintability
+Determination}
+\label{subsec:lintability-ext}
+
+Normative-rule extraction and lintability determination need an independent external
+reference. For this we bring in the CABF BR mapping table published by zlint
+maintainers~\cite{zlint-mapping-sheet}. This table is manually annotated for each BR
+normative rule by zlint experts as to whether it can be expressed by a certificate lint,
+and the annotators are unaware of our extractor, IR, and lintability determination
+module. Each Yes/No label in the table corresponds exactly to our joint output
+of extracting that normative rule and determining whether it is lintable, and
+agreement indicates that our normative-rule extraction and lintability determination match
+human experts. The table covers two versions, BR~1.4.8~\cite{cabf-br148-md} and
+BR~2.0.2~\cite{cabf-br202-md}, compared version-for-version against our
+CABF-Server-1.4.8 extraction of 422 normative rules and the CABF-Server-2.0.2 extraction of 1024
+normative rules, both produced by the same two-layer pipeline. Table~\ref{tab:extval}
+reports the version-for-version agreement.
+
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Version-for-version external validation on BR~1.4.8 / BR~2.0.2, with
+Cohen's $\kappa$ and 95\% confidence intervals.}
+\label{tab:extval}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrrrr@{}}
+\toprule
+Version & Rows; Yes/No & Match cov. & Agreement & $\kappa$ & 95\% CI \\
+\midrule
+BR~1.4.8 & 122; 75/47 & 86.9\% & 91.5\% & 0.823 & [0.71, 0.93] \\
+BR~2.0.2 & 250; 17/233 & 86.8\% & 96.8\% & 0.616 & [0.35, 0.88] \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+A small number of sheet rows fall outside our scope, so match coverage is near
+87\% on both versions. These rows are title-case or lowercase descriptors such as
+``Required if'', ``Deprecated'', or lowercase ``shall'' that RFC~2119 processing
+correctly skips, together with, on the BR~2.0.2 sheet, cross-references or chapter
+anchors with no matching extracted clause. On BR~2.0.2 the matched positive class is
+very small, just 12 of 217 matched pairs, so a naive all-No baseline
+already attains 94.5\% agreement. The more meaningful figure is therefore
+$\kappa = 0.616$, substantial agreement on the Landis--Koch
+scale~\cite{landis1977measurement}. BR~1.4.8 has more balanced classes, with 69
+of 106 matched pairs positive, and yields $\kappa = 0.823$,
+almost-perfect agreement and a tighter estimate of system quality.
+
+\subsection{End-to-End Comparison with a Raw-Text Free-Form Baseline}
+\label{subsec:baseline}
+
+We compare the complete pipeline with a raw-text, free-form LLM-to-code workflow
+on CABF~BR~v2.2.6 \S7.1.2, which contributes 141 of the 278 lintable normative
+rules and 67 of the 142 rules in $\RLunc$. The baseline receives the verbatim text
+of one subsection, enumerates the obligations it finds, and writes one zlint lint
+for each obligation it judges lintable against a single parsed certificate. It
+shares our model at temperature~0, our render-and-build gate, and our judging
+protocol, and receives zlint~v3's registration skeleton and zcrypto's certificate
+type, so failures cannot be mere unfamiliarity with zlint. It receives none of
+the pipeline's apparatus: IR and rule records, the typed vocabulary $\mathcal{V}$,
+atomic templates $\mathcal{A}$, the DSL grammar, the predicate-to-template map,
+the deterministic renderer, and metadata binding. Both arms run end to end three
+times on the same domain under identical prompts; the pipeline's Layer-1
+extraction is deterministic. For semantic equivalence, the pipeline supplies its
+deterministic code-semantics summary and the baseline raw Go source to the same
+independent manual reviewer.
+
+\begingroup\emergencystretch=2em\relax
+To score them we enumerate mechanically all 496 obligation-class RFC~2119 keyword
+occurrences in \S7.1.2 and adjudicate each, blind to both arms' outputs, on
+whether it states a normative obligation and whether that obligation constrains
+certificate content. This yields 493 obligations, 460 on certificate content. The
+pipeline misses four of them, all table rows that Layer-1's regex matching failed
+to segment; completing that logic would give 100\% recall.
+\par\endgroup
+
+
+Most of what the baseline accepts as lintable never compiles
+(Table~\ref{tab:baseline}), and the accepted set is itself unstable from run to
+run, so its denominator is an output of the baseline rather than a stated domain.
+The pipeline splits its domain identically every run, 63 rules through the
+deterministic main path and the remaining four through LLM fallback, and all
+compile. Among the lints that do compile, the baseline's are likelier to be
+marked non-equivalent by the manual reviewer to the obligation they claim to enforce. The variance
+column follows the same line: what the pipeline does by machine does not move,
+and the one stage it still leaves to manual review moves less than the baseline's.
+
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{End-to-end comparison of a raw-text, free-form LLM-to-code baseline and
+the complete pipeline.}
+\label{tab:baseline}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lcccc@{}}
+\toprule
+Metric & \multicolumn{2}{c}{\shortstack{Raw-text\\free-form}} &
+\multicolumn{2}{c}{\shortstack{Complete\\pipeline}} \\
+ & \shortstack{Num.\\/$n$} & \shortstack{Rate\\(Var.)} &
+ \shortstack{Num.\\/$n$} & \shortstack{Rate\\(Var.)} \\
+\midrule
+Extraction recall & \shortstack{$434/460$\\$432/460$\\$431/460$} &
+  \shortstack{$94.0\%$\\$(1.56)$} & \shortstack{$456/460$\\$\times 3$} &
+  \shortstack{$99.1\%$\\$(0.00)$} \\
+\shortstack[l]{Code-generation\\success} & \shortstack{$99/344$\\$90/333$\\$98/343$} &
+  \shortstack{$28.1\%$\\$(16.22)$} & \shortstack{$67/67$\\$\times 3$} &
+  \shortstack{$100.0\%$\\$(0.00)$} \\
+\shortstack[l]{Semantic\\equivalence} & \shortstack{$34/99$\\$40/90$\\$42/98$} &
+  \shortstack{$40.5\%$\\$(11.56)$} & \shortstack{$53/67$\\$49/67$\\$47/67$} &
+  \shortstack{$74.1\%$\\$(6.22)$} \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\subsection{Bugzilla Certificate Detection}
+\label{subsec:certdetect}
+
+We used the manually verified generated lints alongside native zlint checks
+to analyze one million Bugzilla certificates. The reported findings retain
+only results from manually verified lints.
+
+All retained classes identify specific Error/Warning conditions missing
+from, or only partly implemented in, the native zlint version used.
+A certificate may trigger native lints for other conditions. Every retained
+occurrence has \texttt{notBefore} on or after its requirement's or
+recommendation's effective date.
+The date is checked per obligation; \texttt{notBefore} is a timing proxy.
+After merging aliases and date filtering, Table~\ref{tab:bugzilla-findings}
+contains 10 classes: 5 Error and 5 Warning. These comprise 543 Error and
+2,939 Warning occurrences across 2,766 distinct certificates, including 540
+with at least one Error. 
+
+Missing DNS/IP SAN entries prevent SAN-based server identity matching.
+Malformed SAN/CN labels can impair interoperability, although CN-only defects
+need not affect SAN-based verification. Missing reserved policy identifiers
+can disrupt policy-dependent validation. Prohibited OCSP \texttt{caIssuers}
+violates the responder profile; responder AIA adds redundant information.
+Missing \texttt{keyUsage} omits explicit restrictions on key use; other
+constraints still apply. Extra OV subject attributes require verification
+and maintenance. Policy qualifiers increase certificate size with limited
+routine client value. Distribution points lacking HTTP/LDAP may hinder CRL
+retrieval without alternatives.
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Source-reviewed findings in the one-million-file Bugzilla certificate scan after effective-date filtering.}
+\label{tab:bugzilla-findings}
+\begin{tabularx}{\textwidth}{@{}c X L{0.25\textwidth} r@{}}
+\toprule
+Severity & Finding class & Section & Occurrences \\
+\midrule
+Error & Present SAN has neither \texttt{dNSName} nor \texttt{iPAddress} & BR~7.1.2.7.12 & 3 \\
+Error & SAN DNS label starts or ends with a hyphen & BR~7.1.2.7.12 & 4 \\
+Error & Subscriber lacks a required reserved certificate policy identifier & BR~7.1.2.7.9 & 531 \\
+Error & OCSP responder AIA contains prohibited \texttt{caIssuers} & BR~7.1.2.8.3 & 2 \\
+Error & CN DNS label starts or ends with a hyphen & BR~7.1.4.3 & 3 \\
+Warning & Subscriber lacks recommended \texttt{keyUsage} & BR~7.1.2.7.6 & 3 \\
+Warning & OV Subscriber contains another discouraged subject attribute & BR~7.1.2.7.4 & 710 \\
+Warning & Non-CA OCSP responder contains discouraged AIA & BR~7.1.2.8.2--3 & 2 \\
+Warning & CA, Subscriber, or OCSP responder contains discouraged policy qualifiers & BR~7.1.2.7.9, 7.1.2.8.8, 7.1.2.10.5 & 2,210 \\
+Warning & A DistributionPointName lacks an HTTP or LDAP URI & RFC~5280 4.2.1.13 & 14 \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+

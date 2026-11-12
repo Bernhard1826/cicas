@@ -1,0 +1,118 @@
+\documentclass[10pt,sigconf,anonymous,nonacm]{acmart}
+
+% acmart defines balance as an internal xkeyval key rather than a class
+% option.  Set it through the class key interface so the final two columns
+% are left unbalanced without producing an unused-option warning.
+\makeatletter
+\setkeys{acmart.cls}{balance=false}
+\makeatother
+
+\settopmatter{printfolios=true,printacmref=false}
+\input{packages}
+\hypersetup{pdfauthor={}}
+
+% acmart's sigconf format uses flush-bottom columns; retain that behavior so
+% short columns do not leave visible gaps at the foot of a page.
+\flushbottom
+\hbadness=10000
+\vbadness=10000
+
+% Keep the ACM two-column float layout compact.  The manuscript contains
+% several short tables and algorithm listings; the class default separation
+% leaves visibly large gaps below top-of-column floats.  These lengths affect
+% only float-to-text spacing, not the template's margins, columns, or type.
+\AtBeginDocument{%
+  \setlength{\textfloatsep}{8pt plus 2pt minus 2pt}%
+  \setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}%
+  \setlength{\floatsep}{6pt plus 2pt minus 2pt}%
+  \setlength{\dblfloatsep}{6pt plus 2pt minus 2pt}%
+  \setlength{\intextsep}{6pt plus 2pt minus 2pt}%
+}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{definition}{Definition}
+
+\newcommand{\ind}{\mathds{1}}
+\newcommand{\code}{\mathrm{Code}}
+\newcommand{\ir}{\mathrm{IR}}
+\newcommand{\normrule}{\mathrm{NormRule}}
+\newcommand{\Rkw}{\mathcal{R}_{\mathrm{kw}}}
+\newcommand{\smech}{\sigma_{\mathrm{mech}}}
+\newcommand{\Tv}{\mathcal{T}_{\mathcal{V}}}
+\newcommand{\Lrec}{\mathcal{L}_{\mathrm{recall}}}
+\newcommand{\Lcode}{\mathcal{L}_{\mathrm{code}}}
+\newcommand{\Ltot}{\mathcal{L}_{\mathrm{total}}}
+\newcommand{\Nviol}{N_{\mathrm{viol}}}
+\newcommand{\NTpend}{\bot_{\mathrm{NT}}^{\mathrm{pend}}}
+\newcommand{\NTlog}{\bot_{\mathrm{NT}}^{\mathrm{log}}}
+\newcommand{\RL}{\mathcal{R}_L}
+\newcommand{\RLcov}{\mathcal{R}_L^{\mathrm{cov}}}
+\newcommand{\RLunc}{\mathcal{R}_L^{\mathrm{uncov}}}
+\newcommand{\RN}{\mathcal{R}_N}
+\newcommand{\RU}{\mathcal{R}_U}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+\newcommand{\paperfig}[2]{%
+  \IfFileExists{#1}{%
+    \includegraphics[width=\linewidth]{#1}%
+  }{%
+    \fbox{\parbox[c][3.2cm][c]{0.94\linewidth}{\centering
+      \textit{[figure placeholder --- add:}\\[0.2em]
+      {\ttfamily\footnotesize \detokenize{#1}}\textit{]}\\[0.5em]
+      \footnotesize #2}}%
+  }%
+}
+
+\title{From Web PKI Norms to Compliance-Checking Code: End-to-End Generation of Auditable Linters}
+
+\begin{document}
+\begin{abstract}
+\input{0_abstract}
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+   <concept>
+      <concept_id>10002978.10003014</concept_id>
+      <concept_desc>Security and privacy~Network security</concept_desc>
+      <concept_significance>500</concept_significance>
+   </concept>
+   <concept>
+      <concept_id>10011007.10011006.10011041.10011047</concept_id>
+      <concept_desc>Software and its engineering~Source code generation</concept_desc>
+      <concept_significance>300</concept_significance>
+   </concept>
+   <concept>
+      <concept_id>10011007.10011074.10011099</concept_id>
+      <concept_desc>Software and its engineering~Software verification and validation</concept_desc>
+      <concept_significance>100</concept_significance>
+   </concept>
+</ccs2012>
+\end{CCSXML}
+\ccsdesc[500]{Security and privacy~Network security}
+\ccsdesc[300]{Software and its engineering~Source code generation}
+\ccsdesc[100]{Software and its engineering~Software verification and validation}
+\keywords{Web PKI, X.509 certificates, constrained extraction, lintability analysis}
+\maketitle
+
+\input{1_introduction}
+\input{2_background}
+\input{3_architecture}
+\input{4_rule_extraction}
+\input{5_lintability}
+\input{06_codegen}
+\input{08_evaluation}
+\input{09_discussion}
+\input{10_conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\appendix
+\input{imc_disclosures}
+\input{appendix}
+\end{document}

@@ -1,5 +1,5 @@
 %-------------------------------------------------------------------------------
-% Technical appendices A--F, English translation of the source appendices.
+% Technical appendices, English translation of the source appendices.
 %-------------------------------------------------------------------------------
 
 \section{Knowledge-Graph Relation Types and Retrieval Admissibility}
@@ -14,7 +14,7 @@ retrieval; only raw normative-source nodes may enter retrieval; no inferential
 relation may enter retrieval; and all context must be traceable to a
 normative source.
 
-\begin{table}[tb]
+\begin{table}[!htbp]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -45,14 +45,17 @@ inferred & CONFLICTS WITH & potential conflict between normative rules, produced
 \section{Key Fields of the Structured IR}
 \label{app:ir}
 
+\begingroup\emergencystretch=2em\relax
 The system internally uses a JSON-serialized, machine-readable IR object.
 Beyond the core four-tuple of \S\ref{sec:method-dual-layer}, its key fields are listed in Table~\ref{tab:irfields};
 the remaining fields support provenance, normalization, matching, and downstream
 product generation. The lintability determination in \S\ref{sec:lintability} directly
 uses only the four fields obligation, assertion\_subject, enforcement\_phase, and
 rule\_category.
+\par\endgroup
 
-\begin{table}[tb]
+
+\begin{table}[!htbp]
 \centering
 \footnotesize
 \caption{Key fields of the structured IR.}
@@ -67,8 +70,7 @@ predicate & core & constraint relation, such as presence, equality,
   containment, or range \\
 constraint & core & constraint value, pattern, or condition \\
 rule\_text & key ext. & verbatim text of the normative rule sentence, bound
-  unchanged to the Description metadata of the generated lint
-  (\S\ref{subsec:exec-verify}) \\
+  unchanged to the Description metadata of the generated lint \\
 rule\_category & key ext. & normative rule's semantic category, such as
   encoding\_constraint, definition, algorithm\_ref, \dots \\
 assertion\_subject & key ext. & assertion subject, such as Certificate / CA /
@@ -85,7 +87,7 @@ context\_nodes & key ext. & definition, field metadata, or cited
 \end{tabularx}
 \end{table}
 
-\section{Construction Details of the Restricted Code Space $\Tv$}
+\section{Construction Details of the Restricted Code Space \texorpdfstring{$\Tv$}{T V}}
 \label{app:tv}
 
 \textbf{The seven components of the vocabulary $\mathcal{V}$.} $\mathcal{V}$ is
@@ -132,7 +134,7 @@ $\mathcal{R}_{\mathrm{regex}}$ & Named RE2 regexes & 28 &
 \end{table*}
 
 \textbf{Representative atomic templates.} The atomic-template set $\mathcal{A}$
-has $|\mathcal{A}|=151$ and is organized by semantic cluster, each with a typed
+has $|\mathcal{A}|=183$ and is organized by semantic cluster, each with a typed
 signature $\mathrm{sig}(a)$ described in \S\ref{subsec:tv}. Table~\ref{tab:atoms} excerpts
 key atomic templates by cluster.
 
@@ -169,20 +171,20 @@ VI Special structure & DomainComponentOrdered & $()$ &
 There are three combinators $\{\neg, \wedge, \vee\}$, with semantics following
 classical propositional logic.
 
-\textbf{Generality grading of atomic templates.} The GENERIC / NON\_GENERIC
-grading is defined in \S\ref{subsec:atoms}; of the 151 atomic templates in
-$\mathcal{A}$, 98 are GENERIC and 53 are
-NON\_GENERIC. Table~\ref{tab:nongeneric} lists only representative NON\_GENERIC
+\textbf{Generality grading of atomic templates.} The GENERIC / SPECIALIZED
+grading is defined in \S\ref{subsec:atoms}; of the 183 atomic templates in
+$\mathcal{A}$, 118 are GENERIC and 65 are
+SPECIALIZED. Table~\ref{tab:specialized} lists only representative SPECIALIZED
 examples.
 
 \begin{table*}[tb]
 \centering
 \footnotesize
-\caption{Representative NON\_GENERIC atomic templates.}
-\label{tab:nongeneric}
+\caption{Representative SPECIALIZED atomic templates.}
+\label{tab:specialized}
 \begin{tabularx}{\textwidth}{@{}p{4.6cm} p{3cm} X@{}}
 \toprule
-Representative NON\_GENERIC atomic template & Specialization target &
+Representative SPECIALIZED atomic template & Specialization target &
   Semantics \\
 \midrule
 SigAlgMatchesTBSSignature & certificate signature-algorithm fields &
@@ -208,7 +210,7 @@ WildcardFilter & DNS name patterns & whether a domain wildcard
 The specialization target column names the single construct each template is
 written for, which is what keeps it outside the GENERIC set.
 
-\section{Phrase Dictionary of the Mechanical Translation $\smech$}
+\section{Phrase Dictionary of the Mechanical Translation \texorpdfstring{$\smech$}{sigma mech}}
 \label{app:sigma}
 
 $\smech$, defined in \S\ref{subsec:mech}, consists of an
@@ -216,7 +218,7 @@ atomic-template-to-phrase dictionary $\mathcal{M} : \mathcal{A} \to
 \mathcal{L}_{\mathrm{NL}}$ and three combinator reduction rules. Representative
 entries appear in Table~\ref{tab:phrasedict}.
 
-\begin{table}[tb]
+\begin{table}[!htbp]
 \centering
 \footnotesize
 \caption{Representative entries of the phrase dictionary $\mathcal{M}$.}
@@ -240,6 +242,7 @@ SubtreeIPListAny\-HasOctetCount\-AndNotAllZero(F, n) & ``the
 \end{tabularx}
 \end{table}
 
+\begingroup\emergencystretch=2em\relax
 The combinator reduction gives $\smech(\neg t) = $ ``NOT ($\smech(t)$)'';
 $\smech(t_1 \wedge t_2) = $ ``($\smech(t_1)$) AND ($\smech(t_2)$)''; $\vee$
 likewise; the atomic-template base case $\smech(a) = \mathcal{M}(a)$. For a
@@ -247,6 +250,52 @@ conditional pair $(p,q)$, when $p = \neg(p')$, it outputs ``WHEN NOT
 ($\smech(p')$), THEN $\smech(q)$'', the NEG-PRE template for a negated
 precondition; otherwise it outputs ``WHEN ($\smech(p)$), THEN $\smech(q)$''; and
 when $p = \varepsilon$ it outputs the single sentence $\smech(q)$.
+\par\endgroup
+
+
+\section{Lint Coverage Alignment Procedure}
+\label{app:coverage}
+
+The coverage criterion in \S\ref{subsec:coverage} requires information
+beyond a metadata description alone. We therefore first summarize each lint into a reverse IR in Stage-0. For
+every lint we pass three inputs to an offline summarizer
+$M_{\mathrm{summ}}$ under a constrained prompt: the lint's Go source code, its
+Pass/Error test certificates, and the description, citation, and severity
+metadata fields. From these we recover the same IR schema our normative rules
+use, the core four-tuple $\langle$subject, obligation, predicate, constraint$\rangle$
+plus a one-sentence code summary. Three considerations motivate these inputs.
+First, the CheckApplies and Execute branches expose the concrete field and
+threshold the lint actually tests. Second, the Pass/Error samples fix the
+direction of the check, that is, which values it accepts and which it rejects,
+together with its applicable scope. Third, casting the lint into our four-tuple
+lets each normative rule and lint be compared field by field. Extracting the
+full four-tuple, not just the code summary sentence, is what lets Stage-2
+compare subject, obligation, predicate, and constraint jointly and reach a
+defensible full-versus-partial distinction.
+
+\input{algorithms/alg_coverage}
+
+Given these reverse IRs, Algorithm~\ref{alg:coverage} aligns each normative
+rule to zlint in four further stages that combine deterministic steps with a
+single controlled judge. Stage-1 retrieves candidate lints for a normative rule
+by provenance. A normative rule from RFC~5280 is matched only against RFC lints
+whose cited section shares a common prefix with the normative rule's section,
+a test we write \textsc{SectionPrefixMatch}, since RFC section numbers are
+stable. Because CABF section numbers drift across versions, every CABF lint is
+taken as a candidate for a CABF normative rule. Stage-2 hands the normative
+rule's four-tuple and its candidate set to a field-level judge $M_{\mathrm{judge}}$,
+which compares the tuples field by field and returns the best candidate with a
+full, partial, or none verdict. Stage-3 is a deterministic false-positive
+guard. It maps the subject of the normative rule and of the selected lint to a
+field family such as KeyUsage or SubjectAltName via $\mathrm{Family}(\cdot)$,
+and downgrades a full or partial verdict to none whenever the two resolve to
+different nonempty families, so a KeyUsage normative rule is never credited to
+a lint that checks SubjectAltName merely because both mention an extension.
+Stage-4 aggregates deterministically. A normative rule is covered if and only
+if its verdict is full. The LLM is invoked only
+at Stage-0 and Stage-2; candidate
+retrieval, the family guard, and aggregation are fully deterministic.
+
 
 %-------------------------------------------------------------------------------
 % Stage-Aware Iterative Verification (SAIV) --- moved out of the main body and
@@ -255,8 +304,9 @@ when $p = \varepsilon$ it outputs the single sentence $\smech(q)$.
 \section{Stage-Aware Iterative Verification (SAIV)}
 \label{sec:saiv}
 
-To coordinate the modules and safeguard their output quality without manual
-ground truth, we propose the SAIV framework.
+\begingroup\emergencystretch=2em\relax
+
+To coordinate the modules and safeguard their output quality, we propose the SAIV framework.
 The basic idea is to predefine two quantifiable optimization
 objectives, measure the gap between the current and ideal states by each
 objective's computable residual, and when a residual has not reached its
@@ -300,7 +350,6 @@ the lintable verdict, each firing only to correct a suspected lintability error.
 The subsequent subsections revolve around the two objectives, while the two
 checks gate the labels those objectives consume.
 
-\medskip
 \noindent\textbf{G1, recall completeness.}
 \begin{theorem}[Recall-Completeness Invariant]\label{thm:recall}
 If the set-level lintability determination assigns each keyword-recalled candidate in
@@ -333,7 +382,6 @@ Theorem~\ref{thm:recall}, computable without manual ground truth, as shown in Ta
   {\max\!\big(\Rkw,\; \RN+\RL+\RU\big)}
 \end{equation}
 
-\medskip
 \noindent\textbf{G2, code--normative-rule semantic equivalence for uncovered normative rules.} For the
 uncovered subset $\RLunc$, the code summary $\smech(t_r)$, the code summary of
 normative rule $r$'s DSL tree $t_r$ computed by $\smech$ of \S\ref{subsec:mech}, is
@@ -347,7 +395,6 @@ $\equiv 1$ in the fixed zlint shell, so it drops out:
   \Lcode = 1 - \frac{1}{|\RLunc|}\sum_{r\in\RLunc}\lambda_{\mathrm{code}}(r)
 \end{equation}
 
-\medskip
 \noindent\textbf{S1, reverse lintability of covered normative rules.} The first
 auxiliary check audits the not-lintable verdict. If a normative rule has a corresponding
 implementation in a lint tool such as zlint, it must be lintable, so the check
@@ -357,7 +404,6 @@ the not-lintable set $\RU$ and counts the normative rules it rates full or parti
 such hit is adjudicated as either a lintability false negative and re-extracted to
 lintable, or a spurious coverage match and kept not-lintable.
 
-\medskip
 \noindent\textbf{S2, synthesizability of lintable normative rules.} The dual check
 audits the lintable verdict. A normative rule judged lintable should be synthesizable
 within $\Tv$, so a no-template abstention NT returned for such a
@@ -373,7 +419,6 @@ moved to the logged set $\NTlog$. S2 clears when $|\NTpend| = 0$. Entries in
 $\NTlog$ are reported gaps that do not block termination, though their normative
 rules stay in $\RLunc$ and keep contributing to $\Lcode$.
 
-\medskip
 The two objective residuals are weighted into the total loss in
 Eq.~\eqref{eq:total}, with $w_R + w_C = 1$:
 \begin{equation}\label{eq:total}
@@ -383,13 +428,13 @@ Since recall is conserved, $\Lrec = 0$, $\Ltot$ is governed by $\Lcode$ alone.
 The two auxiliary checks stay outside $\Ltot$; their signals are the violation
 count $\Nviol$ of S1 and the abstention review of S2 in \S\ref{subsec:algo}.
 
-\begin{table*}[tb]
+\begin{table*}[!t]
 \centering
-\footnotesize
+\small
 \caption{The two SAIV objectives and the two auxiliary lintability checks, with
 their signals and repair routing.}
 \label{tab:saiv-objectives}
-\begin{tabularx}{\textwidth}{@{}llp{4.0cm}X@{}}
+\begin{tabularx}{\textwidth}{@{}L{2.8cm} L{4.2cm} L{4.0cm} >{\raggedright\arraybackslash}X@{}}
 \toprule
 Item & Signal & Main repair direction & Repair target \\
 \midrule
@@ -452,10 +497,10 @@ accepted only when the metric decreases.
   lintability label are all correct but the meaning is too complex to express
   within $\Tv$, the normative rule is recorded in the logged gap set $\NTlog$
   rather than repaired as code.
-\item \textbf{Verification repair} enlarges the semantic-equivalence
+\item \begingroup\sloppy \textbf{Verification repair} enlarges the semantic-equivalence
   judgment's semantic neighborhood, such as negation/affirmation interchange or
   one-to-many decomposition, or corrects the inconsistency between the two
-  verdict sources.
+  verdict sources.\par\endgroup
 \end{itemize}
 
 \subsection{Iteration Algorithm and Termination Conditions}
@@ -474,3 +519,4 @@ accepted stage-repair operation is monotone, reducing that stage's error or
 leaving it unchanged, then $\Ltot$ is non-increasing each round; the actual
 system stops as soon as no residual decreases, together with the hard cap $K$,
 so the loop terminates in finitely many rounds.
+\par\endgroup
